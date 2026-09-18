@@ -93,6 +93,14 @@ python tests/e2e/run_loop.py --model sonnet
 It runs execute → planted defect → review (must open a fix) → fix → write to a read-only path (must be
 blocked) on a copy of [examples/python-minimal](examples/python-minimal).
 
+```sh
+python tests/e2e/run_lifecycle.py --model sonnet
+```
+
+From zero: init → new-cycle → plan-to-tasks → execute-batch → planted defect → an autopilot that runs
+whatever `rite status` suggests (execute-batch / review / fix-all) → close-cycle → retro, asserting
+`rite check` and one close commit per done item after every step.
+
 ## Guards
 
 `hooks/hooks.json` registers a `PreToolUse` hook on Edit/Write/MultiEdit/NotebookEdit that blocks
@@ -107,10 +115,10 @@ forbids them in prose.
 | 0 | plugin skeleton, templates, config schema, `/rite:status` | done |
 | 1 | `rite.py` CLI + tests | done |
 | 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | done; e2e loop passes |
-| 3 | `execute-batch`, `fix-all`, `batch-plan` | implemented; CLI tested, commands not yet run end to end |
-| 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | implemented; CLI tested, commands not yet run end to end |
+| 3 | `execute-batch`, `fix-all`, `batch-plan` | done; e2e lifecycle passes |
+| 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | done; e2e lifecycle passes |
 | 5 | migration guide, `rite.py migrate --from we2002`, `relink` | implemented; verified on a clone of the source repository (check green) |
-| 6 | release: eval suite, changelog | changelog started; eval suite pending |
+| 6 | release: eval suite, changelog | changelog started; eval suite blocked (`claude plugin eval` is early access) |
 
 ## License
 
