@@ -66,3 +66,7 @@ FINDING 2
 Severity: `critical` = wrong results or data loss reachable now; `high` = a done criterion or the
 source of truth is not met; `medium` = traceability, missing checks, misleading docs; `low` = cosmetic
 but real. No finding without an evidence command. If everything passes, write `FINDINGS: none`.
+
+**One finding per root cause.** When several symptoms (a failing criterion, a red gate, a wrong
+number) come from the same defect, report one finding and list every symptom's evidence under it.
+Why: duplicate fixes for one cause get repaired once and then linger as stale noise.
