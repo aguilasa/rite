@@ -1,0 +1,28 @@
+{
+  "description": "Rite guards: block writes to read-only and generated paths declared in rite.toml; optional end-of-turn check.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/pyrun\" \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/pyrun\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stop_check.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

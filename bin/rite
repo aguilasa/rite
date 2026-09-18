@@ -1,0 +1,4 @@
+#!/bin/sh
+# Rite CLI launcher: sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args]
+here=$(dirname "$0")
+exec sh "$here/pyrun" "$here/rite.py" "$@"

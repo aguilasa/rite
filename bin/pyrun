@@ -1,0 +1,11 @@
+#!/bin/sh
+# Run a Python script with the first interpreter on PATH that is really Python >= 3.11.
+# Why: `python3` is missing on some systems and is a Store stub on Windows.
+for cand in "$RITE_PYTHON" python3 python "py -3"; do
+  [ -n "$cand" ] || continue
+  if $cand -c 'import sys; sys.exit(sys.version_info < (3, 11))' >/dev/null 2>&1; then
+    exec $cand "$@"
+  fi
+done
+echo "rite: Python 3.11+ not found (tried python3, python, py -3; set RITE_PYTHON)" >&2
+exit 127
