@@ -1,0 +1,9 @@
+[project]
+name = "textkit"
+
+[guards]
+read_only = ["data/golden/**"]
+read_only_reason = "golden files are reference data; tests compare against them"
+
+[gates]
+global = ["python -m unittest discover -s tests"]

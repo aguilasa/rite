@@ -1,9 +1,11 @@
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import Fixture, rite, task, write
+from fixtures import ROOT, Fixture, rite, task, write
 
 from rite_lib import frontmatter
 
@@ -266,6 +268,101 @@ class LegacyLayoutTest(FixtureCase):
         code, out, _ = self.fx.rite("guard", "roms/original.bin")
         self.assertEqual(code, 1)
         self.assertIn("ROMs originais", out)
+
+
+class BatchPlanTest(FixtureCase):
+    def add(self, n: int, *, files: str, resources: str = "[]", deps: str = "[]", type_: str = "feature") -> str:
+        item_id = f"BET-TASK-{n:02}"
+        write(self.root / f"docs/rite/cycles/beta/{n:02}-t{n}.md",
+              task(item_id, f"T{n}", depends_on=deps, type_=type_, sot="/docs/plans/PLAN-alpha.md#1",
+                   extra=f"files: {files}\nresources: {resources}\n"))
+        return item_id
+
+    def setUp(self):
+        super().setUp()
+        cfg = self.root / "rite.toml"
+        cfg.write_text(cfg.read_text(encoding="utf-8")
+                       + '\n[resources]\nserialized = [{ name = "display", why = "one screen" }]\n', encoding="utf-8")
+        self.fx.git("rm", "-q", "docs/rite/cycles/beta/01-other.md")
+
+    def plan(self, *targets: str, kind: str = "task") -> dict:
+        return self.js("batch-plan", *targets, "--kind", kind, "--cycle", "beta")
+
+    def test_serialized_resource_splits_waves(self):
+        a = self.add(1, files="[src/a.py]", resources="[display]")
+        b = self.add(2, files="[src/b.py]", resources="[display]")
+        c = self.add(3, files="[src/c.py]")
+        data = self.plan("3")
+        self.assertEqual(data["waves"], [[a, c], [b]])
+        self.assertEqual(data["items"][0]["conflicts"], {b: ["resources: display"]})
+
+    def test_file_overlap_dependency_and_closing(self):
+        a = self.add(1, files="[src/lib/**]")
+        b = self.add(2, files="[src/lib/x.py]")
+        c = self.add(3, files="[docs/c.md]", deps="[BET-TASK-01]")
+        d = self.add(4, files="[docs/d.md]", type_="closing")
+        e = self.add(5, files="[docs/e.md]")
+        data = self.plan(e, d, c, b, a)
+        self.assertEqual(data["waves"], [[a, e], [b, c], [d]])
+        conflicts = {i["id"]: i["conflicts"] for i in data["items"]}
+        self.assertIn("files: src/lib/**", conflicts[a][b])
+        self.assertIn("depends_on", conflicts[a][c])
+
+    def test_default_two_and_unknown_files_run_alone(self):
+        self.add(1, files="[]")
+        self.add(2, files="[src/b.py]")
+        self.add(3, files="[src/c.py]")
+        data = self.plan()
+        self.assertEqual(len(data["items"]), 2)
+        self.assertEqual(data["waves"], [["BET-TASK-01"], ["BET-TASK-02"]])
+        self.assertTrue(any("no predicted files" in w for w in data["warnings"]))
+
+    def test_all_is_for_fixes_only(self):
+        self.add(1, files="[src/a.py]")
+        self.assertEqual(self.fx.rite("batch-plan", "all", "--cycle", "beta")[0], 1)
+        for title in ("one", "two", "three"):
+            self.js("new-fix", "--cycle", "beta", "--origin", "BET-TASK-01", "--title", title, "--severity", "low")
+        self.assertEqual(len(self.plan("all", kind="fix")["items"]), 3)
+
+
+class HookTest(FixtureCase):
+    def hook(self, script: str, event: dict) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, str(ROOT / "hooks" / script)], input=json.dumps(event),
+                              capture_output=True, text=True, encoding="utf-8")
+
+    def test_guard_blocks_read_only_and_generated(self):
+        ev = {"cwd": str(self.root), "tool_name": "Write", "tool_input": {"file_path": "vendor/lib.js"}}
+        res = self.hook("guard.py", ev)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("read-only", res.stderr)
+        ev["tool_input"] = {"file_path": str(self.root / "src/gen/out.py")}
+        res = self.hook("guard.py", ev)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("tools/gen.py", res.stderr)
+        ev["tool_input"] = {"file_path": str(self.root / "src/app.py")}
+        self.assertEqual(self.hook("guard.py", ev).returncode, 0)
+
+    def test_guard_is_inert_without_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ev = {"cwd": tmp, "tool_name": "Write", "tool_input": {"file_path": "vendor/x"}}
+            self.assertEqual(self.hook("guard.py", ev).returncode, 0)
+
+    def test_stop_check_warns_only_when_enabled(self):
+        p = self.root / "docs/rite/cycles/alpha/01-harness.md"
+        p.write_text(frontmatter.set_fields(p.read_text(encoding="utf-8"), {"title": "Drift"}), encoding="utf-8")
+        ev = {"cwd": str(self.root)}
+        self.assertEqual(self.hook("stop_check.py", ev).stdout, "")
+        cfg = self.root / "rite.toml"
+        cfg.write_text(cfg.read_text(encoding="utf-8") + "\n[hooks]\nstop_check = true\n", encoding="utf-8")
+        res = self.hook("stop_check.py", ev)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("out of sync", json.loads(res.stdout)["systemMessage"])
+
+    def test_commit_new(self):
+        res = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T", "--severity", "low")
+        self.ok("commit-new", res["id"])
+        self.assertEqual(self.log(1), [f"chore(rite): open {res['id']}"])
+        self.assertEqual(self.fx.git("status", "--porcelain"), "")
 
 
 class NoConfigTest(unittest.TestCase):
