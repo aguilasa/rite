@@ -8,8 +8,8 @@ progress tables) is done by a deterministic CLI, never by hand.
 Rite is agnostic of language, build tool and folder layout: each repository declares its own structure
 and naming in `rite.toml`.
 
-> Status: **v0.1 in progress.** Phase 0 (skeleton) and phase 1 (CLI) are done; the core rite
-> (`execute`, `review`, `fix`), batches and lifecycle commands are next. See [Roadmap](#roadmap).
+> Status: **v0.1 in progress.** Phases 0–4 are implemented (CLI, core rite, batches, lifecycle);
+> migration tooling and the release are next. See [Roadmap](#roadmap).
 
 ## Install
 
@@ -39,34 +39,35 @@ Requires Python 3.11+ on PATH (stdlib only) and git.
 
 ## Commands
 
-| Command | State |
+| Command | Does |
 | --- | --- |
-| `/rite:status [cycle]` | available |
-| `/rite:execute`, `/rite:review`, `/rite:fix` | phase 2 |
-| `/rite:execute-batch`, `/rite:fix-all` | phase 3 |
-| `/rite:init`, `/rite:new-cycle`, `/rite:plan-to-tasks`, `/rite:close-cycle`, `/rite:retro` | phase 4 |
+| `/rite:init` | adopt Rite: detect conventions, write `rite.toml` |
+| `/rite:new-cycle <name>` | create a cycle: folder, views, profile, pitfalls |
+| `/rite:plan-to-tasks <plan>` | break a plan into tasks with anchored sources of truth and verifiable criteria |
+| `/rite:status [cycle]` | where things stand; the next command to run |
+| `/rite:execute [cycle] [ID]` | one task, two commits |
+| `/rite:execute-batch [cycle] [N]` | N tasks in conflict-free waves |
+| `/rite:review [cycle] [ID]` | independent review by the `rite-reviewer` agent; opens fixes |
+| `/rite:fix [cycle] [ID]` | reproduce evidence, repair, sweep |
+| `/rite:fix-all [cycle]` | parallel triage, then repairs in waves |
+| `/rite:close-cycle <cycle>` | check preconditions, archive with links rewritten |
+| `/rite:retro <cycle>` | root-cause groups; keep, promote, report, prune |
+
+Details: [docs/COMMANDS.md](docs/COMMANDS.md) · concepts: [docs/CONCEPTS.md](docs/CONCEPTS.md).
 
 ## CLI
 
+Commands never touch state by hand; they call a stdlib-only CLI:
+
 ```sh
-python3 bin/rite.py <subcommand> [--cycle C] [--root R] [--json]
+sh bin/rite <subcommand> [--cycle C] [--root R] [--json]     # finds Python 3.11+ (RITE_PYTHON overrides)
+python3 bin/rite.py <subcommand> ...                          # direct
 ```
 
-| Subcommand | Does |
-| --- | --- |
-| `resolve-cycle [name]` | which cycle the rules select, with its prefix, profile and plan |
-| `next task\|review\|fix` | deterministic selection (in-progress first, `depends_on`, severity for fixes) |
-| `new-task`, `new-fix --origin ID` | atomic ID allocation from the templates |
-| `close ID [--sha S]` | record a finished item from its work commit; commits the bookkeeping |
-| `mark ID STATUS` | `pending`, `in-progress`, `blocked`, `skipped` |
-| `mark-reviewed ID [--fixes F,…]` | record a review and the fixes it opened, in one commit |
-| `mark-stale FIX --reason …` | close a fix whose symptom no longer reproduces |
-| `sync` | regenerate the tables from frontmatter (idempotent) |
-| `check [--quick]` | vocabulary, IDs, `source_of_truth` anchors, `depends_on`, links, views, profile |
-| `status` | summary per cycle and the suggested next command |
-| `guard PATH` | is the path read-only or generated (used by the hook) |
-
-Exit codes: `0` ok, `1` failure / nothing selected, `3` no `rite.toml`.
+`resolve-cycle`, `next`, `new-task`, `new-fix`, `commit-new`, `close`, `mark`, `mark-reviewed`,
+`mark-stale`, `sync`, `check`, `status`, `batch-plan`, `new-cycle`, `archive`, `anchors`, `stats`,
+`guard` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
+selected, `3` no `rite.toml`.
 
 ## Configuration
 
@@ -82,16 +83,32 @@ Tests build throw-away git repositories in three layouts (sub-folder cycles, fla
 Portuguese layout) and run the CLI against them, including planted defects that `check` must catch.
 `tests/test_rite_is_agnostic.py` fails if a command names a concrete project, tool or absolute path.
 
+End to end, with a real headless Claude Code (costs tokens):
+
+```sh
+python tests/e2e/run_loop.py --model sonnet
+```
+
+It runs execute → planted defect → review (must open a fix) → fix → write to a read-only path (must be
+blocked) on a copy of [examples/python-minimal](examples/python-minimal).
+
+## Guards
+
+`hooks/hooks.json` registers a `PreToolUse` hook on Edit/Write/MultiEdit/NotebookEdit that blocks
+paths listed in `[guards].read_only` and `[[guards.generated]]` (pointing at the generator instead).
+It is inert in repositories without `rite.toml`. Shell writes are not visible to hooks; the rite
+forbids them in prose.
+
 ## Roadmap
 
 | Phase | Delivers | State |
 | --- | --- | --- |
 | 0 | plugin skeleton, templates, config schema, `/rite:status` | done |
 | 1 | `rite.py` CLI + tests | done |
-| 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | next |
-| 3 | `execute-batch`, `fix-all`, `batch-plan` | |
-| 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | |
-| 5 | migration guide and `rite.py migrate` | |
+| 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | done |
+| 3 | `execute-batch`, `fix-all`, `batch-plan` | implemented; CLI tested, commands not yet run end to end |
+| 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | implemented; CLI tested, commands not yet run end to end |
+| 5 | migration guide and `rite.py migrate` | next |
 | 6 | release: eval suite, changelog | |
 
 ## License
