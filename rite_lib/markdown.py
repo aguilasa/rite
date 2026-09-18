@@ -38,6 +38,18 @@ def headings(text: str) -> list[tuple[int, str]]:
     return out
 
 
+def heading_anchors(text: str) -> list[tuple[int, str, str, str | None]]:
+    """[(level, title, unique slug, section number or None)] in document order."""
+    out, counts = [], {}
+    for level, title in headings(text):
+        slug = github_slug(title)
+        dup = counts.get(slug, 0)
+        counts[slug] = dup + 1
+        num = _SECTION_NO_RE.match(title.strip())
+        out.append((level, title, slug if dup == 0 else f"{slug}-{dup}", num.group(1) if num else None))
+    return out
+
+
 def github_slug(heading: str) -> str:
     text = re.sub(r"[`*_\[\]()]", "", heading).strip().lower()
     text = re.sub(r"[^\w\- ]", "", text, flags=re.UNICODE)

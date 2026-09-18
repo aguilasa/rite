@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import __version__, check as checkmod, config, ops, selection, views
 from .gitutil import GitError
-from .model import Project, RiteError, display
+from .model import Project, RiteError, display, make_link
 
 EXIT_OK, EXIT_FAIL, EXIT_USAGE, EXIT_NO_CONFIG = 0, 1, 2, 3
 
@@ -84,6 +84,13 @@ def cmd_new_fix(project: Project, args) -> int:
                        depends_on=_ids(args.depends_on), slug=args.slug)
     data = {"id": item.id, "path": display(project.root, item.path)}
     _emit(args, data, f"created {item.id}: {data['path']}")
+    return EXIT_OK
+
+
+def cmd_commit_new(project: Project, args) -> int:
+    cycle, item = _item(project, args, args.id)
+    res = ops.commit_new(project, cycle, item)
+    _emit(args, res, _result_text("opened", res))
     return EXIT_OK
 
 
@@ -185,6 +192,85 @@ def cmd_status(project: Project, args) -> int:
     return EXIT_OK
 
 
+def cmd_batch_plan(project: Project, args) -> int:
+    from . import batch
+    cycle = project.resolve_cycle(args.cycle)
+    tokens = _ids(args.targets)
+    if tokens == ["all"]:
+        if args.kind != "fix":
+            raise RiteError("'all' is only for fixes; a task batch takes a number (default 2)")
+        tokens = [str(max(len(selection.open_fixes(cycle)), 1))]
+    count = int(tokens[0]) if len(tokens) == 1 and tokens[0].isdigit() else None
+    ids = [] if count is not None else tokens
+    if count is not None and count < 1:
+        raise RiteError("batch size must be >= 1")
+    items = batch.select(cycle, args.kind, count, ids)
+    if not items:
+        raise RiteError(f"no selectable {args.kind} in cycle {cycle.name} (see: rite.py next {args.kind})")
+    data = batch.plan(project, cycle, items)
+    _emit(args, data, batch.render_text(data))
+    return EXIT_OK
+
+
+def cmd_new_cycle(project: Project, args) -> int:
+    from . import lifecycle
+    res = lifecycle.new_cycle(project, args.name, args.prefix, plan=args.plan, commit=args.commit)
+    lines = [f"created cycle {res['cycle']} [{res['prefix']}] at {res['path']}"]
+    lines += [f"  {p}" for p in res["created"]]
+    if res["commit"]:
+        lines.append(f"  committed {res['commit']}")
+    text = "\n".join(lines)
+    _emit(args, res, text)
+    return EXIT_OK
+
+
+def cmd_archive(project: Project, args) -> int:
+    from . import lifecycle
+    cycle = project.resolve_cycle(args.name)
+    res = lifecycle.archive(project, cycle, commit=not args.no_commit, dry_run=args.dry_run)
+    if res["blockers"]:
+        lines = [f"cycle {res['cycle']} cannot close:"] + [f"  - {b}" for b in res["blockers"]]
+    elif args.dry_run:
+        lines = [f"cycle {res['cycle']} can close: {res['from']} -> {res['to']}"]
+    else:
+        lines = [f"archived {res['cycle']}: {res['from']} -> {res['to']}"]
+        if res["rewritten"]:
+            lines.append(f"  links rewritten in: {', '.join(res['rewritten'])}")
+        if res["commit"]:
+            lines.append(f"  committed {res['commit']}")
+    text = "\n".join(lines)
+    _emit(args, res, text)
+    return EXIT_FAIL if res["blockers"] else EXIT_OK
+
+
+def cmd_anchors(project: Project, args) -> int:
+    from . import markdown
+    path = Path(args.file)
+    path = path if path.is_absolute() else project.root / path
+    if not path.is_file():
+        raise RiteError(f"{args.file} not found")
+    # relative links are written from an item file, i.e. from the cycle folder
+    base = project.resolve_cycle(args.cycle).path / "item.md" \
+        if project.cfg.link_style == "relative" else project.root / "item.md"
+    link = make_link(project.root, base, path, project.cfg.link_style)
+    rows = []
+    for level, title, slug, number in markdown.heading_anchors(path.read_text(encoding="utf-8")):
+        anchor = number or slug
+        rows.append({"level": level, "title": title, "anchor": anchor, "slug": slug,
+                     "source_of_truth": f"{link}#{anchor}"})
+    _emit(args, {"file": display(project.root, path), "headings": rows},
+          "\n".join(f"{'  ' * (r['level'] - 1)}{r['title']}  ->  {r['source_of_truth']}" for r in rows))
+    return EXIT_OK
+
+
+def cmd_stats(project: Project, args) -> int:
+    from . import stats
+    cycle = project.resolve_cycle(args.name)
+    data = stats.cycle_stats(project, cycle)
+    _emit(args, data, stats.render_text(data))
+    return EXIT_OK
+
+
 def cmd_guard(project: Project, args) -> int:
     from . import guard
     verdict = guard.classify(project.cfg, Path(args.path))
@@ -228,6 +314,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--slug")
     s.set_defaults(fn=cmd_new_fix)
 
+    s = sub.add_parser("commit-new", parents=[common], help="commit a new, filled-in item with the views")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_commit_new)
+
     s = sub.add_parser("close", parents=[common], help="record a finished item from its work commit")
     s.add_argument("id")
     s.add_argument("--sha", default="HEAD", help="the work commit (default HEAD)")
@@ -267,6 +357,32 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("status", parents=[common], help="summarise cycles and suggest the next command")
     s.add_argument("--all", action="store_true")
     s.set_defaults(fn=cmd_status)
+
+    s = sub.add_parser("batch-plan", parents=[common], help="inventory, conflict matrix and waves for a batch")
+    s.add_argument("targets", nargs="*", help="a count (default 2), item IDs, or 'all' (fixes only)")
+    s.add_argument("--kind", choices=["task", "fix"], default="task")
+    s.set_defaults(fn=cmd_batch_plan)
+
+    s = sub.add_parser("new-cycle", parents=[common], help="create a cycle folder, views, profile and pitfalls")
+    s.add_argument("name")
+    s.add_argument("--prefix", required=True)
+    s.add_argument("--plan", help="plan file (repo-relative)")
+    s.add_argument("--commit", action="store_true")
+    s.set_defaults(fn=cmd_new_cycle)
+
+    s = sub.add_parser("archive", parents=[common], help="check a cycle can close; move it to archive_dir")
+    s.add_argument("name")
+    s.add_argument("--dry-run", action="store_true", help="only report blockers")
+    s.add_argument("--no-commit", action="store_true")
+    s.set_defaults(fn=cmd_archive)
+
+    s = sub.add_parser("anchors", parents=[common], help="list a document's headings as source_of_truth links")
+    s.add_argument("file")
+    s.set_defaults(fn=cmd_anchors)
+
+    s = sub.add_parser("stats", parents=[common], help="numbers for a retro: tasks, fixes, review latency")
+    s.add_argument("name")
+    s.set_defaults(fn=cmd_stats)
 
     s = sub.add_parser("guard", parents=[common], help="is this path read-only or generated?")
     s.add_argument("path")

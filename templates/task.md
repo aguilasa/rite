@@ -5,6 +5,8 @@ type: {{type}}
 phase: {{phase}}
 depends_on: {{depends_on}}
 source_of_truth: {{source_of_truth}}
+files: []            # predicted paths/globs; batches build their conflict matrix from them
+resources: []        # serialized resources this item needs (rite.toml [resources] / profile)
 status: pending
 done_on: null
 done_commit: null

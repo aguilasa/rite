@@ -140,6 +140,14 @@ def new_fix(project: Project, cycle: Cycle, *, origin: str, title: str, severity
     return project._load_item("fix", path, n)
 
 
+def commit_new(project: Project, cycle: Cycle, item: Item) -> dict:
+    """Commit a freshly created (and filled-in) item together with the regenerated views."""
+    if item.status not in ("pending",):
+        raise RiteError(f"{item.id} has status {item.status!r}; commit-new is for newly created items")
+    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "open", item.id), True)
+    return {"id": item.id, **result}
+
+
 # --- status transitions ------------------------------------------------------
 def close(project: Project, cycle: Cycle, item: Item, *, sha: str = "HEAD", commit: bool = True,
           force: bool = False) -> dict:

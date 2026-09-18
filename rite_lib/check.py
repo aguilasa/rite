@@ -213,6 +213,8 @@ class Checker:
         self.check_links(prof)
         heading = self.p.cfg["sections"]["phase_checks"]
         body = markdown.section(text, heading)
+        if body is not None:
+            body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)  # template hints are not entries
         phases = sorted({str(t.fields.get("phase")) for t in cycle.tasks if t.fields.get("phase") is not None})
         if body is None:
             if phases:

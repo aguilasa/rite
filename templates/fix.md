@@ -3,6 +3,8 @@ id: {{id}}
 title: {{title}}
 origin: {{origin}}
 severity: {{severity}}
+files: []            # predicted paths/globs; batches build their conflict matrix from them
+resources: []        # serialized resources this item needs (rite.toml [resources] / profile)
 status: pending
 depends_on: {{depends_on}}
 done_on: null
