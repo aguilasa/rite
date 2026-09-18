@@ -29,6 +29,7 @@ pitfalls_file = "{cycle}.pitfalls.md"
 [sections]
 execution_log = "Execution Log"
 phase_checks  = "Phase-specific checks"
+phase_label   = "Phase"                     # word looked for in phase_checks ("Phase 3")
 
 [commit]
 style            = "conventional"           # conventional | free

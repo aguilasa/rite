@@ -221,7 +221,8 @@ class Checker:
                 self.err(prof, f"missing section '{heading}' (tasks use phases {', '.join(phases)})")
             return
         for ph in phases:
-            if not re.search(rf"(?i)\bphase\s+{re.escape(ph)}\b", body):
+            label = re.escape(self.p.cfg["sections"]["phase_label"])
+            if not re.search(rf"(?i)\b{label}\s+{re.escape(ph)}\b", body):
                 self.err(prof, f"'{heading}' has no entry for phase {ph}")
 
 

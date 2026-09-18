@@ -113,21 +113,60 @@ def _rewrite(project: Project, text: str, old_file: Path, new_file: Path, old_di
                          "root-absolute" if target.startswith("/") else "relative")
         return link + (f"#{anchor}" if anchor else "")
 
+    return _map_links(text, fix_target)
+
+
+def _map_links(text: str, fix_target) -> str:
+    """Apply ``fix_target`` to every prose link target and link field, skipping code blocks."""
     lines = text.split("\n")
-    code_lines = {n - 1 for n in range(1, len(lines) + 1)} - {n - 1 for n, _ in markdown.prose_lines(text)}
+    prose = {n - 1 for n, _ in markdown.prose_lines(text)}
     link_re = re.compile(r"(?<!!)(\[(?:[^\]\\]|\\.)*\]\(\s*<?)([^)\s>]+)")
     for i, line in enumerate(lines):
-        if i in code_lines:
-            continue
-        lines[i] = link_re.sub(lambda m: m.group(1) + fix_target(m.group(2)), line)
+        if i in prose:
+            lines[i] = link_re.sub(lambda m: m.group(1) + fix_target(m.group(2)), line)
     text = "\n".join(lines)
     try:
         fields, _ = frontmatter.parse(text)
     except frontmatter.FrontmatterError:
-        return text  # not ours to rewrite: frontmatter beyond the supported subset
-    updates = {k: fix_target(str(fields[k])) for k in LINK_FIELDS
-               if isinstance(fields.get(k), str) and fields.get(k) and fix_target(str(fields[k])) != fields[k]}
+        return text
+    updates = {}
+    for k in LINK_FIELDS:
+        if isinstance(fields.get(k), str) and fields[k]:
+            new = fix_target(fields[k])
+            if new != fields[k]:
+                updates[k] = new
     return frontmatter.set_fields(text, updates) if updates else text
+
+
+def relink(project: Project, cycles: list[Cycle], *, write: bool) -> list[dict]:
+    """Rewrite links in cycle files and profiles to [paths].link_style; targets that do not exist stay."""
+    style = project.cfg.link_style
+    changes = []
+    files: list[Path] = []
+    for c in cycles:
+        files += [c.progress_path, c.fixes_path, c.profile_path, c.pitfalls_path, *(i.path for i in c.items)]
+    for f in dict.fromkeys(p for p in files if p.is_file()):
+        count = 0
+
+        def fix_target(target: str, f=f) -> str:
+            nonlocal count
+            if markdown.is_external(target) or target.startswith("#"):
+                return target
+            path, anchor = resolve_link(project.root, f, target)
+            if not path.exists():
+                return target
+            new = make_link(project.root, f, path, style) + (f"#{anchor}" if anchor else "")
+            if new != target:
+                count += 1
+            return new
+
+        text = f.read_text(encoding="utf-8")
+        new_text = _map_links(text, fix_target)
+        if new_text != text:
+            changes.append({"file": display(project.root, f), "links": count})
+            if write:
+                f.write_text(new_text, encoding="utf-8", newline="\n")
+    return changes
 
 
 def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: bool = False) -> dict:

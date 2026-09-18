@@ -129,8 +129,10 @@ class Project:
     def archived_cycles(self) -> list[Cycle]:
         if not self.archive_dir.is_dir():
             return []
-        return [self.load_cycle(p, archived=True) for p in sorted(self.archive_dir.iterdir())
-                if p.is_dir() and self.is_cycle_dir(p)]
+        # a legacy archive folder may itself be one closed cycle
+        dirs = [self.archive_dir] if self.is_cycle_dir(self.archive_dir) else []
+        dirs += [p for p in sorted(self.archive_dir.iterdir()) if p.is_dir() and self.is_cycle_dir(p)]
+        return [self.load_cycle(p, archived=True) for p in dirs]
 
     def all_cycles(self) -> list[Cycle]:
         return self.live_cycles() + self.archived_cycles()

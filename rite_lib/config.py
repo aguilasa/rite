@@ -38,6 +38,7 @@ DEFAULTS: dict = {
     "sections": {
         "execution_log": "Execution Log",
         "phase_checks": "Phase-specific checks",
+        "phase_label": "Phase",
     },
     "commit": {
         "style": "conventional",
@@ -127,8 +128,13 @@ def load(root: Path | None = None, *, start: Path | None = None) -> Config:
     file = root / CONFIG_NAME
     if not file.is_file():
         raise NoConfig(f"no {CONFIG_NAME} in {root} (run /rite:init)")
+    return parse(root, file.read_text(encoding="utf-8"))
+
+
+def parse(root: Path, text: str) -> Config:
+    """Build a Config from TOML text (used by load, and by migrations before rite.toml exists)."""
     try:
-        user = tomllib.loads(file.read_text(encoding="utf-8"))
+        user = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{CONFIG_NAME}: {exc}") from exc
     errors: list[str] = []

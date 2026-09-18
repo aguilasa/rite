@@ -271,6 +271,42 @@ def cmd_stats(project: Project, args) -> int:
     return EXIT_OK
 
 
+def cmd_relink(project: Project, args) -> int:
+    from . import lifecycle
+    cycles = _target_cycles(project, args)
+    changes = lifecycle.relink(project, cycles, write=args.write)
+    total = sum(c["links"] for c in changes)
+    lines = [f"  {c['file']}: {c['links']} link(s)" for c in changes]
+    head = f"{'rewrote' if args.write else 'would rewrite'} {total} link(s) in {len(changes)} file(s) " \
+           f"to {project.cfg.link_style}"
+    _emit(args, {"style": project.cfg.link_style, "changes": changes, "written": args.write},
+          "\n".join([head, *lines] + ([] if args.write else ["dry run: pass --write"])))
+    return EXIT_OK
+
+
+def cmd_migrate(args) -> int:
+    from . import migrate
+    if args.source != "we2002":
+        raise RiteError(f"unknown source {args.source!r}; supported: we2002")
+    root = Path(args.root).resolve() if args.root else Path.cwd()
+    report = migrate.migrate_we2002(root, write=args.write)
+    r = report.as_dict()
+    lines = [f"{'migrated' if args.write else 'would migrate'} {r['items']} items in {len(r['cycles'])} cycles:"]
+    lines += [f"  {c}" for c in r["cycles"]]
+    lines.append(f"files {'changed' if args.write else 'to change'}: {len(r['changed'])}")
+    if r["approximated_commits"]:
+        lines.append(f"done_commit approximated by the last commit touching the item file "
+                     f"({len(r['approximated_commits'])}): " + ", ".join(r["approximated_commits"]))
+    if r["unresolved_commits"]:
+        lines.append(f"done items without a findable work commit ({len(r['unresolved_commits'])}): "
+                     + ", ".join(r["unresolved_commits"]))
+    lines += [f"warning: {w}" for w in r["warnings"]]
+    if not args.write:
+        lines.append("dry run: nothing written (pass --write, on a branch)")
+    _emit(args, r, "\n".join(lines))
+    return EXIT_OK
+
+
 def cmd_guard(project: Project, args) -> int:
     from . import guard
     verdict = guard.classify(project.cfg, Path(args.path))
@@ -384,6 +420,16 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("name")
     s.set_defaults(fn=cmd_stats)
 
+    s = sub.add_parser("relink", parents=[common], help="rewrite links in cycle files to [paths].link_style")
+    s.add_argument("--all", action="store_true")
+    s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
+    s.set_defaults(fn=cmd_relink)
+
+    s = sub.add_parser("migrate", parents=[common], help="adopt a legacy backlog in place (run on a branch)")
+    s.add_argument("--from", dest="source", required=True, help="legacy format: we2002")
+    s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
+    s.set_defaults(fn=cmd_migrate, needs_project=False)
+
     s = sub.add_parser("guard", parents=[common], help="is this path read-only or generated?")
     s.add_argument("path")
     s.set_defaults(fn=cmd_guard)
@@ -396,6 +442,8 @@ def main(argv: list[str] | None = None) -> int:
             stream.reconfigure(encoding="utf-8")
     args = build_parser().parse_args(argv)
     try:
+        if getattr(args, "needs_project", True) is False:
+            return args.fn(args)
         project = _project(args)
         return args.fn(project, args)
     except config.NoConfig as exc:

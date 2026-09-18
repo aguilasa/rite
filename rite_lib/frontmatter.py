@@ -162,6 +162,26 @@ def dump_value(value) -> str:
     return json.dumps(s, ensure_ascii=False)
 
 
+def remove_fields(text: str, keys: set[str]) -> str:
+    """Return ``text`` without the given top-level frontmatter keys (and their block-list lines)."""
+    fm, _ = split(text)
+    if fm is None:
+        return text
+    lines = text.splitlines(keepends=True)
+    end = len(fm) + 1
+    out, i = [lines[0]], 1
+    while i < end:
+        m = _KEY_RE.match(lines[i].rstrip("\r\n"))
+        if m and m.group(1) in keys:
+            i += 1
+            while i < end and lines[i].startswith((" ", "\t")):
+                i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    return "".join(out + lines[end:])
+
+
 def set_fields(text: str, updates: dict) -> str:
     """Return ``text`` with the given frontmatter keys set, preserving everything else."""
     lines = text.splitlines(keepends=True)
