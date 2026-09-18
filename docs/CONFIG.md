@@ -69,6 +69,7 @@ Heading names the CLI reads or writes, so projects can keep their own language.
 | --- | --- |
 | `execution_log` | `"Execution Log"` |
 | `phase_checks` | `"Phase-specific checks"` (section of the profile) |
+| `phase_label` | `"Phase"` — the word `check` looks for inside that section (`Phase 3`, `Fase 3`, …) |
 
 ## `[commit]`
 

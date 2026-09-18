@@ -8,8 +8,8 @@ progress tables) is done by a deterministic CLI, never by hand.
 Rite is agnostic of language, build tool and folder layout: each repository declares its own structure
 and naming in `rite.toml`.
 
-> Status: **v0.1 in progress.** Phases 0–4 are implemented (CLI, core rite, batches, lifecycle);
-> migration tooling and the release are next. See [Roadmap](#roadmap).
+> Status: **v0.1 in progress.** Phases 0–5 are implemented (CLI, core rite, batches, lifecycle, migration);
+> the release (eval suite) is next. See [Roadmap](#roadmap).
 
 ## Install
 
@@ -66,12 +66,13 @@ python3 bin/rite.py <subcommand> ...                          # direct
 
 `resolve-cycle`, `next`, `new-task`, `new-fix`, `commit-new`, `close`, `mark`, `mark-reviewed`,
 `mark-stale`, `sync`, `check`, `status`, `batch-plan`, `new-cycle`, `archive`, `anchors`, `stats`,
-`guard` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
+`relink`, `migrate`, `guard` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
 selected, `3` no `rite.toml`.
 
 ## Configuration
 
 See [docs/CONFIG.md](docs/CONFIG.md). A commented default file is in [templates/rite.toml](templates/rite.toml).
+Adopting an existing backlog: [docs/MIGRATING.md](docs/MIGRATING.md).
 
 ## Development
 
@@ -105,11 +106,11 @@ forbids them in prose.
 | --- | --- | --- |
 | 0 | plugin skeleton, templates, config schema, `/rite:status` | done |
 | 1 | `rite.py` CLI + tests | done |
-| 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | done |
+| 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | done; e2e loop passes |
 | 3 | `execute-batch`, `fix-all`, `batch-plan` | implemented; CLI tested, commands not yet run end to end |
 | 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | implemented; CLI tested, commands not yet run end to end |
-| 5 | migration guide and `rite.py migrate` | next |
-| 6 | release: eval suite, changelog | |
+| 5 | migration guide, `rite.py migrate --from we2002`, `relink` | implemented; verified on a clone of the source repository (check green) |
+| 6 | release: eval suite, changelog | changelog started; eval suite pending |
 
 ## License
 

@@ -48,6 +48,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `batch-plan N\|IDs\|all [--kind task\|fix]` | inventory, conflict matrix, waves |
 | `new-cycle NAME --prefix X`, `archive NAME [--dry-run]` | lifecycle |
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth`; retro numbers |
+| `relink [--write]`, `migrate --from we2002 [--write]` | normalize link style; convert a legacy backlog (see [MIGRATING.md](MIGRATING.md)) |
 | `guard PATH` | read-only / generated verdict (the hook uses it) |
 
 Exit codes: `0` ok · `1` failure or nothing selected · `3` no `rite.toml`.
