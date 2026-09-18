@@ -120,6 +120,9 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
         suggestion = ("plan-to-tasks", "cycle has no tasks")
     elif all(t.status in ("done", "skipped") for t in cycle.tasks) and not fixes:
         suggestion = ("close-cycle", "every task done/skipped and reviewed, no open fix")
+    elif (blocked := [t.id for t in cycle.tasks if t.status == "blocked"]):
+        suggestion = ("execute", f"only blocked tasks remain ({', '.join(blocked)}); /rite:execute {blocked[0]} "
+                                 "re-checks the recorded cause and unblocks it if the cause is gone")
     else:
         suggestion = ("unblock", task_pick.reason)
 

@@ -18,6 +18,9 @@ Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/` and fol
 
 1. **Resolve** (Step 0, kind `task`). The CLI selects: an `in-progress` task first, otherwise the lowest
    pending task whose `depends_on` are satisfied. Nothing selectable → report why and stop.
+   A task named explicitly with `status: blocked`: re-run the check behind the cause recorded in its
+   Execution Log. Cause gone → `rite mark <ID> pending --reason "<command> now <output>" --commit` and
+   continue; cause still there → report it and stop.
 2. **Read the layers** for this task, in order.
 3. **Fix the scope.** The task's Scope and Done criteria are the contract. Do exactly that:
    - Work that belongs to a later task is **not** pulled ahead unless the user asked for it in this

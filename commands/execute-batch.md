@@ -19,6 +19,9 @@ Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/` and fol
    - "all", "everything" or a number above 8 → refuse and ask for a number. Why: a batch that never
      ends is not reviewable, and review must keep pace with execution.
    - `--plan` → stop after Phase 0.
+   - No selectable task but `status: blocked` ones exist → for each, re-run the check behind the
+     cause recorded in its Execution Log; cause gone → `rite mark <ID> pending --reason "..." --commit`.
+     Then plan again; if still nothing is selectable, report the causes and stop.
 2. **Read the layers** once for the batch (repo config, profile); each worker reads its own item.
 3. **Phase 0 — plan** (`batch.md`) with `--kind task`. Tasks with `type: closing` always run alone,
    in the last wave: `batch-plan` enforces it.
