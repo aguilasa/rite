@@ -1,0 +1,64 @@
+# rite.toml — repo config for the Rite workflow. Every key is optional; defaults shown.
+# Reference: docs/CONFIG.md in the plugin.
+
+[project]
+name = ""
+docs_language   = "en-US"   # language of tasks, fixes, profiles
+code_language   = "en-US"   # identifiers and code comments
+commit_language = "en-US"   # commit messages
+
+[paths]
+cycles_root   = "docs/rite/cycles"          # a cycle is any folder here holding progress_file
+archive_dir   = "docs/rite/cycles/archive"  # closed cycles
+profiles_dir  = "docs/rite/profiles"
+plans_dir     = "docs/plans"
+templates_dir = ""                          # optional local overrides of the plugin templates
+link_style    = "root-absolute"             # root-absolute | relative
+default_cycle = ""                          # cycle used when none is given
+
+[naming]
+task_id       = "{prefix}-TASK-{n:02}"
+fix_id        = "FIX-{prefix}-{n:03}"
+task_file     = "{n:02}-{slug}.md"          # relative to the cycle folder
+fix_file      = "{id}.md"
+progress_file = "progress.md"
+fixes_file    = "fixes.md"
+profile_file  = "{cycle}.md"                # inside profiles_dir
+pitfalls_file = "{cycle}.pitfalls.md"
+
+[sections]
+execution_log = "Execution Log"
+phase_checks  = "Phase-specific checks"
+
+[commit]
+style            = "conventional"           # conventional | free
+co_author_footer = true
+bookkeeping      = "separate-commit"        # only mode in v1
+push             = "on-request"             # never | on-request
+never_stage      = []                       # globs never added to a commit
+
+[guards]
+read_only        = []                       # globs; Edit/Write blocked by the hook
+read_only_reason = ""
+# [[guards.generated]]
+# paths     = ["src/gen/**"]
+# generator = "tools/gen.py"
+# check     = "python tools/gen.py --check"
+
+[gates]
+global = []                                 # commands every item must pass before closing
+
+[resources]
+serialized = []                             # e.g. { name = "display", why = "GUI tests share one display" }
+
+[vocab]
+task_types = ["feature", "tool", "research", "verification", "closing"]
+
+[profile]
+max_kb = 12
+
+[status]
+review_age_days = 7
+
+[hooks]
+stop_check = false                          # warn at end of turn if views are out of sync

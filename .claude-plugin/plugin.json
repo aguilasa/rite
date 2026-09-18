@@ -1,0 +1,12 @@
+{
+  "name": "rite",
+  "version": "0.1.0",
+  "description": "A disciplined execute → review → fix workflow for long backlogs: cycles, tasks, independent reviews and evidence-first fixes, with deterministic bookkeeping.",
+  "author": {
+    "name": "aguilasa"
+  },
+  "homepage": "https://github.com/aguilasa/rite",
+  "repository": "https://github.com/aguilasa/rite",
+  "license": "MIT",
+  "keywords": ["workflow", "tasks", "review", "backlog", "planning"]
+}

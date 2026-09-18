@@ -1,0 +1,18 @@
+{
+  "name": "rite",
+  "owner": {
+    "name": "aguilasa"
+  },
+  "metadata": {
+    "description": "Rite — execute/review/fix workflow plugin for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "rite",
+      "source": "./",
+      "description": "A disciplined execute → review → fix workflow for long backlogs, with deterministic bookkeeping.",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}
