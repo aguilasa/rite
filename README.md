@@ -9,7 +9,7 @@ Rite is agnostic of language, build tool and folder layout: each repository decl
 and naming in `rite.toml`.
 
 > Status: **v0.1 in progress.** Phases 0–5 are implemented (CLI, core rite, batches, lifecycle, migration);
-> the release (eval suite) is next. See [Roadmap](#roadmap).
+> the 0.1.0 release is next. See [Roadmap](#roadmap).
 
 ## Install
 
@@ -118,7 +118,7 @@ forbids them in prose.
 | 3 | `execute-batch`, `fix-all`, `batch-plan` | done; e2e lifecycle passes |
 | 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | done; e2e lifecycle passes |
 | 5 | migration guide, `rite.py migrate --from we2002`, `relink` | implemented; verified on a clone of the source repository (check green) |
-| 6 | release: eval suite, changelog | changelog started; eval suite blocked (`claude plugin eval` is early access) |
+| 6 | release: changelog, version tag | changelog started |
 
 ## License
 
