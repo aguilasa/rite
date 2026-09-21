@@ -8,8 +8,8 @@ progress tables) is done by a deterministic CLI, never by hand.
 Rite is agnostic of language, build tool and folder layout: each repository declares its own structure
 and naming in `rite.toml`.
 
-> Status: **v0.1 in progress.** Phases 0–5 are implemented (CLI, core rite, batches, lifecycle, migration);
-> the 0.1.0 release is next. See [Roadmap](#roadmap).
+> Status: **0.1.0 released.** CLI, core rite, batches, lifecycle and migration; the end-to-end runs pass
+> on both examples (Python and Node). See [CHANGELOG.md](CHANGELOG.md) and the [Roadmap](#roadmap).
 
 ## Install
 
@@ -127,11 +127,11 @@ forbids them in prose.
 | --- | --- | --- |
 | 0 | plugin skeleton, templates, config schema, `/rite:status` | done |
 | 1 | `rite.py` CLI + tests | done |
-| 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | done; e2e loop passes |
-| 3 | `execute-batch`, `fix-all`, `batch-plan` | done; e2e lifecycle passes |
-| 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | done; e2e lifecycle passes |
-| 5 | migration guide, `rite.py migrate --from we2002`, `relink` | implemented; verified on a clone of the source repository (check green) |
-| 6 | release: changelog, version tag | changelog started |
+| 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | done; e2e loop passes on both examples |
+| 3 | `execute-batch`, `fix-all`, `batch-plan` | done; e2e lifecycle passes on both examples |
+| 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | done; e2e lifecycle passes on both examples |
+| 5 | migration guide, `rite.py migrate --from we2002`, `relink` | done; measured on a clone of the source repository (no delta against the old tables) |
+| 6 | release: changelog, version tag | done — 0.1.0 |
 
 ## License
 
