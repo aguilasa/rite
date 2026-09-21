@@ -8,8 +8,8 @@ progress tables) is done by a deterministic CLI, never by hand.
 Rite is agnostic of language, build tool and folder layout: each repository declares its own structure
 and naming in `rite.toml`.
 
-> Status: **0.1.0 released.** CLI, core rite, batches, lifecycle and migration; the end-to-end runs pass
-> on both examples (Python and Node). See [CHANGELOG.md](CHANGELOG.md) and the [Roadmap](#roadmap).
+> Status: **0.3.0 released.** CLI, core rite, batches, lifecycle, migration, per-cycle tickets, local
+> cycles and workspaces. See [CHANGELOG.md](CHANGELOG.md) and the [Roadmap](#roadmap).
 
 ## Install
 
@@ -21,6 +21,98 @@ and naming in `rite.toml`.
 For local development: `claude --plugin-dir /path/to/rite`.
 
 Requires Python 3.11+ on PATH (stdlib only) and git.
+
+## Walkthrough: from a plan to a closed cycle
+
+The example below is the harder setup: a **workspace** (a plain folder holding several git
+repositories, one plan spanning two of them) and a **JIRA ticket** on every commit. In a single
+repository the steps are the same, minus everything about `repo`.
+
+```text
+C:\work\                 ← not a git repository; rite.toml goes here
+├── api\                 ← git repository
+├── web\                 ← git repository
+└── docs\plans\plan-name.md
+```
+
+### 0. Once per machine
+
+1. Install, or update an existing install:
+   ```text
+   /plugin marketplace add aguilasa/rite      # first time only
+   /plugin install rite@rite                  # first time only
+   /plugin marketplace update rite
+   /plugin update rite@rite
+   ```
+2. `/reload-plugins`, or start a new session.
+
+### 1. Once per folder
+
+3. Open Claude Code in the folder (`C:\work`).
+4. `/rite:init` — detects the workspace and its repositories, asks at most four questions, writes
+   `rite.toml`.
+5. Adjust `rite.toml` if needed ([docs/CONFIG.md](docs/CONFIG.md)):
+   ```toml
+   [commit]
+   co_author_footer = false             # no co-author footer on work commits
+   ticket_format = "Refs: {ticket}"     # or "{ticket} {subject}" when a JIRA hook wants the key first
+
+   [gates]                              # optional; run from the folder, so name the repository
+   global = ["cd api && <test command>", "cd web && <test command>"]
+   ```
+
+### 2. Once per plan (a cycle)
+
+6. Create the cycle with its ticket:
+   ```text
+   /rite:new-cycle my-cycle --plan docs/plans/plan-name.md --ticket PROJ-123
+   ```
+   Confirm the suggested prefix (e.g. `MY`). Without `--ticket` the command asks for one. In a single
+   repository it also asks whether the cycle is **local** (its documents stay out of git); in a
+   workspace every cycle is local.
+7. Preview the breakdown, then write it:
+   ```text
+   /rite:plan-to-tasks docs/plans/plan-name.md my-cycle --dry-run
+   /rite:plan-to-tasks docs/plans/plan-name.md my-cycle
+   ```
+   Check that every task names one `repo` — work touching both repositories becomes two tasks,
+   linked by `depends_on` when order matters. It ends with `rite check` clean.
+8. `/rite:status my-cycle` — the first task and the command to run.
+
+### 3. The loop (repeat)
+
+9. `/rite:execute my-cycle` — one task: works and commits **inside the task's repository**, with
+   `Refs: PROJ-123` in the message; `rite close` records `done_commit` and queues the task for review.
+10. `/rite:review my-cycle` — a clean-context review of the oldest task awaiting it; whatever fails
+    becomes a fix (`FIX-MY-001`, …) in the same repository.
+11. `/rite:fix my-cycle` — the most severe fix: reproduce, repair, verify, commit.
+12. `/rite:status my-cycle` — always tells you which of the three comes next.
+
+Faster: `/rite:execute-batch my-cycle 2` (tasks in different repositories never conflict) and
+`/rite:fix-all my-cycle`.
+
+### 4. Push
+
+13. Push each repository yourself (`git -C api push`); Rite never pushes.
+14. Squashed or rebased before merging? `rite check` warns that `done_commit` left HEAD's history;
+    repoint it with `rite rebind MY-TASK-03 --sha <new sha>`.
+
+### 5. Close the cycle
+
+15. `/rite:close-cycle my-cycle` — needs every task done and reviewed and no open fix; archives the
+    cycle.
+16. `/rite:retro my-cycle` — groups fixes by root cause and proposes the pitfalls to keep for the next
+    cycle.
+
+Keep in mind:
+
+- In a workspace (or a local cycle) the cycle's documents live only on your disk — back them up.
+- One task, one repository: if `/rite:execute` finds it must change the other one, it stops and reports.
+- A surprising next task? `/rite:status` says why; `rite check --cycle my-cycle` names what is
+  inconsistent.
+
+Concepts behind these choices: [local cycles](docs/CONCEPTS.md#local-cycles),
+[workspaces](docs/CONCEPTS.md#workspaces).
 
 ## Concepts
 
@@ -64,9 +156,9 @@ sh bin/rite <subcommand> [--cycle C] [--root R] [--json]     # finds Python 3.11
 python3 bin/rite.py <subcommand> ...                          # direct
 ```
 
-`resolve-cycle`, `next`, `new-task`, `new-fix`, `commit-new`, `close`, `mark`, `mark-reviewed`,
-`mark-stale`, `sync`, `check`, `status`, `batch-plan`, `new-cycle`, `archive`, `anchors`, `stats`,
-`relink`, `migrate`, `guard` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
+`resolve-cycle`, `next`, `new-task`, `new-fix`, `commit-new`, `commit-refs`, `close`, `rebind`, `mark`,
+`mark-reviewed`, `mark-stale`, `sync`, `check`, `status`, `batch-plan`, `new-cycle`, `archive`,
+`publish`, `anchors`, `stats`, `relink`, `migrate`, `guard` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
 selected, `3` no `rite.toml`.
 
 ## Configuration
