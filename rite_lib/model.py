@@ -65,7 +65,17 @@ class Cycle:
 
     @property
     def tasks(self) -> list[Item]:
-        return sorted((i for i in self.items if i.kind == "task"), key=lambda i: i.n)
+        """Tasks in execution order: IDs listed in the progress file's `order:` first, in that order;
+        the rest by number. Why a list: a task split late gets a new, higher ID but must run before
+        tasks numbered below it, and renumbering would break every link to them."""
+        pos = {item_id: k for k, item_id in enumerate(self.order)}
+        return sorted((i for i in self.items if i.kind == "task"),
+                      key=lambda i: (0, pos[i.id], 0) if i.id in pos else (1, i.n, 0))
+
+    @property
+    def order(self) -> list[str]:
+        value = self.meta.get("order") or []
+        return [str(v) for v in value] if isinstance(value, list) else []
 
     @property
     def fixes(self) -> list[Item]:

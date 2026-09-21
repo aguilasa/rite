@@ -80,6 +80,16 @@ class Checker:
     def check_cycle(self, cycle: Cycle, owner: dict[str, Cycle]) -> None:
         if not cycle.prefix:
             self.err(cycle.progress_path, "frontmatter lacks 'prefix'")
+        if "order" in cycle.meta and not isinstance(cycle.meta["order"], list):
+            self.err(cycle.progress_path, "'order' must be a list of task IDs")
+        task_ids = {t.id for t in cycle.tasks}
+        seen_order: set[str] = set()
+        for item_id in cycle.order:
+            if item_id in seen_order:
+                self.err(cycle.progress_path, f"'order' lists {item_id} twice")
+            elif item_id not in task_ids:
+                self.err(cycle.progress_path, f"'order' lists {item_id}, which is not a task of this cycle")
+            seen_order.add(item_id)
         for path in views.out_of_sync(self.p, cycle):
             self.err(path, "generated table out of sync with item frontmatter (run: rite.py sync)")
         index = cycle.by_id()

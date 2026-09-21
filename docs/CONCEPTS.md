@@ -31,8 +31,9 @@ Each layer knows only what is its own. The rite never names a project, a path, a
 ## Cycles
 
 A **cycle** is a folder holding a progress file. Its tasks and fixes live in it, one file per item.
-`depends_on` never crosses cycles. A cycle's `prefix` is in every ID it allocates. Closed cycles move
-to the archive folder and keep their history (`git mv`).
+`depends_on` never crosses cycles. A cycle's `prefix` is in every ID it allocates. Tasks run in ID
+order, or in the order the progress file's `order:` lists. Closed cycles move to the archive folder and
+keep their history (`git mv`).
 
 ## State
 

@@ -183,6 +183,17 @@ class MigrateTest(unittest.TestCase):
         self.assertIsNone(self.fields("PAR-TASK-01.md")["phase"])
         self.assertEqual(self.fields("01-primeira.md")["phase"], 1)
 
+    def test_table_order_is_kept_as_execution_order(self):
+        # by number, PAR-TASK-01 would sort next to LEG-TASK-01; the tables ran LEG 01-03, then PAR
+        code, out, err = rite(self.root, "migrate", "--from", "we2002", "--write", "--json")
+        self.assertEqual(code, 0, err)
+        progress = (self.root / "docs/tasks/progresso.md").read_text(encoding="utf-8")
+        self.assertEqual(frontmatter.parse(progress)[0]["order"],
+                         ["LEG-TASK-01", "LEG-TASK-02", "LEG-TASK-03", "PAR-TASK-01"])
+        region = progress.split("<!-- rite:begin tasks -->", 1)[1]
+        self.assertLess(region.index("[LEG-TASK-03]"), region.index("[PAR-TASK-01]"))
+        self.assertEqual(json.loads(rite(self.root, "next", "task", "--json")[1])["id"], "LEG-TASK-03")
+
     def test_pipe_inside_code_does_not_shift_columns(self):
         code, out, err = rite(self.root, "migrate", "--from", "we2002", "--write", "--json")
         self.assertEqual(code, 0, err)

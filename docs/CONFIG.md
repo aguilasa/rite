@@ -72,8 +72,17 @@ prefix.
 Task numbers are per cycle. Fix numbers are per prefix across all cycles, archived ones included.
 IDs are always allocated by `rite.py new-task` / `new-fix`, which create the file atomically.
 
-A cycle's `prefix` (and optionally `cycle`, `plan`, `profile`, `pitfalls`) comes from the
+A cycle's `prefix` (and optionally `cycle`, `plan`, `profile`, `pitfalls`, `order`) comes from the
 frontmatter of its `progress_file`.
+
+**Execution order.** Tasks run in ID order unless the progress file lists `order:` — task IDs that
+come first, in that order; unlisted tasks follow by number. It is how a task split late (new, higher
+ID) runs before tasks numbered below it without renumbering them and breaking their links. Selection
+(`next`, `batch-plan`) and the generated table both follow it; `check` rejects unknown or repeated IDs.
+
+```yaml
+order: [LOOKS-TASK-31, LOOKS-TASK-36, LOOKS-TASK-37, LOOKS-TASK-32]
+```
 
 ## `[sections]`
 

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Versions follow [SemVer
 
 ## [Unreleased]
 
+### Added
+
+- `order:` in a progress file's frontmatter sets the execution order of its tasks (listed IDs
+  first, the rest by number); `next`, `batch-plan` and the generated table follow it. `migrate` writes it
+  when a legacy table's row order was not the ID order.
+
 ### Fixed
 
 - `check` reads phase ranges in a profile's phase-checks section ("Phase 4-5", "Fase 6–7") as covering

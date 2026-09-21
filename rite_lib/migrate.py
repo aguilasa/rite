@@ -319,6 +319,13 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
     prof = re.search(r"\*\*Perfil deste ciclo:\*\*\s*\[[^\]]*\]\(([^)]+)\)", ptext)
     if prof:
         new_meta["profile"] = prof.group(1)
+    # the legacy table's row order was the execution order; keep it when it is not the ID order
+    task_ids = {t.id for t in cycle.tasks}
+    table_order = [i for i in rows if i in task_ids]
+    if table_order and table_order != [t.id for t in cycle.tasks][:len(table_order)]:
+        new_meta["order"] = table_order
+        report.warnings.append(f"{display(project.root, progress)}: table order differs from ID order; "
+                               f"kept as `order:` ({len(table_order)} tasks)")
 
     for item in cycle.items:
         report.items += 1

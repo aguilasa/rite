@@ -40,6 +40,7 @@ What it does:
 | every state table of a progress/fix file (an appendix can hold a second one) | the first becomes the generated region (`<!-- rite:begin … -->`); later ones become a one-line pointer to it; the prose around them stays |
 | items named by ID (`PAR-TASK-01.md`) next to `NN-slug.md` ones | read through a second `[naming].task_file` template; new items still use the first |
 | "**Perfil deste ciclo:** [...]" | `profile:` in the progress file's frontmatter |
+| row order of the state tables, when it is not the ID order (a task split late runs before lower numbers) | `order:` in the progress file's frontmatter |
 
 An approximated `done_commit` is recorded where it will be read — at the end of the item's Execution Log:
 
@@ -102,6 +103,7 @@ What the migration left for the operator (`action required`, 15):
 
 Found and fixed while measuring (each now has a test in `tests/test_migrate.py`):
 
+- the tables' row order was the execution order (`looks` runs 36–40 before 32) and was lost;
 - a second state table in an appendix was ignored, so its eleven `PAR-TASK-*` rows had no dates;
 - phase ranges in a profile ("Fase 4-5") were not read as covering each phase;
 - a `|` inside a code span in a title (`` `cor|grade` ``) shifted the columns of that row, losing the

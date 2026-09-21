@@ -93,11 +93,12 @@ def select(cycle: Cycle, kind: str, count: int | None, ids: list[str]) -> list[I
         if len(kinds) > 1:
             raise RiteError("a batch holds tasks or fixes, not both")
         # canonical order, whatever order the IDs were typed in
-        return sorted(chosen, key=lambda i: (i.severity_rank, i.n) if i.kind == "fix" else (0, i.n))
+        rank = {t.id: k for k, t in enumerate(cycle.tasks)}  # execution order, not ID order
+        return sorted(chosen, key=lambda i: (i.severity_rank, i.n) if i.kind == "fix" else (0, rank[i.id]))
     count = count or 2
     if kind == "task":
         pool = [t for t in cycle.tasks if t.status in ("in-progress", "pending")]
-        pool.sort(key=lambda t: (t.status != "in-progress", t.n))
+        pool.sort(key=lambda t: t.status != "in-progress")  # stable: keeps execution order
     else:
         pool = sorted(open_fixes(cycle), key=lambda f: (f.status != "in-progress", f.severity_rank, f.n))
     chosen: list[Item] = []

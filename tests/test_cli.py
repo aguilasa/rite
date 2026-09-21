@@ -114,6 +114,32 @@ class LoopTest(FixtureCase):
         self.assertIsNone(res["commit"])
         self.assertEqual(self.log(1), ["feat: b"])
 
+    def test_order_overrides_id_order(self):
+        # a task split late (04) must run before 02 and 03, without renumbering them
+        write(self.root / "docs/rite/cycles/alpha/04-split.md",
+              task("ALP-TASK-04", "Split", sot="/docs/plans/PLAN-alpha.md#1"))
+        progress = self.root / "docs/rite/cycles/alpha/progress.md"
+        progress.write_text(frontmatter.set_fields(progress.read_text(encoding="utf-8"),
+                            {"order": ["ALP-TASK-01", "ALP-TASK-04", "ALP-TASK-02", "ALP-TASK-03"]}),
+                            encoding="utf-8")
+        self.ok("sync", "--all")
+        table = progress.read_text(encoding="utf-8")
+        self.assertLess(table.index("[ALP-TASK-04]"), table.index("[ALP-TASK-02]"))
+        self.fx.work_commit("src/a.py", "a\n", "feat: a")
+        self.ok("close", "ALP-TASK-01")
+        self.assertEqual(self.js("next", "task", "--cycle", "alpha")["id"], "ALP-TASK-04")
+        self.assertEqual([i["id"] for i in self.js("batch-plan", "2", "--cycle", "alpha")["items"]],
+                         ["ALP-TASK-04", "ALP-TASK-02"])
+        self.assertEqual(self.check_errors("--all"), [])
+
+    def test_order_with_an_unknown_id_is_red(self):
+        progress = self.root / "docs/rite/cycles/alpha/progress.md"
+        progress.write_text(frontmatter.set_fields(progress.read_text(encoding="utf-8"),
+                            {"order": ["ALP-TASK-02", "ALP-TASK-09", "ALP-TASK-02"]}), encoding="utf-8")
+        errors = self.check_errors("--all")
+        self.assertTrue(any("ALP-TASK-09, which is not a task" in e for e in errors), errors)
+        self.assertTrue(any("lists ALP-TASK-02 twice" in e for e in errors), errors)
+
     def test_blocked_selection(self):
         self.ok("mark", "ALP-TASK-01", "blocked", "--reason", "waiting on hardware")
         pick = json.loads(self.fx.rite("next", "task", "--cycle", "alpha", "--json")[1])
