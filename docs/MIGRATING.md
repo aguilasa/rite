@@ -83,27 +83,27 @@ table parser the migration uses, and independently by `grep` on the table rows o
 | `port-mcr` (`docs/tasks/port-mcr`) | 17 → 17 | 17 → 17 | 0 → 0 | 30 → 30 | 30 → 30 | 0 → 0 | none |
 | `wte`, archived (`docs/tasks/concluidos`) | 51 → 51 | 48 → 48 | 0 / 0 / 3 → 0 / 0 / 3 | 142 → 142 | 141 + 1 stale → 141 + 1 stale | 0 → 0 | none |
 
-`check --all` (live cycles): **0 errors, 0 warnings**. With `--include-archived`: 3 errors and
-11 warnings, all genuine and all in the archived `wte` cycle:
-
-- 3 errors — the old `perfil-wte.md` never had phase-specific checks for phases 1, 5 and 7. A gap of the
-  legacy profile, not of the migration; Rite reports it because the reviewer has nothing to run there.
-- 11 warnings — `PAR-TASK-01` … `11` keep their `PAR` prefix inside the `WTE` cycle, as intended by the
-  second `task_file` template.
+`check --all` (live cycles): **0 errors, 0 warnings**. With `--include-archived`: 0 errors and
+11 warnings — `PAR-TASK-01` … `11` keep their `PAR` prefix inside the `WTE` cycle, as intended by the
+second `task_file` template. (A first measurement reported 3 errors for phases 1, 5 and 7 of
+`perfil-wte.md`; the profile covers them with ranges — "Fase 0-1", "Fase 4-5", "Fase 6-7" — which
+`check` did not read until then.)
 
 What the migration left for the operator (`action required`, 15):
 
 - 4 section references with no heading: `WTE-TASK-28`, `29`, `32`, `33` point at §5.1–§5.4 of
   `PLAN-WTE-LAZARUS.md`, which has no such headings. Add the headings, or repoint each task
   (`rite anchors /docs/PLAN-WTE-LAZARUS.md`).
-- 11 tasks with no phase: `PAR-TASK-01` … `11`. Their table has a `§` column, not a phase; they are
-  `phase: null` until someone assigns one.
+- 11 tasks with no phase: `PAR-TASK-01` … `11`. Their table has a `§` column, not a phase, and the
+  progress file says why: they belong to another project and "do not enter phases 0 to 7". `phase: null`
+  is the right answer there, not a gap.
 - 21 approximated `done_commit` values (`CORR-LOOKS-*` and `CORR-WTE-*` whose messages never named
   the ID), each with the provenance line above.
 
 Found and fixed while measuring (each now has a test in `tests/test_migrate.py`):
 
 - a second state table in an appendix was ignored, so its eleven `PAR-TASK-*` rows had no dates;
+- phase ranges in a profile ("Fase 4-5") were not read as covering each phase;
 - a `|` inside a code span in a title (`` `cor|grade` ``) shifted the columns of that row, losing the
   severity and date of `CORR-WTE-079`;
 - single-number section references (`§1`) never became anchors;

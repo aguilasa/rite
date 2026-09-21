@@ -223,6 +223,18 @@ class CheckRedTest(FixtureCase):
         self.ok("sync", "--all")
         self.assert_red("no entry for phase 7")
 
+    def test_a_phase_range_covers_every_phase_in_it(self):
+        # one entry often serves phases that share their checks ("Phase 6-7")
+        prof = self.root / "docs/rite/profiles/alpha.md"
+        prof.write_text(prof.read_text(encoding="utf-8") + "\n### Phase 6-8 — late\n- same checks\n",
+                        encoding="utf-8")
+        write(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", phase=7, sot="/docs/plans/PLAN-alpha.md#1"))
+        write(self.cyc() / "05-y.md", task("ALP-TASK-05", "Y", phase=9, sot="/docs/plans/PLAN-alpha.md#1"))
+        self.ok("sync", "--all")
+        errors = self.check_errors("--all")
+        self.assertFalse([e for e in errors if "phase 7" in e], errors)
+        self.assertTrue([e for e in errors if "phase 9" in e], errors)
+
     def test_profile_over_limit(self):
         p = self.root / "docs/rite/profiles/alpha.md"
         p.write_text(p.read_text(encoding="utf-8") + "\n" + ("pitfall line\n" * 1200), encoding="utf-8")

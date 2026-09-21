@@ -18,6 +18,23 @@ REQUIRED = {
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+def covered_phases(body: str, label: str) -> set[str]:
+    """Phases a profile's phase-checks section has entries for.
+
+    Accepts single phases ("Phase 3") and ranges ("Phase 4-5", "Phase 6–7"): one entry often covers
+    phases that share their checks.
+    """
+    covered: set[str] = set()
+    rx = re.compile(rf"(?i)\b{re.escape(label)}s?\s+(\w+)(?:\s*[-–]\s*(\d+))?\b")
+    for m in rx.finditer(body):
+        first, last = m.group(1), m.group(2)
+        if last and first.isdigit() and int(first) <= int(last):
+            covered.update(str(n) for n in range(int(first), int(last) + 1))
+        else:
+            covered.add(first)
+    return covered
+
+
 @dataclass
 class Finding:
     level: str  # "error" | "warn"
@@ -226,9 +243,9 @@ class Checker:
             if phases:
                 self.err(prof, f"missing section '{heading}' (tasks use phases {', '.join(phases)})")
             return
+        covered = covered_phases(body, self.p.cfg["sections"]["phase_label"])
         for ph in phases:
-            label = re.escape(self.p.cfg["sections"]["phase_label"])
-            if not re.search(rf"(?i)\b{label}\s+{re.escape(ph)}\b", body):
+            if ph not in covered:
                 self.err(prof, f"'{heading}' has no entry for phase {ph}")
 
 

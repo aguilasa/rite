@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `check` reads phase ranges in a profile's phase-checks section ("Phase 4-5", "Fase 6–7") as covering
+  every phase in them; single phases were the only form it recognised.
+
 ## [0.1.0] — 2026-09-21
 
 First release.
