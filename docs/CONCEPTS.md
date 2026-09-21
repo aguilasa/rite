@@ -79,6 +79,21 @@ Some work is planned only for yourself: the code goes to the repository, the tas
   code. `rite publish <cycle>` turns a local cycle into a tracked one — `local: false` and one commit
   with its documents — once you have removed its `.gitignore` lines.
 
+## Workspaces
+
+`rite.toml` may sit in a plain folder that holds several git repositories — one plan for two
+projects, say. Rite detects it (the root is not a git repository) and runs in workspace mode:
+
+- **Every item names its repository** in `repo:` — `rite new-task --repo api`; a fix inherits its
+  origin's. `check` reports an item without one and lists the repositories found.
+- `close`, `rebind`, `mark-reviewed` and `mark-stale` read commits and HEAD in that repository;
+  `check` resolves each `done_commit` there. Commit the work inside it (`git -C api commit`).
+- **Every cycle is local**: the documents live in the workspace folder, outside every repository, and
+  no bookkeeping commit is made. There is nothing to `publish` to.
+- **One item, one repository.** Work spanning two becomes two items; `/rite:plan-to-tasks` splits it.
+- `batch-plan` reads `files:` relative to each item's repository, so the same path in two
+  repositories is not a conflict.
+
 ## Engineering disciplines
 
 - **Measure, do not read.** Logs and ticked boxes are leads; only commands run now count.

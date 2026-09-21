@@ -9,7 +9,7 @@ Arguments: `$ARGUMENTS`
 
 Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/` and follow them:
 `cli.md`, `cycle-resolution.md`, `evidence.md`, `guards.md`, `discrepancy-sweep.md`,
-`commit-policy.md`, `bookkeeping.md`, `batch.md`.
+`commit-policy.md`, `bookkeeping.md`, `batch.md`, `workspace.md`.
 
 ## Steps
 

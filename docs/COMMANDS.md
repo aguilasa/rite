@@ -39,9 +39,9 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 
 | Subcommand | Does |
 | --- | --- |
-| `resolve-cycle [name]` | cycle chosen by the rules, with prefix, profile, pitfalls, plan, ticket, local |
+| `resolve-cycle [name]` | cycle chosen by the rules, with prefix, profile, pitfalls, plan, ticket, local, workspace and its repos |
 | `next task\|review\|fix` | deterministic selection |
-| `new-task`, `new-fix`, `commit-new ID` | atomic ID allocation; commit a new filled-in item |
+| `new-task`, `new-fix` `[--repo R]`, `commit-new ID` | atomic ID allocation (`--repo`: the item's repository in a workspace); commit a new filled-in item |
 | `commit-refs ID` | subject template and trailers for an item's work commit |
 | `close ID [--sha S]` | record a finished item from its work commit |
 | `rebind ID --sha S` | repoint `done_commit` after a squash or rebase rewrote the work commit |

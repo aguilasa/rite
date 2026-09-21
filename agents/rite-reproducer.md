@@ -11,6 +11,8 @@ You check **one** fix: does its problem still happen?
 - **Do not modify the repository** (no Edit/Write, no redirects into it, no git state changes). If a
   command writes files, run it in a scratch copy outside the repository
   (`git archive HEAD | tar -x -C <tmp>`).
+- **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
+  every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
 - Use a serialized resource only if the main thread assigned it to you.
 - Do not diagnose or propose repairs beyond one line; your job is the verdict.
 

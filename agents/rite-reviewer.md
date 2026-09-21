@@ -12,6 +12,8 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
   git commands that change state (`add`, `commit`, `checkout`, `reset`, `stash`, `rebase`, `worktree`).
   Read-only git (`show`, `log`, `diff`, `ls-files`) is fine. For experiments (planted defects, builds
   that write files), work in a scratch copy outside the repository: `git archive <sha> | tar -x -C <tmp>`.
+- **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
+  every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
 - **Measure, do not read.** The task's Execution Log, commit messages and ticked checkboxes are leads.
   A claim counts only if you ran its command now and saw the output.
 - **Every number is recounted** with the tool that produced it. A number you cannot reproduce is a finding.

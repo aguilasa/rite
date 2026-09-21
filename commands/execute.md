@@ -12,7 +12,7 @@ reviewable and resumable; batches are `/rite:execute-batch`.
 
 Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/` and follow them:
 `cli.md`, `cycle-resolution.md`, `layers.md`, `evidence.md`, `guards.md`, `discrepancy-sweep.md`,
-`commit-policy.md`, `bookkeeping.md`.
+`commit-policy.md`, `bookkeeping.md`, `workspace.md`.
 
 ## Steps
 

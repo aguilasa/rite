@@ -22,20 +22,21 @@ For each wave, in order:
 
 1. `rite mark <ID> in-progress` for each item of the wave.
 2. Launch one `rite-worker` agent (namespaced `rite:rite-worker`) per item, **in parallel, in one
-   message**. Give each only: repository root, cycle, item path, its allowed files (`files`), the
-   serialized resources assigned to it (at most one worker per resource), the gates it may run
+   message**. Give each only: repository root (in a workspace, the item's `repo`), cycle, item path,
+   its allowed files (`files`), the serialized resources assigned to it (at most one worker per resource), the gates it may run
    (none that use a resource held by another worker), and the CLI invocation.
-3. Wait for all workers. For each report, check with `git status --porcelain` that the worker only
-   changed its allowed files. A stray file is a failure of that item.
+3. Wait for all workers. For each report, check with `git status --porcelain` (in a workspace, in each
+   item's repository) that the worker only changed its allowed files. A stray file is a failure of
+   that item.
 4. Run `[gates].global` and the profile's Gates **once, on the combined tree**.
    - **Green** → go to 5.
    - **Red** → abort the batch: commit nothing from this wave, leave items `in-progress`, and report
      the gate output with the per-item file lists so the user can decide. Why: a broken global gate
      cannot be attributed safely after parallel edits.
 5. **Serially, in item order**, for each item that reported DONE: stage exactly its files
-   (`git add -- <files>`), work commit with the references from `rite commit-refs <ID>`, then
-   `rite close <ID> --json`. Why: the
-   subagent edits, the main thread commits — no races on the index or the views.
+   (`git add -- <files>`, or `git -C <repo> add -- <files>` in a workspace), work commit with the
+   references from `rite commit-refs <ID>`, then `rite close <ID> --json`. Why: the subagent edits,
+   the main thread commits — no races on the index or the views.
 6. Items that reported STALE (fixes) → `rite mark-stale`; BLOCKED → `rite mark <ID> blocked
    --reason "..." --commit`. An isolated failure does not stop the batch.
 7. Write each worker's forwarded notes into the destination items' Notes and commit them

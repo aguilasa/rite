@@ -17,6 +17,10 @@ its history or its links. `init` writes `rite.toml` and a short block in `CLAUDE
 1. **Already adopted?** If `rite.toml` exists at the repository root, run `rite check --all` and
    `rite status --all`, report both, and stop.
 2. **Detect** (read-only), and note the evidence for each conclusion:
+   - **Workspace**: the current folder is not inside a git repository (`git rev-parse` fails) but
+     sub-folders are. Then Rite runs in workspace mode (see `${CLAUDE_PLUGIN_ROOT}/shared/workspace.md`):
+     `rite.toml` goes here, every cycle is local, every item names its `repo`. Read languages, commit
+     style and gates from each repository, and tell the user which ones were found.
    - **Docs and plans**: folders holding plans, specs or design documents.
    - **Existing backlog**: folders with task-like files; their ID pattern (e.g. `ABC-TASK-01`,
      `XYZ-042`), progress files and their names, fix/correction files and their ID pattern, whether

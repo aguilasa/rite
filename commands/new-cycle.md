@@ -20,7 +20,8 @@ Read from `${CLAUDE_PLUGIN_ROOT}/shared/`: `cli.md`, `asking.md`.
      without one if the user says so.
    - Unless `--yes`, ask in one question: the cycle's **ticket** in an external tracker (e.g. a JIRA
      key; optional — every commit of the cycle will carry it) and whether the cycle is **local**
-     (its documents stay out of git; code commits still go to the repository).
+     (its documents stay out of git; code commits still go to the repository). Skip the local question
+     in a workspace (`rite.toml` outside git): every cycle there is local.
 2. **Create**: `rite new-cycle <name> --prefix <X> [--plan <path>] [--ticket <KEY>] [--local] --commit
    --json`. It creates the cycle folder with its progress and fixes files, the profile skeleton (all
    required sections) and an empty pitfalls file, and commits them — a local cycle commits nothing. It

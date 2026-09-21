@@ -12,7 +12,7 @@ review record. Why: the one who executed cannot see their own blind spots; the r
 separate context that **measures instead of reads**.
 
 Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/`: `cli.md`,
-`cycle-resolution.md`, `evidence.md`, `bookkeeping.md`.
+`cycle-resolution.md`, `evidence.md`, `bookkeeping.md`, `workspace.md`.
 
 ## Steps
 
@@ -22,7 +22,8 @@ Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/`: `cli.m
    never this context. Give it only facts, not opinions about the work:
    - repository root; the CLI invocation from `cli.md`;
    - cycle name and folder; paths of the task, profile, pitfalls file and `rite.toml`;
-   - the task's `source_of_truth`, `done_commit`, `phase`;
+   - the task's `source_of_truth`, `done_commit`, `phase`, and `repo` when it has one (the reviewer works
+     inside that repository);
    - the instruction: "Review this task per your procedure and return findings in your format."
 3. **Screen the findings.** Keep a finding only if it has a runnable evidence command and its output.
    Do not re-review, soften or add findings of your own; list dropped ones in the report with the reason.

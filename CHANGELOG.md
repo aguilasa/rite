@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Workspace mode.** `rite.toml` may live in a plain folder whose sub-folders are git repositories.
+  Each task and fix names its repository in `repo:` (`new-task --repo`; a fix inherits its origin's);
+  `close`, `rebind`, `mark-reviewed`, `mark-stale` and `check` read commits there, and every cycle is
+  local. `resolve-cycle` reports `workspace` and `repos`; `commit-refs` reports the item's `repo`;
+  `batch-plan` compares `files:` only within one repository. New `shared/workspace.md` tells the
+  commands and agents to work and commit inside the item's repository.
+
 ## [0.2.0] — 2026-09-21
 
 ### Added
