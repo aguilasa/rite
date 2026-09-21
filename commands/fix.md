@@ -33,7 +33,8 @@ Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/` and fol
 6. **Repair**, keeping to the fix's scope. Where the project has tests, add one that fails without the
    repair. Rerun the Verification command: it must now pass — record before/after output.
 7. **Gates**: `[gates].global` and the profile's Gates.
-8. **Work commit** (`fix: ...`, `Refs: <FIX>`), including the fix file's prose (Root cause, Verification).
+8. **Work commit** (`fix: ...`, references from `rite commit-refs <FIX>`), including the fix file's prose
+   (Root cause, Verification) — except in a local cycle, where the fix file stays out of the commit.
 9. **Discrepancy sweep** — with its **own commit** (`docs: sweep after <FIX>`) when it changed anything.
    Why: separate commits let a reviewer tell the repair from its ripple.
 10. **Close**: `rite close <FIX> --sha <work-commit-SHA> --json`, then `rite check --quick --cycle <cycle>`.

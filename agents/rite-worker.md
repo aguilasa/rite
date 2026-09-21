@@ -37,6 +37,6 @@ FILES CHANGED: <paths, one per line>
 CRITERIA: <criterion → [x]|[ ] → command → decisive output>
 GATES: <command → pass|fail>
 SWEEP: <terms searched; mentions updated; forwards for other files>
-COMMIT MESSAGE: <suggested conventional subject> / Refs: <ID>
+COMMIT MESSAGE: <suggested conventional subject> (the main thread adds the references)
 NOTES: <blockers, surprises, anything the main thread must know>
 ```

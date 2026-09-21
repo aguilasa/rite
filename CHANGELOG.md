@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Ticket per cycle.** `ticket: PROJ-123` in a progress file (`new-cycle --ticket`) puts the key in
+  every commit of the cycle, work and bookkeeping alike; `[commit].ticket_format` chooses a trailer
+  (default `Refs: {ticket}`) or a subject template (`{ticket} {subject}`).
+- **Local cycles.** `local: true` (`new-cycle --local`) keeps a cycle's documents out of git: the CLI
+  writes state to the item files and makes no bookkeeping commit, and work commits carry no
+  `Refs: <ID>`. `check` warns when `local` and `.gitignore` disagree. `publish <cycle>` turns a local
+  cycle into a tracked one in one commit.
+- `commit-refs <ID>`: the subject template and trailers an item's work commit must carry; commands take
+  references from it instead of writing `Refs: <ID>` themselves.
+- `rebind <ID> --sha <commit>`: repoint `done_commit` after a squash or rebase, keeping the review.
+- `check` warns when a `done_commit` is not in HEAD's history, and its errors for a missing commit
+  suggest `rebind`.
+
+### Fixed
+
+- `close` recognises a bookkeeping commit at HEAD when a ticket precedes its subject.
+
 ## [0.1.1] — 2026-09-21
 
 ### Added

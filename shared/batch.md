@@ -33,7 +33,8 @@ For each wave, in order:
      the gate output with the per-item file lists so the user can decide. Why: a broken global gate
      cannot be attributed safely after parallel edits.
 5. **Serially, in item order**, for each item that reported DONE: stage exactly its files
-   (`git add -- <files>`), work commit with `Refs: <ID>`, then `rite close <ID> --json`. Why: the
+   (`git add -- <files>`), work commit with the references from `rite commit-refs <ID>`, then
+   `rite close <ID> --json`. Why: the
    subagent edits, the main thread commits — no races on the index or the views.
 6. Items that reported STALE (fixes) → `rite mark-stale`; BLOCKED → `rite mark <ID> blocked
    --reason "..." --commit`. An isolated failure does not stop the batch.

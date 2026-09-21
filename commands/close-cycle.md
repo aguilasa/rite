@@ -22,7 +22,8 @@ Read from `${CLAUDE_PLUGIN_ROOT}/shared/`: `cli.md`, `asking.md`.
    are rewritten across the repository.
 5. **Archive**: `rite archive <cycle> --json`. It moves the folder with `git mv`, rewrites links in
    prose and link fields (not inside code blocks), and commits `chore(rite): archive <cycle>`. It
-   refuses when the index has staged changes — report that as is.
+   refuses when the index has staged changes — report that as is. A local cycle is moved on disk and
+   nothing is committed; the archive folder must be ignored by git too, or `check` warns.
 6. **Verify**: `rite check --all` and `rite status --all`.
 
 ## Report (fixed format)

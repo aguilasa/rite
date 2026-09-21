@@ -34,6 +34,7 @@ Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/`: `cli.m
 5. **Record**: `rite mark-reviewed <ID> [--fixes <FIX-ID>,...] --json`. This one commit carries the new
    fix files, the task's `reviewed_on` and the views — also when there are no findings.
    Why: a review without a commit leaves no trace, and the task would be selected again.
+   In a local cycle it writes the same record to the files and commits nothing.
 6. `rite check --quick --cycle <cycle>`.
 
 ## Report (fixed format)
@@ -43,5 +44,5 @@ Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/`: `cli.m
 3. **Phase-specific checks** — each check → pass/fail (or "no entry for phase N").
 4. **Fixes opened** — ID, severity, title; or "none".
 5. **Dropped findings** — with reason; or "none".
-6. **Commit** — SHA + subject.
+6. **Commit** — SHA + subject; or "local cycle, recorded in files".
 7. **Next** — `rite status --cycle <cycle>` suggestion.

@@ -53,6 +53,32 @@ reads that commit and writes `done_on` (the commit's date), `done_commit`, and t
 and commits that as `chore(rite): close <ID>`. A commit cannot contain its own SHA, so the record is
 a second commit — and it is always consistent with the first.
 
+Work commits name what they belong to with trailers from `rite commit-refs <ID>`: `Refs: <ID>`, and
+the cycle's `ticket` if it has one (see `[commit].ticket_format`).
+
+A squash or rebase rewrites the work commit and leaves `done_commit` pointing at a commit outside
+HEAD's history; `rite check` warns (errors once the old commit is gone) and `rite rebind <ID> --sha
+<commit>` repoints it without reopening the item or its review.
+
+## Local cycles
+
+Some work is planned only for yourself: the code goes to the repository, the tasks never do.
+`local: true` in the progress file's frontmatter (`rite new-cycle --local`) makes such a cycle:
+
+- **State is unchanged.** Status, dates and `done_commit` are in the item files as always, and
+  `next`, `status`, review and fix selection read them the same way. The CLI never took state from git.
+- **No bookkeeping commits.** `close`, `mark-reviewed`, `mark-stale`, `mark --commit`, `commit-new`,
+  `new-cycle --commit` and `archive` write the files and commit nothing (`"commit": null,
+  "local": true`). `close` still reads the work commit — that is code, and it is in the repository.
+- **No `Refs: <ID>`** in work commits: the ID would name a file nobody else has. The ticket, if any,
+  stays — the tracker is outside the repository.
+- **Keep the documents ignored.** Add the cycle folder, its profile and pitfalls file (and the archive
+  folder) to `.gitignore`; `rite check` warns when a local cycle is not ignored, and when an ignored
+  one is not local (its bookkeeping commits would fail).
+- **No backup.** The documents live only on your disk; losing them loses the cycle's history, not the
+  code. `rite publish <cycle>` turns a local cycle into a tracked one — `local: false` and one commit
+  with its documents — once you have removed its `.gitignore` lines.
+
 ## Engineering disciplines
 
 - **Measure, do not read.** Logs and ticked boxes are leads; only commands run now count.

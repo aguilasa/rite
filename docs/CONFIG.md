@@ -103,6 +103,10 @@ Heading names the CLI reads or writes, so projects can keep their own language.
 | `bookkeeping` | `"separate-commit"` | Only mode in v1: the work commit first, then `rite.py close` records it in its own commit. |
 | `push` | `"on-request"` | `never` or `on-request`. Commands never push on their own. |
 | `never_stage` | `[]` | Globs never added to a commit. |
+| `ticket_format` | `"Refs: {ticket}"` | Where a cycle's `ticket` goes in its commits. With `{subject}` it is the subject (`"{ticket} {subject}"` gives `PROJ-1 feat: …`, as many JIRA commit-msg hooks want); without, it is a trailer line. Must contain `{ticket}`. Applies to work commits (through `rite commit-refs`) and bookkeeping commits alike. |
+
+The ticket itself is per cycle, not per repository: `ticket: PROJ-123` in the progress file's
+frontmatter (`rite new-cycle --ticket`). A cycle without one gets no ticket reference.
 
 ## `[guards]`
 

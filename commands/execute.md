@@ -37,7 +37,8 @@ Before step 1, read these fragments from `${CLAUDE_PLUGIN_ROOT}/shared/` and fol
 7. **Gates**: run `[gates].global` and the profile's Gates. Red → fix and rerun; if you cannot, go to
    *Blocked* below.
 8. **Discrepancy sweep.**
-9. **Work commit** — code, docs, sweep edits and the task file's prose together, with `Refs: <ID>`.
+9. **Work commit** — code, docs, sweep edits and the task file's prose together, with the references
+   from `rite commit-refs <ID>`. In a local cycle the task file stays out of the commit.
 10. **Close**: `rite close <ID> --json`, then `rite check --quick --cycle <cycle>`.
 
 **Blocked**: if the task cannot be finished (missing dependency, failing gate you cannot fix, guarded
