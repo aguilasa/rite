@@ -1,0 +1,13 @@
+{
+  "name": "slugkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tiny text utilities (Rite example project)",
+  "scripts": {
+    "test": "node --test",
+    "gen": "node tools/gen-exports.mjs",
+    "gen:check": "node tools/gen-exports.mjs --check"
+  },
+  "engines": { "node": ">=20" }
+}

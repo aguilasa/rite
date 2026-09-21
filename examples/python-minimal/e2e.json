@@ -1,0 +1,18 @@
+{
+  "name": "textkit",
+  "cycle": "textkit",
+  "prefix": "TXT",
+  "plan": "docs/plans/PLAN-textkit.md",
+  "gate": "python -m unittest discover -s tests",
+  "read_only_probe": "data/golden/words.txt",
+  "defect": {
+    "file_glob": "textkit/*.py",
+    "find": "def slugify(",
+    "replace": "def _slugify_ok(",
+    "append": "\n\ndef slugify(text):\n    return _slugify_ok(text).upper()\n",
+    "commit_subject": "refactor: tweak slugify",
+    "symptom_command": "python -c \"from textkit import slugify; print(slugify('Hello, World!'))\"",
+    "good_output": "hello-world",
+    "bad_output": "HELLO-WORLD"
+  }
+}

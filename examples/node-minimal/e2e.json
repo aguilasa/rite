@@ -1,0 +1,27 @@
+{
+  "name": "slugkit",
+  "cycle": "slugkit",
+  "prefix": "SLG",
+  "plan": "docs/plans/PLAN-slugkit.md",
+  "gate": "npm test",
+  "read_only_probe": "fixtures/golden/words.txt",
+  "defect": {
+    "file_glob": "src/*.mjs",
+    "candidates": [
+      {
+        "find": "function slugify(",
+        "replace": "function _slugifyOk(",
+        "append": "\nexport function slugify(text) {\n  return _slugifyOk(text).toUpperCase();\n}\n"
+      },
+      {
+        "find": "const slugify =",
+        "replace": "const _slugifyOk =",
+        "append": "\nexport function slugify(text) {\n  return _slugifyOk(text).toUpperCase();\n}\n"
+      }
+    ],
+    "commit_subject": "refactor: tweak slugify",
+    "symptom_command": "node -e \"import('./src/index.mjs').then(m => console.log(m.slugify('Hello, World!')))\"",
+    "good_output": "hello-world",
+    "bad_output": "HELLO-WORLD"
+  }
+}

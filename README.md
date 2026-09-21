@@ -84,22 +84,35 @@ Tests build throw-away git repositories in three layouts (sub-folder cycles, fla
 Portuguese layout) and run the CLI against them, including planted defects that `check` must catch.
 `tests/test_rite_is_agnostic.py` fails if a command names a concrete project, tool or absolute path.
 
-End to end, with a real headless Claude Code (costs tokens):
+## Examples
+
+| Example | Stack | Gate | Generated artifact |
+| --- | --- | --- | --- |
+| [examples/python-minimal](examples/python-minimal) | Python, stdlib only | `python -m unittest discover -s tests` | — |
+| [examples/node-minimal](examples/node-minimal) | Node 20+, no dependencies | `npm test` (`node --test`) | `src/index.mjs` from `tools/gen-exports.mjs` |
+
+Each example carries an `e2e.json` manifest (cycle, prefix, plan, gate, a read-only path to probe and
+a declarative defect). `tests/test_examples.py` keeps every example green under `rite check` and its
+manifest honest — the end-to-end runs read the manifest, so they name no project, path or tool.
+
+End to end, with a real headless Claude Code (costs tokens). Both runs take `--example`
+(default `python-minimal`) and work on a throw-away copy:
 
 ```sh
-python tests/e2e/run_loop.py --model sonnet
+python tests/e2e/run_loop.py --example node-minimal --model sonnet
 ```
 
-It runs execute → planted defect → review (must open a fix) → fix → write to a read-only path (must be
-blocked) on a copy of [examples/python-minimal](examples/python-minimal).
+Execute → planted defect → review (must open a fix) → fix → write to the read-only path (must be
+blocked by the hook).
 
 ```sh
-python tests/e2e/run_lifecycle.py --model sonnet
+python tests/e2e/run_lifecycle.py --example node-minimal --model sonnet
 ```
 
-From zero: init → new-cycle → plan-to-tasks → execute-batch → planted defect → an autopilot that runs
-whatever `rite status` suggests (execute-batch / review / fix-all) → close-cycle → retro, asserting
-`rite check` and one close commit per done item after every step.
+From zero (the example stripped of its `rite.toml` and cycle): init → new-cycle → plan-to-tasks →
+execute-batch → planted defect → an autopilot that runs whatever `rite status` suggests
+(execute-batch / execute / review / fix-all) → close-cycle → retro, asserting `rite check` and one
+close commit per done item after every step.
 
 ## Guards
 
