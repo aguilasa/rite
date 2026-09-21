@@ -97,14 +97,48 @@ def _cells(line: str) -> list[str]:
     line = line.strip()
     if line.startswith("|"):
         line = line[1:]
-    if line.endswith("|"):
+    if line.endswith("|") and not line.endswith("\\|"):
         line = line[:-1]
-    return [c.strip() for c in re.split(r"(?<!\\)\|", line)]
+    # split on '|' except when escaped or inside a code span: legacy titles quote shell pipes
+    # (`a|b`), and splitting there shifts every later column of the row
+    cells, current, in_code, i = [], [], False, 0
+    while i < len(line):
+        ch = line[i]
+        if ch == "\\" and i + 1 < len(line) and line[i + 1] == "|":
+            current.append("|")
+            i += 2
+            continue
+        if ch == "`":
+            in_code = not in_code
+        if ch == "|" and not in_code:
+            cells.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+    cells.append("".join(current))
+    return [c.strip() for c in cells]
 
 
-def find_table(text: str, must_have: tuple[str, ...]) -> tuple[int, int, list[str], list[list[str]]] | None:
-    """First table whose header contains all ``must_have`` columns: (start, end, header, rows) by line."""
+def _row(line: str, width: int) -> list[str]:
+    """Cells of a table row; falls back to a plain split when code-span awareness breaks the width
+    (an unbalanced backtick would otherwise swallow the rest of the row)."""
+    cells = _cells(line)
+    if len(cells) == width:
+        return cells
+    stripped = line.strip().strip("|")
+    plain = [c.strip() for c in re.split(r"(?<!\\)\|", stripped)]
+    return plain if len(plain) == width else cells
+
+
+def find_tables(text: str, must_have: tuple[str, ...]) -> list[tuple[int, int, list[str], list[list[str]]]]:
+    """Every table whose header contains all ``must_have`` columns: [(start, end, header, rows)] by line.
+
+    Legacy progress files can hold several state tables (an appendix for a second backlog); all of
+    them carry state, so all of them are read.
+    """
     lines = text.split("\n")
+    found = []
     i = 0
     while i < len(lines) - 1:
         if lines[i].lstrip().startswith("|") and re.match(r"^\s*\|?\s*:?-{2,}", lines[i + 1]):
@@ -113,11 +147,16 @@ def find_table(text: str, must_have: tuple[str, ...]) -> tuple[int, int, list[st
             while j < len(lines) and lines[j].lstrip().startswith("|"):
                 j += 1
             if all(any(m in h for h in header) for m in must_have):
-                return i, j, header, [_cells(ln) for ln in lines[i + 2:j]]
+                found.append((i, j, header, [_row(ln, len(header)) for ln in lines[i + 2:j]]))
             i = j
         else:
             i += 1
-    return None
+    return found
+
+
+def find_table(text: str, must_have: tuple[str, ...]) -> tuple[int, int, list[str], list[list[str]]] | None:
+    tables = find_tables(text, must_have)
+    return tables[0] if tables else None
 
 
 def _col(header: list[str], *names: str) -> int | None:
@@ -141,11 +180,23 @@ def _status_from_cell(cell: str, table: dict) -> str | None:
     return table.get(low)
 
 
-def replace_table(text: str, table: tuple, region: str) -> str:
-    start, end, _, _ = table
+MOVED_TABLE_NOTE = ("_The state of these items now lives in their frontmatter and in the generated table "
+                    "above (`rite.py sync`)._")
+
+
+def replace_tables(text: str, tables: list[tuple], region: str) -> str:
+    """First state table becomes the generated region; later ones become a pointer to it.
+
+    Why not keep them: a second copy of the state is exactly the drift the migration removes.
+    """
     lines = text.split("\n")
-    lines[start:end] = [views.begin_marker(region), views.END_MARKER]
+    for index, (start, end, _, _) in reversed(list(enumerate(tables))):
+        lines[start:end] = [views.begin_marker(region), views.END_MARKER] if index == 0 else [MOVED_TABLE_NOTE]
     return "\n".join(lines)
+
+
+def replace_table(text: str, table: tuple, region: str) -> str:
+    return replace_tables(text, [table], region)
 
 
 # --- commits -----------------------------------------------------------------------
@@ -217,32 +268,33 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
     fixes_file = cycle_dir / project.fixes_name
     ptext = progress.read_text(encoding="utf-8")
     meta, _ = frontmatter.parse(ptext)
-    task_table = find_table(ptext, ("id", "status"))
+    task_tables = find_tables(ptext, ("id", "status"))
     rows: dict[str, dict] = {}
-    if task_table:
-        _, _, header, trs = task_table
+    for _, _, header, trs in task_tables:
         c_id, c_st = _col(header, "id"), _col(header, "status")
         c_done, c_rev = _col(header, "concluída", "concluida"), _col(header, "revisad")
+        c_phase = _col(header, "fase", "phase")
         for r in trs:
-            if c_id is None or c_id >= len(r) or not (tid := _first_id(r[c_id])):
+            if c_id is None or c_id >= len(r) or not (tid := _first_id(r[c_id])) or tid in rows:
                 continue
             rows[tid] = {
                 "status": _status_from_cell(r[c_st], TASK_STATUS) if c_st is not None and c_st < len(r) else None,
                 "done_on": (_DATE.search(r[c_done]) or [None])[0] if c_done is not None and c_done < len(r) else None,
                 "review": r[c_rev] if c_rev is not None and c_rev < len(r) else "",
+                "phase": int(r[c_phase]) if c_phase is not None and c_phase < len(r)
+                and r[c_phase].strip().isdigit() else None,
             }
     frows: dict[str, dict] = {}
     ftext = fixes_file.read_text(encoding="utf-8") if fixes_file.is_file() else ""
-    fix_table = find_table(ftext, ("id", "status")) if ftext else None
-    if fix_table:
-        _, _, header, trs = fix_table
+    fix_tables = find_tables(ftext, ("id", "status")) if ftext else []
+    for _, _, header, trs in fix_tables:
         c_id, c_or = _col(header, "id"), _col(header, "origem", "origin")
         c_sev, c_st = _col(header, "criticidade", "severidade"), _col(header, "status")
         c_done = _col(header, "concluída", "concluida")
         if c_or == c_id:
             c_or = next((k for k, h in enumerate(header) if "origem" in h and k != c_id), None)
         for r in trs:
-            if c_id is None or c_id >= len(r) or not (fid := _first_id(r[c_id])):
+            if c_id is None or c_id >= len(r) or not (fid := _first_id(r[c_id])) or fid in frows:
                 continue
             frows[fid] = {
                 "origin": _first_id(r[c_or]) if c_or is not None and c_or < len(r) else None,
@@ -282,6 +334,17 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
             if "fonte_de_verdade" in f or "source_of_truth" in f:
                 up["source_of_truth"] = _sot(project, item.path, str(f.get("fonte_de_verdade") or
                                                                       f.get("source_of_truth")), report, item.id)
+            if f.get("phase") is None:
+                if row.get("phase") is not None:
+                    up["phase"] = row["phase"]
+                else:
+                    # unknown is recorded as unknown; the operator assigns it
+                    up["phase"] = None
+                    report.actions.append({
+                        "item": item.id, "file": display(project.root, item.path),
+                        "action": "no phase in frontmatter or table: set `phase:` to the plan phase this "
+                                  "task belongs to (phase-specific checks are keyed on it)",
+                    })
             if f.get("type") in TYPE_MAP:
                 up["type"] = TYPE_MAP[f["type"]]
             done_on = row.get("done_on") if status == "done" else None
@@ -334,15 +397,15 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
                 item.path.write_text(new, encoding="utf-8", newline="\n")
 
     new_ptext = ptext
-    if task_table:
-        new_ptext = replace_table(new_ptext, task_table, views.TASKS_REGION)
+    if task_tables:
+        new_ptext = replace_tables(new_ptext, task_tables, views.TASKS_REGION)
     else:
         report.warnings.append(f"{display(project.root, progress)}: no task table found; region appended")
     new_ptext = frontmatter.set_fields(new_ptext, new_meta)
     if write:
         progress.write_text(new_ptext, encoding="utf-8", newline="\n")
-        if fix_table:
-            fixes_file.write_text(replace_table(ftext, fix_table, views.FIXES_REGION), encoding="utf-8",
+        if fix_tables:
+            fixes_file.write_text(replace_tables(ftext, fix_tables, views.FIXES_REGION), encoding="utf-8",
                                   newline="\n")
         views.sync(project, project.load_cycle(cycle_dir))
     report.changed.append(display(project.root, progress))

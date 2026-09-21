@@ -23,9 +23,16 @@ PROGRESS = """\
 | [LEG-TASK-01](/docs/tasks/01-primeira.md) | Primeira | 1 | — | ✅ Concluído | 2026-01-02 | 2026-01-03 |
 | [LEG-TASK-02](/docs/tasks/02-segunda.md) | Segunda | 1 | 01 | ✅ Concluído | 2026-01-04 | ⬜ pendente |
 | [LEG-TASK-03](/docs/tasks/03-fechamento.md) | Fechamento | 1 | 02 | ⬜ Pendente | — | — |
-| [PAR-TASK-01](/docs/tasks/PAR-TASK-01.md) | Paridade | 1 | — | ✅ Concluído | 2026-01-05 | 2026-01-06 |
 
 Notas humanas ficam.
+
+# Anexo — paridade
+
+## Resumo
+
+| ID | Tarefa | §  | Itens | Dependências | Status | Concluída em | Revisado em |
+| -- | ------ | -- | ----- | ------------ | ------ | ------------ | ----------- |
+| [PAR-TASK-01](/docs/tasks/PAR-TASK-01.md) | Paridade | 8.1 | 5 | — | ✅ Concluído | 2026-01-05 | 2026-01-06 |
 """
 
 FIXES = """\
@@ -35,11 +42,12 @@ FIXES = """\
 |---|---|---|---|---|---|
 | [CORR-LEG-001](/docs/tasks/CORR-LEG-001.md) | [LEG-TASK-01](/docs/tasks/01-primeira.md) | Um erro | Alta | [x] concluída | 2026-01-03 |
 | [CORR-LEG-002](/docs/tasks/CORR-LEG-002.md) | [LEG-TASK-02](/docs/tasks/02-segunda.md) | Outro | Baixa | [ ] pendente | — |
+| [CORR-LEG-003](/docs/tasks/CORR-LEG-003.md) | [LEG-TASK-01](/docs/tasks/01-primeira.md) | O ramo `cor|grade` morto | Média | [x] concluída | 2026-01-07 |
 """
 
 
-def legacy_task(item_id, title, sot, status, type_="implementação", deps="[]"):
-    return (f"---\nid: {item_id}\ntitle: \"{title}\"\ntype: {type_}\ncategory: x\nphase: 1\n"
+def legacy_task(item_id, title, sot, status, type_="implementação", deps="[]", phase="phase: 1\n"):
+    return (f"---\nid: {item_id}\ntitle: \"{title}\"\ntype: {type_}\ncategory: x\n{phase}"
             f"depends_on: {deps}\nfonte_de_verdade: \"{sot}\"\nstatus: {status}\n---\n\n# {item_id}\n\n"
             "## Log de Execução\n\n- feito\n")
 
@@ -69,7 +77,9 @@ class MigrateTest(unittest.TestCase):
         write(t / "CORR-LEG-001.md", legacy_fix("CORR-LEG-001", "concluída"))
         write(t / "CORR-LEG-002.md", legacy_fix("CORR-LEG-002", "pendente"))
         # an item an earlier convention named by ID, with another prefix, in the same folder
-        write(t / "PAR-TASK-01.md", legacy_task("PAR-TASK-01", "Paridade", "/docs/PLAN-LEG.md §1", "concluído"))
+        write(t / "PAR-TASK-01.md", legacy_task("PAR-TASK-01", "Paridade", "/docs/PLAN-LEG.md §1", "concluído",
+                                                 phase=""))  # its table has a § column, not a phase
+        write(t / "CORR-LEG-003.md", legacy_fix("CORR-LEG-003", "concluída"))
         write(t / "concluidos/.keep", "")
         git(r, "add", "-A")
         git(r, "commit", "-q", "-m", "chore: legacy")
@@ -87,7 +97,7 @@ class MigrateTest(unittest.TestCase):
     def test_dry_run_writes_nothing(self):
         code, out, err = rite(self.root, "migrate", "--from", "we2002", "--json")
         self.assertEqual(code, 0, err)
-        self.assertEqual(json.loads(out)["items"], 6)
+        self.assertEqual(json.loads(out)["items"], 7)
         self.assertFalse((self.root / "rite.toml").exists())
         self.assertEqual(git(self.root, "status", "--porcelain"), "")
 
@@ -133,6 +143,11 @@ class MigrateTest(unittest.TestCase):
         par = self.fields("PAR-TASK-01.md")
         self.assertEqual((par["status"], par["done_on"], par["reviewed_on"]), ("done", "2026-01-05", "2026-01-06"))
         self.assertEqual(par["source_of_truth"], "/docs/PLAN-LEG.md#1")
+        progress = (self.root / "docs/tasks/progresso.md").read_text(encoding="utf-8")
+        self.assertEqual(progress.count("<!-- rite:begin tasks -->"), 1)
+        self.assertIn("# Anexo — paridade", progress)          # the appendix prose stays
+        self.assertIn("now lives in their frontmatter", progress)  # its state table does not
+        self.assertNotIn("✅", progress)
         # new items are still named by the canonical (first) template
         code, out, err = rite(self.root, "new-task", "--title", "Nova", "--type", "closing", "--phase", "1",
                               "--source-of-truth", "/docs/PLAN-LEG.md#1", "--json")
@@ -154,10 +169,26 @@ class MigrateTest(unittest.TestCase):
     def test_missing_section_asks_the_operator_instead_of_inventing(self):
         code, out, _ = rite(self.root, "migrate", "--from", "we2002", "--json")
         actions = json.loads(out)["actions"]
-        self.assertEqual([a["item"] for a in actions], ["LEG-TASK-02"])
-        self.assertEqual((actions[0]["target"], actions[0]["section"]), ("/docs/PLAN-LEG.md", "9.9"))
-        self.assertIn("add a heading starting with '9.9'", actions[0]["action"])
-        self.assertIn("rite anchors /docs/PLAN-LEG.md", actions[0]["action"])
+        sections = [a for a in actions if "section" in a]
+        self.assertEqual([a["item"] for a in sections], ["LEG-TASK-02"])
+        self.assertEqual((sections[0]["target"], sections[0]["section"]), ("/docs/PLAN-LEG.md", "9.9"))
+        self.assertIn("add a heading starting with '9.9'", sections[0]["action"])
+        self.assertIn("rite anchors /docs/PLAN-LEG.md", sections[0]["action"])
+
+    def test_unknown_phase_is_null_and_asked_for(self):
+        code, out, err = rite(self.root, "migrate", "--from", "we2002", "--write", "--json")
+        self.assertEqual(code, 0, err)
+        phase_actions = [a["item"] for a in json.loads(out)["actions"] if "phase" in a["action"]]
+        self.assertEqual(phase_actions, ["PAR-TASK-01"])
+        self.assertIsNone(self.fields("PAR-TASK-01.md")["phase"])
+        self.assertEqual(self.fields("01-primeira.md")["phase"], 1)
+
+    def test_pipe_inside_code_does_not_shift_columns(self):
+        code, out, err = rite(self.root, "migrate", "--from", "we2002", "--write", "--json")
+        self.assertEqual(code, 0, err)
+        c3 = self.fields("CORR-LEG-003.md")
+        self.assertEqual((c3["status"], c3["severity"], c3["done_on"]), ("done", "medium", "2026-01-07"))
+        self.assertFalse([w for w in json.loads(out)["warnings"] if "CORR-LEG-003" in w])
 
 
 class PrefixRuleTest(unittest.TestCase):

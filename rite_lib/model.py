@@ -198,11 +198,14 @@ class Project:
             for cand in candidates:
                 if cand.is_dir() and self.is_cycle_dir(cand):
                     return self.load_cycle(cand)
-            for path in live:
-                if self.load_cycle(path).name == arg:
-                    return self.load_cycle(path)
+            # by the name its progress file declares — live first, then archived (a legacy archive
+            # folder can itself be one closed cycle whose name is not its folder's)
+            for cycle in [*(self.load_cycle(p) for p in live), *self.archived_cycles()]:
+                if cycle.name == arg:
+                    return cycle
+            names = ", ".join(self.load_cycle(p).name for p in live) or "none"
             raise RiteError(f"no cycle named {arg!r} (a cycle is a folder with {self.progress_name}); "
-                            f"live cycles: {', '.join(p.name for p in live) or 'none'}")
+                            f"live cycles: {names}")
         default = self.cfg["paths"]["default_cycle"]
         if default:
             return self.resolve_cycle(default)
@@ -212,7 +215,8 @@ class Project:
             return self.load_cycle(live[0])
         if not live:
             raise RiteError(f"no live cycle under {display(self.root, self.cycles_root)} (run /rite:new-cycle)")
-        raise RiteError("several live cycles, pass one explicitly: " + ", ".join(p.name for p in live))
+        raise RiteError("several live cycles, pass one explicitly: "
+                        + ", ".join(self.load_cycle(p).name for p in live))
 
     def find_item(self, item_id: str, cycle: Cycle | None = None) -> tuple[Cycle, Item]:
         cycles = [cycle] if cycle else self.all_cycles()

@@ -138,8 +138,12 @@ def cmd_mark_stale(project: Project, args) -> int:
 def _target_cycles(project: Project, args) -> list:
     if getattr(args, "all", False) or (not args.cycle and len(project.live_cycles()) != 1
                                        and not project.cfg["paths"]["default_cycle"]):
-        return project.live_cycles()
-    return [project.resolve_cycle(args.cycle)]
+        cycles = project.live_cycles()
+    else:
+        cycles = [project.resolve_cycle(args.cycle)]
+    if getattr(args, "include_archived", False):
+        cycles += [c for c in project.archived_cycles() if c.path not in {x.path for x in cycles}]
+    return cycles
 
 
 def cmd_sync(project: Project, args) -> int:
@@ -386,10 +390,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("sync", parents=[common], help="regenerate progress/fixes tables from frontmatter")
     s.add_argument("--all", action="store_true")
+    s.add_argument("--include-archived", action="store_true", help="also archived cycles")
     s.set_defaults(fn=cmd_sync)
 
     s = sub.add_parser("check", parents=[common], help="validate items, links, views and profile")
     s.add_argument("--all", action="store_true")
+    s.add_argument("--include-archived", action="store_true", help="also archived cycles")
     s.add_argument("--quick", action="store_true", help="skip git, link and profile checks")
     s.set_defaults(fn=cmd_check)
 
@@ -425,6 +431,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("relink", parents=[common], help="rewrite links in cycle files to [paths].link_style")
     s.add_argument("--all", action="store_true")
+    s.add_argument("--include-archived", action="store_true", help="also archived cycles")
     s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
     s.set_defaults(fn=cmd_relink)
 

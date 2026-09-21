@@ -44,7 +44,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `new-task`, `new-fix`, `commit-new ID` | atomic ID allocation; commit a new filled-in item |
 | `close ID [--sha S]` | record a finished item from its work commit |
 | `mark ID STATUS`, `mark-reviewed ID [--fixes …]`, `mark-stale FIX --reason …` | other transitions |
-| `sync`, `check [--quick]`, `status` | views, validation, summary |
+| `sync`, `check [--quick]`, `status` | views, validation, summary; `sync`/`check`/`relink` take `--include-archived` |
 | `batch-plan N\|IDs\|all [--kind task\|fix]` | inventory, conflict matrix, waves |
 | `new-cycle NAME --prefix X`, `archive NAME [--dry-run]` | lifecycle |
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth`; retro numbers |
