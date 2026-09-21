@@ -24,7 +24,7 @@ def is_bookkeeping(subject: str) -> bool:
 
 
 # --- commit messages -----------------------------------------------------------
-def commit_refs(project: Project, cycle: Cycle, item_id: str | None = None) -> dict:
+def commit_refs(project: Project, cycle: Cycle, item: Item | None = None) -> dict:
     """How a commit of this cycle names what it belongs to — the one place that decides it.
 
     A tracked cycle refers to the item (`Refs: <ID>`) so `git log --grep <ID>` finds its commits.
@@ -33,14 +33,15 @@ def commit_refs(project: Project, cycle: Cycle, item_id: str | None = None) -> d
     """
     fmt = project.cfg["commit"]["ticket_format"]
     ticket = cycle.ticket
-    trailers = [f"Refs: {item_id}"] if item_id and not cycle.local else []
+    trailers = [f"Refs: {item.id}"] if item and not cycle.local else []
     subject_template = "{subject}"
     if ticket:
         if "{subject}" in fmt:
             subject_template = fmt.replace("{ticket}", ticket)
         else:
             trailers.append(fmt.replace("{ticket}", ticket))
-    return {"local": cycle.local, "ticket": ticket, "subject_template": subject_template, "trailers": trailers}
+    return {"local": cycle.local, "ticket": ticket, "repo": item.repo if item else None,
+            "subject_template": subject_template, "trailers": trailers}
 
 
 def compose_message(refs: dict, subject: str, body: str = "") -> str:
@@ -85,6 +86,23 @@ def _write_item(item: Item, updates: dict, log_line: str | None, log_title: str)
     item.fields.update(updates)
 
 
+def _head(project: Project, item: Item) -> str | None:
+    """HEAD of the repository the item's work lives in; None when there is none to read."""
+    try:
+        root = project.git_root(item)
+    except RiteError:
+        return None
+    return gitutil.short(root, "HEAD") if gitutil.is_repo(root) else None
+
+
+def _check_repo(project: Project, repo: str | None) -> str | None:
+    repo = (repo or "").strip().strip("/") or None
+    if repo and not project.is_git((project.root / repo).resolve()):
+        raise RiteError(f"repo {repo!r} is not a git repository under {project.root} "
+                        f"(repositories here: {', '.join(project.repos()) or 'none'})")
+    return repo
+
+
 def _reload(project: Project, cycle: Cycle) -> Cycle:
     return project.load_cycle(cycle.path, archived=cycle.archived)
 
@@ -127,7 +145,7 @@ def _max_n(items: list[Item]) -> int:
 
 # --- creation ----------------------------------------------------------------
 def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, depends_on: list[str],
-             source_of_truth: str, slug: str | None = None) -> Item:
+             source_of_truth: str, slug: str | None = None, repo: str | None = None) -> Item:
     if not cycle.prefix:
         raise RiteError(f"cycle {cycle.name} has no 'prefix' in {display(project.root, cycle.progress_path)}")
     types = project.cfg["vocab"]["task_types"]
@@ -137,6 +155,10 @@ def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, d
     for dep in depends_on:
         if dep not in index:
             raise RiteError(f"depends_on {dep} is not an item of cycle {cycle.name}")
+    repo = _check_repo(project, repo)
+    if project.workspace and not repo:
+        raise RiteError("rite.toml is outside git (a workspace): pass --repo, the repository the task's work "
+                        f"lands in ({', '.join(project.repos()) or 'none found'})")
     slug = slug or slugify(title)
     naming = project.naming
     n, path, fd = _allocate(lambda k: cycle.path / naming.task_file(cycle.prefix, k, slug), _max_n(cycle.tasks) + 1)
@@ -147,6 +169,8 @@ def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, d
         "depends_on": frontmatter.dump_value(depends_on),
         "source_of_truth": frontmatter.dump_value(source_of_truth),
     })
+    if repo:
+        text = frontmatter.set_fields(text, {"repo": repo})
     with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     views.sync(project, _reload(project, cycle))
@@ -154,13 +178,16 @@ def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, d
 
 
 def new_fix(project: Project, cycle: Cycle, *, origin: str, title: str, severity: str,
-            depends_on: list[str] | None = None, slug: str | None = None) -> Item:
+            depends_on: list[str] | None = None, slug: str | None = None, repo: str | None = None) -> Item:
     if severity not in SEVERITIES:
         raise RiteError(f"severity {severity!r}; expected one of {list(SEVERITIES)}")
     if not cycle.prefix:
         raise RiteError(f"cycle {cycle.name} has no 'prefix' in {display(project.root, cycle.progress_path)}")
     if origin not in cycle.by_id():
         raise RiteError(f"origin {origin} is not an item of cycle {cycle.name}")
+    repo = _check_repo(project, repo or cycle.by_id()[origin].repo)  # a fix defaults to its origin's repo
+    if project.workspace and not repo:
+        raise RiteError(f"rite.toml is outside git (a workspace) and {origin} names no repo: pass --repo")
     # fix numbers are unique per prefix across every cycle, archived ones included
     same_prefix = [f for c in project.all_cycles() if c.prefix == cycle.prefix for f in c.fixes]
     slug = slug or slugify(title)
@@ -174,6 +201,8 @@ def new_fix(project: Project, cycle: Cycle, *, origin: str, title: str, severity
         "depends_on": frontmatter.dump_value(depends_on or []),
         "origin_link": make_link(project.root, path, origin_item.path, project.cfg.link_style),
     })
+    if repo:
+        text = frontmatter.set_fields(text, {"repo": repo})
     with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     views.sync(project, _reload(project, cycle))
@@ -194,26 +223,30 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str = "HEAD", comm
     """Record a finished item from its work commit, then commit the bookkeeping separately."""
     if item.status not in ("pending", "in-progress") and not force:
         raise RiteError(f"{item.id} has status {item.status!r}; only pending/in-progress items can be closed")
-    if not gitutil.is_repo(project.root):
+    root = project.git_root(item)
+    if not gitutil.is_repo(root):
         raise RiteError("close needs git: done_on and the file list come from the work commit")
-    full = gitutil.resolve(project.root, sha)
+    where = f" in {item.repo}" if item.repo else ""
+    full = gitutil.resolve(root, sha)
     if not full:
-        raise RiteError(f"{sha!r} is not a commit")
-    subj = gitutil.subject(project.root, full)
+        raise RiteError(f"{sha!r} is not a commit{where}")
+    subj = gitutil.subject(root, full)
     if is_bookkeeping(subj) and not force:
         raise RiteError(f"{sha} is a bookkeeping commit ({subj!r}); pass the work commit with --sha")
-    short = gitutil.short(project.root, full)
-    date = gitutil.commit_date(project.root, full)
-    files = gitutil.changed_files(project.root, full)
+    short = gitutil.short(root, full)
+    date = gitutil.commit_date(root, full)
+    files = gitutil.changed_files(root, full)
     updates = {"status": "done", "done_on": date, "done_commit": short}
     if item.kind == "task":
         updates["reviewed_on"] = "pending"
-    log = [f"- **Closed** — commit `{short}` ({date}): {subj}",
-           f"  - Files (`git show --name-status {short}`):"]
+    git_c = f"git -C {item.repo}" if item.repo else "git"
+    log = [f"- **Closed** — commit `{short}`{where} ({date}): {subj}",
+           f"  - Files (`{git_c} show --name-status {short}`):"]
     log += [f"    - `{st} {p}`" for st, p in files] or ["    - *(none)*"]
     _write_item(item, updates, "\n".join(log), project.cfg["sections"]["execution_log"])
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
-    return {"id": item.id, "done_on": date, "done_commit": short, "work_subject": subj, **result}
+    return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": short, "work_subject": subj,
+            **result}
 
 
 def mark(project: Project, cycle: Cycle, item: Item, status: str, *, reason: str = "",
@@ -244,7 +277,7 @@ def mark_reviewed(project: Project, cycle: Cycle, item: Item, *, fixes: list[str
             raise RiteError(f"{fid} is not a fix of cycle {cycle.name}")
         fix_items.append(index[fid])
     date = date or dt.date.today().isoformat()
-    head = gitutil.short(project.root, "HEAD") if gitutil.is_repo(project.root) else None
+    head = _head(project, item)
     log = f"- **Reviewed** ({date}) at `{head}`: " + (", ".join(fixes) if fixes else "no finding")
     _write_item(item, {"reviewed_on": date, "review_commit": head}, log, project.cfg["sections"]["execution_log"])
     detail = f" ({len(fixes)} fix{'es' if len(fixes) != 1 else ''}: {', '.join(fixes)})" if fixes else " (no finding)"
@@ -261,7 +294,7 @@ def mark_stale(project: Project, cycle: Cycle, item: Item, *, reason: str, commi
     if not reason.strip():
         raise RiteError("mark-stale needs --reason: what was measured and why the symptom is gone")
     today = dt.date.today().isoformat()
-    head = gitutil.short(project.root, "HEAD") if gitutil.is_repo(project.root) else None
+    head = _head(project, item)
     _write_item(item, {"status": "stale", "done_on": today, "done_commit": head},
                 f"- **Stale** ({today}) at `{head}`: {reason}", project.cfg["sections"]["execution_log"])
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "stale", item.id, cycle=cycle), commit)
@@ -276,16 +309,17 @@ def rebind(project: Project, cycle: Cycle, item: Item, *, sha: str, commit: bool
     """
     if item.status not in ("done", "stale"):
         raise RiteError(f"{item.id} has status {item.status!r}; rebind is for done or stale items")
-    if not gitutil.is_repo(project.root):
+    root = project.git_root(item)
+    if not gitutil.is_repo(root):
         raise RiteError("rebind needs git")
-    full = gitutil.resolve(project.root, sha)
+    full = gitutil.resolve(root, sha)
     if not full:
-        raise RiteError(f"{sha!r} is not a commit")
-    subj = gitutil.subject(project.root, full)
+        raise RiteError(f"{sha!r} is not a commit" + (f" in {item.repo}" if item.repo else ""))
+    subj = gitutil.subject(root, full)
     if is_bookkeeping(subj):
         raise RiteError(f"{sha} is a bookkeeping commit ({subj!r}); pass the work commit")
     old = item.fields.get("done_commit")
-    short = gitutil.short(project.root, full)
+    short = gitutil.short(root, full)
     if str(old) == short:
         raise RiteError(f"{item.id} already points at {short}")
     today = dt.date.today().isoformat()

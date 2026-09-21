@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import frontmatter
+from . import frontmatter, gitutil
 from .config import Config, SEVERITIES
 from .naming import Naming
 
@@ -42,6 +42,12 @@ class Item:
         return [str(d) for d in deps] if isinstance(deps, list) else [str(deps)]
 
     @property
+    def repo(self) -> str | None:
+        """Folder (under the root) of the git repository this item's work lands in."""
+        value = self.fields.get("repo")
+        return str(value).strip().strip("/") or None if value is not None else None
+
+    @property
     def severity_rank(self) -> int:
         sev = self.fields.get("severity")
         return SEVERITIES.index(sev) if sev in SEVERITIES else len(SEVERITIES)
@@ -58,6 +64,7 @@ class Cycle:
     profile_path: Path
     pitfalls_path: Path
     items: list[Item] = field(default_factory=list)
+    workspace: bool = False  # rite.toml lives outside git; every cycle is then local
 
     @property
     def prefix(self) -> str:
@@ -85,8 +92,9 @@ class Cycle:
 
     @property
     def local(self) -> bool:
-        """A local cycle keeps its documents out of git: no bookkeeping commits, no item refs."""
-        return self.meta.get("local") is True
+        """A local cycle keeps its documents out of git: no bookkeeping commits, no item refs.
+        In a workspace there is no repository to hold them, so every cycle is local."""
+        return self.workspace or self.meta.get("local") is True
 
     @property
     def fixes(self) -> list[Item]:
@@ -128,6 +136,34 @@ class Project:
         self.archive_dir = cfg.path("archive_dir")
         self.progress_name = cfg["naming"]["progress_file"]
         self.fixes_name = cfg["naming"]["fixes_file"]
+        # a workspace: rite.toml in a plain folder whose sub-folders are git repositories
+        self.workspace = not gitutil.is_repo(self.root)
+        self._git_ok: dict[Path, bool] = {}
+
+    # --- repositories ------------------------------------------------------
+    def repos(self) -> list[str]:
+        """Immediate sub-folders that are git repositories (the projects of a workspace)."""
+        if not self.root.is_dir():
+            return []
+        return [p.name for p in sorted(self.root.iterdir()) if p.is_dir() and (p / ".git").exists()]
+
+    def is_git(self, path: Path) -> bool:
+        if path not in self._git_ok:
+            self._git_ok[path] = path.is_dir() and gitutil.is_repo(path)
+        return self._git_ok[path]
+
+    def git_root(self, item: Item) -> Path:
+        """The repository an item's work commits live in: its `repo:` folder, or the root itself."""
+        if item.repo:
+            path = (self.root / item.repo).resolve()
+            if not self.is_git(path):
+                raise RiteError(f"{item.id}: repo {item.repo!r} is not a git repository under "
+                                f"{self.root} (repositories here: {', '.join(self.repos()) or 'none'})")
+            return path
+        if self.workspace:
+            raise RiteError(f"{item.id} has no 'repo:'. rite.toml is outside git (a workspace), so each item "
+                            f"names the repository its work lands in: {', '.join(self.repos()) or 'none found'}")
+        return self.root
 
     # --- discovery -------------------------------------------------------
     def is_cycle_dir(self, path: Path) -> bool:
@@ -176,6 +212,7 @@ class Project:
         cycle = Cycle(
             name=name, path=path, progress_path=progress, fixes_path=path / self.fixes_name,
             meta=meta, archived=archived, profile_path=profile, pitfalls_path=pitfalls,
+            workspace=self.workspace,
         )
         cycle.items = self._load_items(path)
         return cycle

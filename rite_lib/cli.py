@@ -54,7 +54,8 @@ def cmd_resolve_cycle(project: Project, args) -> int:
         "profile": display(project.root, c.profile_path), "profile_exists": c.profile_path.is_file(),
         "pitfalls": display(project.root, c.pitfalls_path), "pitfalls_exists": c.pitfalls_path.is_file(),
         "plan": c.meta.get("plan"), "archived": c.archived, "ticket": c.ticket, "local": c.local,
-        "commit": ops.commit_refs(project, c),
+        "commit": ops.commit_refs(project, c), "workspace": project.workspace,
+        "repos": project.repos() if project.workspace else [],
     }
     _emit(args, data, "\n".join(f"{k}: {v}" for k, v in data.items()))
     return EXIT_OK
@@ -62,8 +63,9 @@ def cmd_resolve_cycle(project: Project, args) -> int:
 
 def cmd_commit_refs(project: Project, args) -> int:
     cycle, item = _item(project, args, args.id)
-    data = {"id": item.id, "cycle": cycle.name, **ops.commit_refs(project, cycle, item.id)}
-    lines = [f"subject: {data['subject_template']}"] + [f"trailer: {t}" for t in data["trailers"]]
+    data = {"id": item.id, "cycle": cycle.name, **ops.commit_refs(project, cycle, item)}
+    lines = [f"repo: {data['repo']}"] if data["repo"] else []
+    lines += [f"subject: {data['subject_template']}"] + [f"trailer: {t}" for t in data["trailers"]]
     if data["local"]:
         lines.append(f"local cycle {cycle.name}: no Refs to the item; never stage its documents")
     _emit(args, data, "\n".join(lines))
@@ -83,7 +85,8 @@ def cmd_new_task(project: Project, args) -> int:
     cycle = project.resolve_cycle(args.cycle)
     phase = int(args.phase) if str(args.phase).isdigit() else args.phase
     item = ops.new_task(project, cycle, title=args.title, type_=args.type, phase=phase,
-                        depends_on=_ids(args.depends_on), source_of_truth=args.source_of_truth, slug=args.slug)
+                        depends_on=_ids(args.depends_on), source_of_truth=args.source_of_truth, slug=args.slug,
+                        repo=args.repo)
     data = {"id": item.id, "path": display(project.root, item.path)}
     _emit(args, data, f"created {item.id}: {data['path']}")
     return EXIT_OK
@@ -92,7 +95,7 @@ def cmd_new_task(project: Project, args) -> int:
 def cmd_new_fix(project: Project, args) -> int:
     cycle = project.resolve_cycle(args.cycle)
     item = ops.new_fix(project, cycle, origin=args.origin, title=args.title, severity=args.severity,
-                       depends_on=_ids(args.depends_on), slug=args.slug)
+                       depends_on=_ids(args.depends_on), slug=args.slug, repo=args.repo)
     data = {"id": item.id, "path": display(project.root, item.path)}
     _emit(args, data, f"created {item.id}: {data['path']}")
     return EXIT_OK
@@ -381,6 +384,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--depends-on", action="append", help="IDs, comma-separated or repeated")
     s.add_argument("--source-of-truth", required=True, help="link to the plan section, e.g. /docs/plans/P.md#4.2")
     s.add_argument("--slug")
+    s.add_argument("--repo", help="workspace: folder of the git repository the work lands in")
     s.set_defaults(fn=cmd_new_task)
 
     s = sub.add_parser("new-fix", parents=[common], help="create a fix with an atomically allocated ID")
@@ -389,6 +393,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--severity", required=True, choices=list(config.SEVERITIES))
     s.add_argument("--depends-on", action="append")
     s.add_argument("--slug")
+    s.add_argument("--repo", help="workspace: repository of the fix (default: its origin's)")
     s.set_defaults(fn=cmd_new_fix)
 
     s = sub.add_parser("commit-new", parents=[common], help="commit a new, filled-in item with the views")

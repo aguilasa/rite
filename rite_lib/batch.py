@@ -139,7 +139,9 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
             why.append("closing task runs alone")
         if not a.files or not b.files:
             why.append("unknown files")
-        shared = sorted({f"{x}" for x in a.files for y in b.files if globs_overlap(x, y)})
+        # paths are relative to the item's repository; two repositories never share a file
+        same_repo = a.item.repo == b.item.repo
+        shared = sorted({f"{x}" for x in a.files for y in b.files if same_repo and globs_overlap(x, y)})
         if shared:
             why.append("files: " + ", ".join(shared))
         res = sorted(set(a.resources) & set(b.resources) & serial)
@@ -191,7 +193,7 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
         "cycle": cycle.name,
         "kind": items[0].kind if items else None,
         "items": [{
-            "id": p.item.id, "title": p.item.title, "path": display(root, p.item.path),
+            "id": p.item.id, "title": p.item.title, "path": display(root, p.item.path), "repo": p.item.repo,
             "type": p.item.fields.get("type"), "severity": p.item.fields.get("severity"),
             "files": p.files, "files_declared": p.files_declared, "resources": p.resources,
             "depends_on": p.item.depends_on, "wave": p.wave + 1, "conflicts": p.conflicts,
@@ -207,7 +209,8 @@ def render_text(data: dict) -> str:
     for it in data["items"]:
         files = ", ".join(it["files"]) or "?"
         lines.append(f"{it['id']} [wave {it['wave']}] {it['title']}")
-        lines.append(f"  files{'' if it['files_declared'] else ' (inferred)'}: {files}")
+        repo = f" in {it['repo']}" if it.get("repo") else ""
+        lines.append(f"  files{repo}{'' if it['files_declared'] else ' (inferred)'}: {files}")
         if it["resources"]:
             lines.append(f"  resources: {', '.join(it['resources'])}")
     lines.append("")

@@ -71,10 +71,10 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
 
 def publish(project: Project, cycle: Cycle) -> dict:
     """Turn a local cycle into a tracked one: `local: false` and one commit with its documents."""
+    if project.workspace:
+        raise RiteError("rite.toml is outside git (a workspace): there is no repository to publish the cycle to")
     if not cycle.local:
         raise RiteError(f"cycle {cycle.name} is not local")
-    if not gitutil.is_repo(project.root):
-        raise RiteError("publish needs git")
     paths = [p for p in (cycle.path, cycle.profile_path, cycle.pitfalls_path) if p.exists()]
     ignored = [display(project.root, p) for p in paths if gitutil.is_ignored(project.root, p)]
     if ignored:

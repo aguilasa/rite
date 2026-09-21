@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import gitutil, markdown, views
 from .config import FIX_STATUSES, SEVERITIES, TASK_STATUSES
-from .model import Cycle, Item, Project, display, resolve_link
+from .model import Cycle, Item, Project, RiteError, display, resolve_link
 
 REQUIRED = {
     "task": ("id", "title", "type", "phase", "depends_on", "source_of_truth", "status",
@@ -52,7 +52,9 @@ class Checker:
         self.p = project
         self.quick = quick
         self.findings: list[Finding] = []
-        self.git = gitutil.is_repo(project.root) and not quick
+        self.git = not project.workspace and not quick
+        # a workspace with no repository under it has nothing to check commits against
+        self.bare = project.workspace and not project.repos()
 
     def err(self, path: Path, msg: str, line: int | None = None) -> None:
         self.findings.append(Finding("error", display(self.p.root, path), msg, line))
@@ -62,8 +64,8 @@ class Checker:
 
     # ------------------------------------------------------------------
     def run(self, cycles: list[Cycle]) -> list[Finding]:
-        if not gitutil.is_repo(self.p.root) and not self.quick:
-            self.warn(self.p.root / "rite.toml", "not a git repository; commit checks skipped")
+        if self.bare and not self.quick:
+            self.warn(self.p.root / "rite.toml", "not a git repository and none under it; commit checks skipped")
         all_cycles = self.p.all_cycles()
         owner = {i.id: c for c in all_cycles for i in c.items}
         seen: dict[tuple[str, str], Path] = {}
@@ -162,7 +164,29 @@ class Checker:
                          + (f"crosses into cycle {where.name}; dependencies stay inside a cycle"
                             if where else "does not exist"))
 
+        self.check_repo(item)
         self.check_done_state(item)
+
+    def git_root(self, item: Item) -> Path | None:
+        """Where the item's commits are checked; None when they cannot be (reported by check_repo)."""
+        if self.quick or self.bare:
+            return None
+        try:
+            return self.p.git_root(item)
+        except RiteError:  # reported by check_repo
+            return None
+
+    def check_repo(self, item: Item) -> None:
+        if self.bare:
+            return
+        repo = item.fields.get("repo")
+        if repo is not None and not isinstance(repo, str):
+            self.err(item.path, f"'repo' must be a folder name, not {repo!r}")
+            return
+        try:
+            self.p.git_root(item)
+        except RiteError as exc:
+            self.err(item.path, str(exc).removeprefix(f"{item.id}: "))
 
     def check_done_state(self, item: Item) -> None:
         f = item.fields
@@ -177,10 +201,12 @@ class Checker:
         if item.status == "done":
             if not sha:
                 self.err(item.path, "status done without done_commit (use rite.py close)")
-            elif self.git and not gitutil.resolve(self.p.root, str(sha)):
-                self.err(item.path, f"done_commit {sha} is not a commit in this repository "
+            elif (root := self.git_root(item)) is None:
+                pass
+            elif not gitutil.resolve(root, str(sha)):
+                self.err(item.path, f"done_commit {sha} is not a commit in {item.repo or 'this repository'} "
                          f"(rewritten by a squash or rebase? rite.py rebind {item.id} --sha <commit>)")
-            elif self.git and not gitutil.is_ancestor(self.p.root, str(sha), "HEAD"):
+            elif not gitutil.is_ancestor(root, str(sha), "HEAD"):
                 # a warning: the commit may sit on another branch; a rewritten one lingers until gc
                 self.warn(item.path, f"done_commit {sha} is not in the history of HEAD (squashed or rebased? "
                           f"rite.py rebind {item.id} --sha <commit>; or it lives on another branch)")
