@@ -82,6 +82,12 @@ class Checker:
             self.err(cycle.progress_path, "frontmatter lacks 'prefix'")
         if "order" in cycle.meta and not isinstance(cycle.meta["order"], list):
             self.err(cycle.progress_path, "'order' must be a list of task IDs")
+        if cycle.meta.get("local") not in (None, True, False):
+            self.err(cycle.progress_path, f"'local' must be true or false, not {cycle.meta['local']!r}")
+        if cycle.meta.get("ticket") is not None and not isinstance(cycle.meta["ticket"], str):
+            self.err(cycle.progress_path, f"'ticket' must be a string, not {cycle.meta['ticket']!r}")
+        if self.git:
+            self.check_tracking(cycle)
         task_ids = {t.id for t in cycle.tasks}
         seen_order: set[str] = set()
         for item_id in cycle.order:
@@ -172,7 +178,22 @@ class Checker:
             if not sha:
                 self.err(item.path, "status done without done_commit (use rite.py close)")
             elif self.git and not gitutil.resolve(self.p.root, str(sha)):
-                self.err(item.path, f"done_commit {sha} is not a commit in this repository")
+                self.err(item.path, f"done_commit {sha} is not a commit in this repository "
+                         f"(rewritten by a squash or rebase? rite.py rebind {item.id} --sha <commit>)")
+            elif self.git and not gitutil.is_ancestor(self.p.root, str(sha), "HEAD"):
+                # a warning: the commit may sit on another branch; a rewritten one lingers until gc
+                self.warn(item.path, f"done_commit {sha} is not in the history of HEAD (squashed or rebased? "
+                          f"rite.py rebind {item.id} --sha <commit>; or it lives on another branch)")
+
+    def check_tracking(self, cycle: Cycle) -> None:
+        """A local cycle's folder should be ignored by git, a tracked one's should not."""
+        ignored = gitutil.is_ignored(self.p.root, cycle.progress_path)
+        if cycle.local and not ignored:
+            self.warn(cycle.progress_path, "cycle is local but git does not ignore its folder; "
+                      "its documents can slip into a commit (add the folder to .gitignore)")
+        elif not cycle.local and ignored:
+            self.warn(cycle.progress_path, "git ignores this cycle's folder but it is not 'local: true'; "
+                      "bookkeeping commits will fail (set local: true, or stop ignoring it)")
 
     def check_review_state(self, item: Item) -> None:
         rv = item.fields.get("reviewed_on")

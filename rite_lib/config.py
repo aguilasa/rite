@@ -46,6 +46,7 @@ DEFAULTS: dict = {
         "bookkeeping": "separate-commit",
         "push": "on-request",
         "never_stage": [],
+        "ticket_format": "Refs: {ticket}",
     },
     "guards": {
         "read_only": [],
@@ -147,6 +148,9 @@ def parse(root: Path, text: str) -> Config:
         values = value if isinstance(value, list) else [value]
         if not values or not all(isinstance(v, str) and v.strip() for v in values):
             errors.append(f"[naming].{key} must be a template string or a non-empty list of them")
+    fmt = data["commit"]["ticket_format"]
+    if not isinstance(fmt, str) or "{ticket}" not in fmt:
+        errors.append("[commit].ticket_format must be a string containing {ticket}")
     for gen in data["guards"]["generated"]:
         if not isinstance(gen, dict) or "paths" not in gen or "generator" not in gen:
             errors.append("[[guards.generated]] entries need 'paths' and 'generator'")

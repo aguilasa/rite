@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import re
 from pathlib import Path
 
 from . import frontmatter, gitutil, views
@@ -14,12 +15,48 @@ from .naming import slugify
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 BOOKKEEPING_PREFIXES = ("chore(rite):", "rite:")
+# a ticket template may put the key before the subject ("PROJ-1 chore(rite): close ...")
+_BOOKKEEPING_RE = re.compile(r"(?:^|\s)(?:chore\(rite\)|rite):\s")
 
 
-# --- helpers -----------------------------------------------------------------
-def bookkeeping_message(project: Project, verb: str, item_id: str, detail: str = "") -> str:
+def is_bookkeeping(subject: str) -> bool:
+    return bool(_BOOKKEEPING_RE.search(subject))
+
+
+# --- commit messages -----------------------------------------------------------
+def commit_refs(project: Project, cycle: Cycle, item_id: str | None = None) -> dict:
+    """How a commit of this cycle names what it belongs to — the one place that decides it.
+
+    A tracked cycle refers to the item (`Refs: <ID>`) so `git log --grep <ID>` finds its commits.
+    A local cycle does not: its documents are not in the repository, so the ID would point nowhere.
+    The cycle's ticket goes in every commit either way; the tracker lives outside the repository.
+    """
+    fmt = project.cfg["commit"]["ticket_format"]
+    ticket = cycle.ticket
+    trailers = [f"Refs: {item_id}"] if item_id and not cycle.local else []
+    subject_template = "{subject}"
+    if ticket:
+        if "{subject}" in fmt:
+            subject_template = fmt.replace("{ticket}", ticket)
+        else:
+            trailers.append(fmt.replace("{ticket}", ticket))
+    return {"local": cycle.local, "ticket": ticket, "subject_template": subject_template, "trailers": trailers}
+
+
+def compose_message(refs: dict, subject: str, body: str = "") -> str:
+    head = refs["subject_template"].replace("{subject}", subject)
+    parts = [head, body.strip(), "\n".join(refs["trailers"])]
+    return "\n\n".join(p for p in parts if p)
+
+
+def bookkeeping_message(project: Project, verb: str, item_id: str, detail: str = "",
+                        cycle: Cycle | None = None) -> str:
     head = "chore(rite):" if project.cfg["commit"]["style"] == "conventional" else "rite:"
-    return f"{head} {verb} {item_id}{detail}"
+    subject = f"{head} {verb} {item_id}{detail}"
+    if cycle is None:
+        return subject
+    # the item ID is already in the subject; only the ticket is added
+    return compose_message(commit_refs(project, cycle), subject)
 
 
 def template_path(project: Project, name: str) -> Path:
@@ -63,8 +100,11 @@ def _finish(project: Project, cycle: Cycle, item_paths: list[Path], message: str
     cycle = _reload(project, cycle)
     views.sync(project, cycle)
     paths = [*item_paths, cycle.progress_path, cycle.fixes_path]
+    # a local cycle's documents are not in git (usually ignored, where `git add` would fail):
+    # the state is written to the files and that is the whole record
+    commit = commit and not cycle.local
     sha = _commit(project, cycle, paths, message) if commit else None
-    return {"commit": sha, "message": message if commit else None,
+    return {"commit": sha, "message": message if commit else None, "local": cycle.local,
             "files": [display(project.root, p) for p in paths if p.exists()]}
 
 
@@ -144,7 +184,7 @@ def commit_new(project: Project, cycle: Cycle, item: Item) -> dict:
     """Commit a freshly created (and filled-in) item together with the regenerated views."""
     if item.status not in ("pending",):
         raise RiteError(f"{item.id} has status {item.status!r}; commit-new is for newly created items")
-    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "open", item.id), True)
+    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "open", item.id, cycle=cycle), True)
     return {"id": item.id, **result}
 
 
@@ -160,7 +200,7 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str = "HEAD", comm
     if not full:
         raise RiteError(f"{sha!r} is not a commit")
     subj = gitutil.subject(project.root, full)
-    if subj.startswith(BOOKKEEPING_PREFIXES) and not force:
+    if is_bookkeeping(subj) and not force:
         raise RiteError(f"{sha} is a bookkeeping commit ({subj!r}); pass the work commit with --sha")
     short = gitutil.short(project.root, full)
     date = gitutil.commit_date(project.root, full)
@@ -172,7 +212,7 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str = "HEAD", comm
            f"  - Files (`git show --name-status {short}`):"]
     log += [f"    - `{st} {p}`" for st, p in files] or ["    - *(none)*"]
     _write_item(item, updates, "\n".join(log), project.cfg["sections"]["execution_log"])
-    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id), commit)
+    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "done_on": date, "done_commit": short, "work_subject": subj, **result}
 
 
@@ -186,7 +226,7 @@ def mark(project: Project, cycle: Cycle, item: Item, status: str, *, reason: str
     log = f"- **{status}** ({today})" + (f": {reason}" if reason else "")
     _write_item(item, {"status": status}, log if (reason or status in ("blocked", "skipped")) else None,
                 project.cfg["sections"]["execution_log"])
-    result = _finish(project, cycle, [item.path], bookkeeping_message(project, status, item.id), commit)
+    result = _finish(project, cycle, [item.path], bookkeeping_message(project, status, item.id, cycle=cycle), commit)
     return {"id": item.id, "status": status, **result}
 
 
@@ -209,7 +249,7 @@ def mark_reviewed(project: Project, cycle: Cycle, item: Item, *, fixes: list[str
     _write_item(item, {"reviewed_on": date, "review_commit": head}, log, project.cfg["sections"]["execution_log"])
     detail = f" ({len(fixes)} fix{'es' if len(fixes) != 1 else ''}: {', '.join(fixes)})" if fixes else " (no finding)"
     result = _finish(project, cycle, [item.path, *(f.path for f in fix_items)],
-                     bookkeeping_message(project, "review", item.id, detail), commit)
+                     bookkeeping_message(project, "review", item.id, detail, cycle=cycle), commit)
     return {"id": item.id, "reviewed_on": date, "review_commit": head, "fixes": fixes, **result}
 
 
@@ -224,5 +264,34 @@ def mark_stale(project: Project, cycle: Cycle, item: Item, *, reason: str, commi
     head = gitutil.short(project.root, "HEAD") if gitutil.is_repo(project.root) else None
     _write_item(item, {"status": "stale", "done_on": today, "done_commit": head},
                 f"- **Stale** ({today}) at `{head}`: {reason}", project.cfg["sections"]["execution_log"])
-    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "stale", item.id), commit)
+    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "stale", item.id, cycle=cycle), commit)
     return {"id": item.id, "status": "stale", **result}
+
+
+def rebind(project: Project, cycle: Cycle, item: Item, *, sha: str, commit: bool = True) -> dict:
+    """Point a closed item at its work commit again after a squash or rebase rewrote that commit.
+
+    Only `done_commit` changes: the item stays done and its review state is kept. Why not close again:
+    closing reopens the review and repeats the Execution Log entry for work that did not change.
+    """
+    if item.status not in ("done", "stale"):
+        raise RiteError(f"{item.id} has status {item.status!r}; rebind is for done or stale items")
+    if not gitutil.is_repo(project.root):
+        raise RiteError("rebind needs git")
+    full = gitutil.resolve(project.root, sha)
+    if not full:
+        raise RiteError(f"{sha!r} is not a commit")
+    subj = gitutil.subject(project.root, full)
+    if is_bookkeeping(subj):
+        raise RiteError(f"{sha} is a bookkeeping commit ({subj!r}); pass the work commit")
+    old = item.fields.get("done_commit")
+    short = gitutil.short(project.root, full)
+    if str(old) == short:
+        raise RiteError(f"{item.id} already points at {short}")
+    today = dt.date.today().isoformat()
+    _write_item(item, {"done_commit": short},
+                f"- **Rebound** ({today}): done_commit `{old}` -> `{short}`: {subj}",
+                project.cfg["sections"]["execution_log"])
+    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "rebind", item.id, cycle=cycle),
+                     commit)
+    return {"id": item.id, "old_commit": old, "done_commit": short, "work_subject": subj, **result}

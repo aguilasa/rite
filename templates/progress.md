@@ -2,6 +2,8 @@
 cycle: {{cycle}}
 prefix: {{prefix}}
 plan: {{plan}}
+ticket: null
+local: false
 ---
 
 # Progress — {{cycle}}

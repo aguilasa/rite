@@ -78,6 +78,17 @@ class Cycle:
         return [str(v) for v in value] if isinstance(value, list) else []
 
     @property
+    def ticket(self) -> str | None:
+        """External tracker key (e.g. a JIRA issue) the cycle's commits carry."""
+        value = self.meta.get("ticket")
+        return str(value).strip() or None if value is not None else None
+
+    @property
+    def local(self) -> bool:
+        """A local cycle keeps its documents out of git: no bookkeeping commits, no item refs."""
+        return self.meta.get("local") is True
+
+    @property
     def fixes(self) -> list[Item]:
         return sorted((i for i in self.items if i.kind == "fix"), key=lambda i: i.n)
 

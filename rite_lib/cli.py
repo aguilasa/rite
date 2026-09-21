@@ -53,9 +53,20 @@ def cmd_resolve_cycle(project: Project, args) -> int:
         "progress": display(project.root, c.progress_path), "fixes": display(project.root, c.fixes_path),
         "profile": display(project.root, c.profile_path), "profile_exists": c.profile_path.is_file(),
         "pitfalls": display(project.root, c.pitfalls_path), "pitfalls_exists": c.pitfalls_path.is_file(),
-        "plan": c.meta.get("plan"), "archived": c.archived,
+        "plan": c.meta.get("plan"), "archived": c.archived, "ticket": c.ticket, "local": c.local,
+        "commit": ops.commit_refs(project, c),
     }
     _emit(args, data, "\n".join(f"{k}: {v}" for k, v in data.items()))
+    return EXIT_OK
+
+
+def cmd_commit_refs(project: Project, args) -> int:
+    cycle, item = _item(project, args, args.id)
+    data = {"id": item.id, "cycle": cycle.name, **ops.commit_refs(project, cycle, item.id)}
+    lines = [f"subject: {data['subject_template']}"] + [f"trailer: {t}" for t in data["trailers"]]
+    if data["local"]:
+        lines.append(f"local cycle {cycle.name}: no Refs to the item; never stage its documents")
+    _emit(args, data, "\n".join(lines))
     return EXIT_OK
 
 
@@ -101,6 +112,8 @@ def _result_text(verb: str, res: dict) -> str:
             lines.append(f"  {key}: {res[key]}")
     if res.get("commit"):
         lines.append(f"  committed {res['commit']}: {res['message']}")
+    elif res.get("local"):
+        lines.append("  local cycle, files written (no bookkeeping commit): " + ", ".join(res["files"]))
     else:
         lines.append("  files written, not committed: " + ", ".join(res["files"]))
     return "\n".join(lines)
@@ -110,6 +123,13 @@ def cmd_close(project: Project, args) -> int:
     cycle, item = _item(project, args, args.id)
     res = ops.close(project, cycle, item, sha=args.sha, commit=not args.no_commit, force=args.force)
     _emit(args, res, _result_text("closed", res))
+    return EXIT_OK
+
+
+def cmd_rebind(project: Project, args) -> int:
+    cycle, item = _item(project, args, args.id)
+    res = ops.rebind(project, cycle, item, sha=args.sha, commit=not args.no_commit)
+    _emit(args, res, _result_text(f"rebound {res['old_commit']} ->", res))
     return EXIT_OK
 
 
@@ -218,13 +238,25 @@ def cmd_batch_plan(project: Project, args) -> int:
 
 def cmd_new_cycle(project: Project, args) -> int:
     from . import lifecycle
-    res = lifecycle.new_cycle(project, args.name, args.prefix, plan=args.plan, commit=args.commit)
-    lines = [f"created cycle {res['cycle']} [{res['prefix']}] at {res['path']}"]
+    res = lifecycle.new_cycle(project, args.name, args.prefix, plan=args.plan, ticket=args.ticket,
+                              local=args.local, commit=args.commit)
+    lines = [f"created cycle {res['cycle']} [{res['prefix']}] at {res['path']}"
+             + (f", ticket {res['ticket']}" if res["ticket"] else "") + (", local" if res["local"] else "")]
     lines += [f"  {p}" for p in res["created"]]
     if res["commit"]:
         lines.append(f"  committed {res['commit']}")
+    for path, ignored in (res["ignored"] or {}).items():
+        if not ignored:
+            lines.append(f"  warning: {path} is not ignored by git; add it to .gitignore to keep it local")
     text = "\n".join(lines)
     _emit(args, res, text)
+    return EXIT_OK
+
+
+def cmd_publish(project: Project, args) -> int:
+    from . import lifecycle
+    res = lifecycle.publish(project, project.resolve_cycle(args.name))
+    _emit(args, res, f"published cycle {res['cycle']}: committed {res['commit']} ({', '.join(res['files'])})")
     return EXIT_OK
 
 
@@ -242,6 +274,8 @@ def cmd_archive(project: Project, args) -> int:
             lines.append(f"  links rewritten in: {', '.join(res['rewritten'])}")
         if res["commit"]:
             lines.append(f"  committed {res['commit']}")
+        elif res.get("local"):
+            lines.append("  local cycle: moved on disk, nothing committed")
     text = "\n".join(lines)
     _emit(args, res, text)
     return EXIT_FAIL if res["blockers"] else EXIT_OK
@@ -368,6 +402,18 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_close)
 
+    s = sub.add_parser("rebind", parents=[common],
+                       help="point a closed item at its rewritten work commit (after squash/rebase)")
+    s.add_argument("id")
+    s.add_argument("--sha", required=True, help="the work commit as it is now")
+    s.add_argument("--no-commit", action="store_true")
+    s.set_defaults(fn=cmd_rebind)
+
+    s = sub.add_parser("commit-refs", parents=[common],
+                       help="subject template and trailers for an item's work commit")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_commit_refs)
+
     s = sub.add_parser("mark", parents=[common], help="set pending/in-progress/blocked/skipped")
     s.add_argument("id")
     s.add_argument("status")
@@ -412,8 +458,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("name")
     s.add_argument("--prefix", required=True)
     s.add_argument("--plan", help="plan file (repo-relative)")
+    s.add_argument("--ticket", help="external tracker key the cycle's commits carry, e.g. PROJ-123")
+    s.add_argument("--local", action="store_true", help="documents stay out of git: no bookkeeping commits")
     s.add_argument("--commit", action="store_true")
     s.set_defaults(fn=cmd_new_cycle)
+
+    s = sub.add_parser("publish", parents=[common], help="make a local cycle tracked and commit its documents")
+    s.add_argument("name")
+    s.set_defaults(fn=cmd_publish)
 
     s = sub.add_parser("archive", parents=[common], help="check a cycle can close; move it to archive_dir")
     s.add_argument("name")

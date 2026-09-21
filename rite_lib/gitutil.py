@@ -66,5 +66,22 @@ def commit_paths(root: Path, paths: list[Path], message: str) -> str:
     return short(root, "HEAD")
 
 
+def is_ancestor(root: Path, sha: str, of: str) -> bool:
+    proc = subprocess.run(["git", "merge-base", "--is-ancestor", sha, of], cwd=root, capture_output=True)
+    return proc.returncode == 0
+
+
+def is_ignored(root: Path, path: Path) -> bool:
+    rel = str(path.relative_to(root)) if path.is_absolute() else str(path)
+    proc = subprocess.run(["git", "check-ignore", "-q", "--", rel], cwd=root, capture_output=True)
+    return proc.returncode == 0
+
+
+def is_tracked(root: Path, path: Path) -> bool:
+    """Whether git tracks ``path`` or, for a folder, anything under it."""
+    rel = str(path.relative_to(root)) if path.is_absolute() else str(path)
+    return bool(run(root, "ls-files", "--", rel, check=False).strip())
+
+
 def mv(root: Path, src: Path, dst: Path) -> None:
     run(root, "mv", str(src.relative_to(root)), str(dst.relative_to(root)))

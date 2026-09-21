@@ -37,6 +37,7 @@ co_author_footer = true
 bookkeeping      = "separate-commit"        # only mode in v1
 push             = "on-request"             # never | on-request
 never_stage      = []                       # globs never added to a commit
+ticket_format    = "Refs: {ticket}"         # where a cycle's `ticket:` goes; "{ticket} {subject}" = subject prefix
 
 [guards]
 read_only        = []                       # globs; Edit/Write blocked by the hook

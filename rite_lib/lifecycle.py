@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from pathlib import Path
 
 from . import frontmatter, gitutil, markdown, views
@@ -16,7 +17,7 @@ _PREFIX_RE = re.compile(r"^[A-Za-z0-9]+$")
 
 # --- new cycle -----------------------------------------------------------------
 def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = None,
-              commit: bool = False) -> dict:
+              ticket: str | None = None, local: bool = False, commit: bool = False) -> dict:
     if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", name):
         raise RiteError(f"cycle name {name!r}: use letters, digits, '.', '_' or '-'")
     if not _PREFIX_RE.match(prefix):
@@ -52,15 +53,49 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
         text = render(project, tpl, values)
         if tpl == "profile.md":
             text = text.replace("## Phase-specific checks", "## " + project.cfg["sections"]["phase_checks"])
+        if tpl == "progress.md":
+            # set, not templated: a local template override may predate these keys
+            text = frontmatter.set_fields(text, {"ticket": ticket or None, "local": bool(local)})
         dest.write_text(text, encoding="utf-8", newline="\n")
         created.append(dest)
     cycle = project.load_cycle(path)
     views.sync(project, cycle)
     sha = None
-    if commit:
-        sha = gitutil.commit_paths(project.root, created, bookkeeping_message(project, "new cycle", name))
-    return {"cycle": name, "prefix": prefix, "path": display(project.root, path),
-            "created": [display(project.root, p) for p in created], "commit": sha}
+    if commit and not cycle.local:
+        sha = gitutil.commit_paths(project.root, created,
+                                   bookkeeping_message(project, "new cycle", name, cycle=cycle))
+    return {"cycle": name, "prefix": prefix, "path": display(project.root, path), "ticket": cycle.ticket,
+            "local": cycle.local, "created": [display(project.root, p) for p in created], "commit": sha,
+            "ignored": _ignored(project, [path, profile, pitfalls]) if cycle.local else None}
+
+
+def publish(project: Project, cycle: Cycle) -> dict:
+    """Turn a local cycle into a tracked one: `local: false` and one commit with its documents."""
+    if not cycle.local:
+        raise RiteError(f"cycle {cycle.name} is not local")
+    if not gitutil.is_repo(project.root):
+        raise RiteError("publish needs git")
+    paths = [p for p in (cycle.path, cycle.profile_path, cycle.pitfalls_path) if p.exists()]
+    ignored = [display(project.root, p) for p in paths if gitutil.is_ignored(project.root, p)]
+    if ignored:
+        raise RiteError("still ignored by git: " + ", ".join(ignored)
+                        + "; remove the matching lines from .gitignore first (git check-ignore -v <path>)")
+    if gitutil.run(project.root, "diff", "--cached", "--name-only").strip():
+        raise RiteError("the index has staged changes; commit or unstage them first")
+    text = cycle.progress_path.read_text(encoding="utf-8")
+    cycle.progress_path.write_text(frontmatter.set_fields(text, {"local": False}), encoding="utf-8", newline="\n")
+    cycle = project.load_cycle(cycle.path, archived=cycle.archived)
+    views.sync(project, cycle)
+    sha = gitutil.commit_paths(project.root, paths,
+                               bookkeeping_message(project, "publish cycle", cycle.name, cycle=cycle))
+    return {"cycle": cycle.name, "commit": sha, "files": [display(project.root, p) for p in paths]}
+
+
+def _ignored(project: Project, paths: list[Path]) -> dict[str, bool]:
+    """Which of ``paths`` git ignores. A local cycle's documents should all be ignored."""
+    if not gitutil.is_repo(project.root):
+        return {}
+    return {display(project.root, p): gitutil.is_ignored(project.root, p) for p in paths}
 
 
 # --- close / archive -----------------------------------------------------------
@@ -181,7 +216,9 @@ def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: boo
         raise RiteError("a flat single-cycle layout cannot be archived into itself; move it by hand")
     if new_dir.exists():
         raise RiteError(f"{display(project.root, new_dir)} already exists")
-    if not gitutil.is_repo(project.root):
+    local = cycle.local
+    commit = commit and not local
+    if not local and not gitutil.is_repo(project.root):
         raise RiteError("archive needs git (git mv keeps history)")
     if commit and gitutil.run(project.root, "diff", "--cached", "--name-only").strip():
         raise RiteError("the index has staged changes; commit or unstage them first (archive commits the index)")
@@ -195,14 +232,18 @@ def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: boo
         if new_text != text:
             rewrites[new_f] = new_text
     new_dir.parent.mkdir(parents=True, exist_ok=True)
-    gitutil.mv(project.root, old_dir, new_dir)
+    if local:
+        shutil.move(old_dir, new_dir)  # nothing of a local cycle is in git to move
+    else:
+        gitutil.mv(project.root, old_dir, new_dir)
     for path, text in rewrites.items():
         path.write_text(text, encoding="utf-8", newline="\n")
     result["rewritten"] = [display(project.root, p) for p in rewrites]
+    result["local"] = local
     if commit:
         # git mv already staged the rename; add the rewritten files and the moved folder's untracked leftovers
         paths = [str(new_dir.relative_to(project.root)), *(str(p.relative_to(project.root)) for p in rewrites)]
         gitutil.run(project.root, "add", "--", *paths)
-        gitutil.run(project.root, "commit", "-q", "-m", bookkeeping_message(project, "archive", cycle.name))
+        gitutil.run(project.root, "commit", "-q", "-m", bookkeeping_message(project, "archive", cycle.name, cycle=cycle))
         result["commit"] = gitutil.short(project.root, "HEAD")
     return result
