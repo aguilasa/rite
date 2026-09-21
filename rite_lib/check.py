@@ -92,7 +92,13 @@ class Checker:
         else:
             groups = parsed[1]
             if groups.get("prefix") and cycle.prefix and groups["prefix"] != cycle.prefix:
-                self.err(item.path, f"id prefix {groups['prefix']} differs from cycle prefix {cycle.prefix}")
+                # when [naming] declares lists, a cycle may legitimately hold items an earlier convention
+                # named with another prefix; with single templates, a stray prefix is a typo
+                n = self.p.naming
+                single = all(len(tpls) == 1 for tpls in
+                             (n.task_id_tpls, n.fix_id_tpls, n.task_file_tpls, n.fix_file_tpls))
+                report = self.err if single else self.warn
+                report(item.path, f"id prefix {groups['prefix']} differs from cycle prefix {cycle.prefix}")
             if int(groups["n"]) != item.n:
                 self.err(item.path, f"id number {groups['n']} differs from file name number {item.n}")
 

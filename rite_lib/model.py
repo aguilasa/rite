@@ -174,8 +174,8 @@ class Project:
                     continue
                 file = current / fname
                 rel = file.relative_to(cycle_dir).as_posix()
-                for kind, rx in (("fix", self.naming.fix_file_re), ("task", self.naming.task_file_re)):
-                    m = rx.match(rel)
+                for kind in ("fix", "task"):
+                    m = self.naming.match_file(kind, rel)
                     if m:
                         items.append(self._load_item(kind, file, int(m.group("n"))))
                         break

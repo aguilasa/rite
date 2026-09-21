@@ -55,6 +55,20 @@ Templates use Python format syntax. Fields: `{prefix}`, `{n}` (number, e.g. `{n:
 | `profile_file` | `"{cycle}.md"` |
 | `pitfalls_file` | `"{cycle}.pitfalls.md"` |
 
+`task_id`, `fix_id`, `task_file` and `fix_file` also take a **list**. The first template is
+canonical — new items are always named with it; the others are only accepted when reading, so items an
+earlier convention named differently stay part of their cycle instead of being ignored. For example, a
+closed cycle whose later tasks were saved as `PAR-TASK-01.md` next to `01-extract.md`:
+
+```toml
+[naming]
+task_file = ["{n:02}-{slug}.md", "{id}.md"]
+```
+
+With single templates, an ID whose prefix differs from its cycle's prefix is an error (a typo). As soon
+as any of those four keys is a list, it is a warning: a cycle may legitimately hold items with an older
+prefix.
+
 Task numbers are per cycle. Fix numbers are per prefix across all cycles, archived ones included.
 IDs are always allocated by `rite.py new-task` / `new-fix`, which create the file atomically.
 

@@ -142,6 +142,11 @@ def parse(root: Path, text: str) -> Config:
     for (section, key), allowed in ENUMS.items():
         if data[section][key] not in allowed:
             errors.append(f"[{section}].{key} = {data[section][key]!r}; expected one of {sorted(allowed)}")
+    for key in ("task_id", "fix_id", "task_file", "fix_file"):
+        value = data["naming"][key]
+        values = value if isinstance(value, list) else [value]
+        if not values or not all(isinstance(v, str) and v.strip() for v in values):
+            errors.append(f"[naming].{key} must be a template string or a non-empty list of them")
     for gen in data["guards"]["generated"]:
         if not isinstance(gen, dict) or "paths" not in gen or "generator" not in gen:
             errors.append("[[guards.generated]] entries need 'paths' and 'generator'")

@@ -43,6 +43,11 @@ def fmt(template: str, **fields) -> str:
     return template.format(**fields)
 
 
+def as_list(value) -> list[str]:
+    """A naming template is a string or a list of them (first = canonical)."""
+    return [str(v) for v in value] if isinstance(value, (list, tuple)) else [str(value)]
+
+
 def slugify(title: str, max_len: int = 48) -> str:
     text = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
     text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
@@ -52,15 +57,41 @@ def slugify(title: str, max_len: int = 48) -> str:
 
 
 class Naming:
+    """ID and file-name templates.
+
+    Each template may be a string or a list. The first entry is canonical — it is what new items are
+    named with; the rest are only accepted when reading, which is how a repository keeps items that
+    an earlier convention named differently.
+    """
+
     def __init__(self, naming: dict):
-        self.task_id_tpl = naming["task_id"]
-        self.fix_id_tpl = naming["fix_id"]
-        self.task_file_tpl = naming["task_file"]
-        self.fix_file_tpl = naming["fix_file"]
-        self.task_id_re = template_regex(self.task_id_tpl)
-        self.fix_id_re = template_regex(self.fix_id_tpl)
-        self.task_file_re = template_regex(self.task_file_tpl, id_template=self.task_id_tpl)
-        self.fix_file_re = template_regex(self.fix_file_tpl, id_template=self.fix_id_tpl)
+        self.task_id_tpls = as_list(naming["task_id"])
+        self.fix_id_tpls = as_list(naming["fix_id"])
+        self.task_file_tpls = as_list(naming["task_file"])
+        self.fix_file_tpls = as_list(naming["fix_file"])
+        self.task_id_res = [template_regex(t) for t in self.task_id_tpls]
+        self.fix_id_res = [template_regex(t) for t in self.fix_id_tpls]
+        self.task_file_res = [template_regex(f, id_template=i)
+                              for f in self.task_file_tpls for i in self.task_id_tpls]
+        self.fix_file_res = [template_regex(f, id_template=i)
+                             for f in self.fix_file_tpls for i in self.fix_id_tpls]
+
+    # the canonical template of each kind
+    @property
+    def task_id_tpl(self) -> str:
+        return self.task_id_tpls[0]
+
+    @property
+    def fix_id_tpl(self) -> str:
+        return self.fix_id_tpls[0]
+
+    @property
+    def task_file_tpl(self) -> str:
+        return self.task_file_tpls[0]
+
+    @property
+    def fix_file_tpl(self) -> str:
+        return self.fix_file_tpls[0]
 
     def task_id(self, prefix: str, n: int) -> str:
         return fmt(self.task_id_tpl, prefix=prefix, n=n)
@@ -74,10 +105,19 @@ class Naming:
     def fix_file(self, prefix: str, n: int, slug: str) -> str:
         return fmt(self.fix_file_tpl, prefix=prefix, n=n, slug=slug, id=self.fix_id(prefix, n))
 
-    def parse_id(self, item_id: str) -> tuple[str, dict] | None:
-        """Return ("task"|"fix", groups) for a well-formed ID, else None."""
-        for kind, rx in (("task", self.task_id_re), ("fix", self.fix_id_re)):
-            m = rx.match(item_id)
+    def match_file(self, kind: str, rel: str):
+        """First file-template match for ``rel`` (posix, relative to the cycle), else None."""
+        for rx in (self.task_file_res if kind == "task" else self.fix_file_res):
+            m = rx.match(rel)
             if m:
-                return kind, m.groupdict()
+                return m
+        return None
+
+    def parse_id(self, item_id: str) -> tuple[str, dict] | None:
+        """Return ("task"|"fix", groups) for a well-formed ID, else None. Canonical pattern first."""
+        for kind, patterns in (("task", self.task_id_res), ("fix", self.fix_id_res)):
+            for index, rx in enumerate(patterns):
+                m = rx.match(item_id)
+                if m:
+                    return kind, {**m.groupdict(), "pattern": index}
         return None

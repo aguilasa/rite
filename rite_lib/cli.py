@@ -301,6 +301,9 @@ def cmd_migrate(args) -> int:
         lines.append(f"done items without a findable work commit ({len(r['unresolved_commits'])}): "
                      + ", ".join(r["unresolved_commits"]))
     lines += [f"warning: {w}" for w in r["warnings"]]
+    if r["actions"]:
+        lines.append(f"action required ({len(r['actions'])}):")
+        lines += [f"  {a['item']} ({a['file']}): {a['action']}" for a in r["actions"]]
     if not args.write:
         lines.append("dry run: nothing written (pass --write, on a branch)")
     _emit(args, r, "\n".join(lines))

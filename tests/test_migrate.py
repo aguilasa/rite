@@ -23,6 +23,7 @@ PROGRESS = """\
 | [LEG-TASK-01](/docs/tasks/01-primeira.md) | Primeira | 1 | — | ✅ Concluído | 2026-01-02 | 2026-01-03 |
 | [LEG-TASK-02](/docs/tasks/02-segunda.md) | Segunda | 1 | 01 | ✅ Concluído | 2026-01-04 | ⬜ pendente |
 | [LEG-TASK-03](/docs/tasks/03-fechamento.md) | Fechamento | 1 | 02 | ⬜ Pendente | — | — |
+| [PAR-TASK-01](/docs/tasks/PAR-TASK-01.md) | Paridade | 1 | — | ✅ Concluído | 2026-01-05 | 2026-01-06 |
 
 Notas humanas ficam.
 """
@@ -67,6 +68,8 @@ class MigrateTest(unittest.TestCase):
                                                   "pendente", type_="fechamento", deps='["LEG-TASK-02"]'))
         write(t / "CORR-LEG-001.md", legacy_fix("CORR-LEG-001", "concluída"))
         write(t / "CORR-LEG-002.md", legacy_fix("CORR-LEG-002", "pendente"))
+        # an item an earlier convention named by ID, with another prefix, in the same folder
+        write(t / "PAR-TASK-01.md", legacy_task("PAR-TASK-01", "Paridade", "/docs/PLAN-LEG.md §1", "concluído"))
         write(t / "concluidos/.keep", "")
         git(r, "add", "-A")
         git(r, "commit", "-q", "-m", "chore: legacy")
@@ -84,7 +87,7 @@ class MigrateTest(unittest.TestCase):
     def test_dry_run_writes_nothing(self):
         code, out, err = rite(self.root, "migrate", "--from", "we2002", "--json")
         self.assertEqual(code, 0, err)
-        self.assertEqual(json.loads(out)["items"], 5)
+        self.assertEqual(json.loads(out)["items"], 6)
         self.assertFalse((self.root / "rite.toml").exists())
         self.assertEqual(git(self.root, "status", "--porcelain"), "")
 
@@ -116,9 +119,75 @@ class MigrateTest(unittest.TestCase):
 
         code, out, _ = rite(self.root, "check", "--json")
         self.assertEqual(json.loads(out)["errors"], 0, out)
+        warnings = [f["message"] for f in json.loads(out)["findings"] if f["level"] == "warn"]
+        self.assertEqual(warnings, ["id prefix PAR differs from cycle prefix LEG"])
         status = json.loads(rite(self.root, "status", "--json")[1])["cycles"][0]
         self.assertEqual(status["review_queue"], ["LEG-TASK-02"])
         self.assertEqual(status["open_fixes"]["low"], 1)
+
+    def test_items_named_by_an_older_convention_are_migrated(self):
+        code, out, err = rite(self.root, "migrate", "--from", "we2002", "--write", "--json")
+        self.assertEqual(code, 0, err)
+        report = json.loads(out)
+        self.assertFalse([w for w in report["warnings"] if "not recognized" in w], report["warnings"])
+        par = self.fields("PAR-TASK-01.md")
+        self.assertEqual((par["status"], par["done_on"], par["reviewed_on"]), ("done", "2026-01-05", "2026-01-06"))
+        self.assertEqual(par["source_of_truth"], "/docs/PLAN-LEG.md#1")
+        # new items are still named by the canonical (first) template
+        code, out, err = rite(self.root, "new-task", "--title", "Nova", "--type", "closing", "--phase", "1",
+                              "--source-of-truth", "/docs/PLAN-LEG.md#1", "--json")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["path"], "docs/tasks/04-nova.md")
+
+    def test_approximated_commit_is_recorded_in_the_item(self):
+        code, out, err = rite(self.root, "migrate", "--from", "we2002", "--write", "--json")
+        self.assertEqual(code, 0, err)
+        report = json.loads(out)
+        self.assertIn("LEG-TASK-02", report["approximated_commits"])
+        self.assertNotIn("LEG-TASK-01", report["approximated_commits"])  # its commit names the ID
+        body = (self.root / "docs/tasks/02-segunda.md").read_text(encoding="utf-8")
+        log = body.split("## Log de Execução", 1)[1]
+        self.assertRegex(log, r"_Migrated on \d{4}-\d{2}-\d{2}: done_commit approximated from the last "
+                              r"commit touching this file\._")
+        self.assertNotIn("approximated", (self.root / "docs/tasks/01-primeira.md").read_text(encoding="utf-8"))
+
+    def test_missing_section_asks_the_operator_instead_of_inventing(self):
+        code, out, _ = rite(self.root, "migrate", "--from", "we2002", "--json")
+        actions = json.loads(out)["actions"]
+        self.assertEqual([a["item"] for a in actions], ["LEG-TASK-02"])
+        self.assertEqual((actions[0]["target"], actions[0]["section"]), ("/docs/PLAN-LEG.md", "9.9"))
+        self.assertIn("add a heading starting with '9.9'", actions[0]["action"])
+        self.assertIn("rite anchors /docs/PLAN-LEG.md", actions[0]["action"])
+
+
+class PrefixRuleTest(unittest.TestCase):
+    """A foreign prefix is an error with single [naming] templates and a warning with lists."""
+
+    def build(self, naming: str) -> Path:
+        tmp = tempfile.TemporaryDirectory(prefix="rite-prefix-")
+        self.addCleanup(tmp.cleanup)
+        r = Path(tmp.name).resolve()
+        git(r, "init", "-q")
+        write(r / "rite.toml", f'[paths]\ncycles_root = "cycles"\n[naming]\n{naming}\n[vocab]\ntask_types = []\n')
+        write(r / "cycles/a/progress.md", "---\nprefix: AAA\n---\n")
+        write(r / "plan.md", "# P\n\n## 1. X\n")
+        write(r / "cycles/a/OLD-TASK-01.md",
+              '---\nid: OLD-TASK-01\ntitle: t\ntype: x\nphase: 1\ndepends_on: []\nsource_of_truth: "/plan.md#1"\n'
+              "status: pending\ndone_on: null\ndone_commit: null\nreviewed_on: null\n---\n")
+        rite(r, "sync", "--all")
+        return r
+
+    def findings(self, root: Path) -> list[tuple[str, str]]:
+        out = rite(root, "check", "--all", "--quick", "--json")[1]
+        return [(f["level"], f["message"]) for f in json.loads(out)["findings"] if "prefix" in f["message"]]
+
+    def test_single_templates_are_strict(self):
+        root = self.build('task_file = "{id}.md"')
+        self.assertEqual(self.findings(root), [("error", "id prefix OLD differs from cycle prefix AAA")])
+
+    def test_lists_allow_an_older_prefix(self):
+        root = self.build('task_file = ["{n:02}-{slug}.md", "{id}.md"]')
+        self.assertEqual(self.findings(root), [("warn", "id prefix OLD differs from cycle prefix AAA")])
 
 
 if __name__ == "__main__":

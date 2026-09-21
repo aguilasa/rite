@@ -8,6 +8,7 @@ to Rite's closed vocabulary. No file is renamed or moved; run it on a branch and
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -33,6 +34,8 @@ plans_dir    = "docs"
 link_style   = "root-absolute"
 
 [naming]
+# the first template names new items; the second keeps items an earlier convention named by ID
+task_file     = ["{{n:02}}-{{slug}}.md", "{{id}}.md"]
 fix_id        = "CORR-{{prefix}}-{{n:03}}"
 progress_file = "progresso.md"
 fixes_file    = "correcoes-progresso.md"
@@ -67,10 +70,12 @@ SEVERITY = {"crítica": "critical", "critica": "critical", "alta": "high", "méd
             "media": "medium", "baixa": "low"}
 TYPE_MAP = {"fechamento": "closing"}
 LEGACY_KEYS = {"fonte_de_verdade", "criticidade", "origem"}
+PROVENANCE_MARK = "done_commit approximated from the last commit touching this file"
+PROVENANCE_LINE = "_Migrated on {date}: " + PROVENANCE_MARK + "._"
 EMOJI_STATUS = {"✅": "done", "⬜": "pending", "🔄": "in-progress", "❌": "blocked", "⏭": "skipped"}
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _ID_IN = re.compile(r"\[?([A-Z][A-Z0-9]*-(?:TASK-)?\d+|CORR-[A-Z0-9]+-\d+)\]?")
-_SECTION_REF = re.compile(r"^(\S+?\.md)\s*(?:§\s*([\d.]+\d)|#(\S+))?")
+_SECTION_REF = re.compile(r"^(\S+?\.md)\s*(?:§\s*(\d+(?:\.\d+)*)|#(\S+))?")
 
 
 @dataclass
@@ -81,6 +86,7 @@ class Report:
     warnings: list[str] = field(default_factory=list)
     unresolved_commits: list[str] = field(default_factory=list)
     approximated_commits: list[str] = field(default_factory=list)  # last commit touching the item file
+    actions: list[dict] = field(default_factory=list)  # what the operator must decide, per item
 
     def as_dict(self) -> dict:
         return self.__dict__
@@ -178,10 +184,16 @@ class CommitFinder:
 
 
 # --- migration ---------------------------------------------------------------------
-def _sot(project: Project, item_path: Path, raw: str, warnings: list[str], item_id: str) -> str:
+def _today() -> str:
+    return dt.date.today().isoformat()
+
+
+def _sot(project: Project, item_path: Path, raw: str, report: Report, item_id: str) -> str:
     m = _SECTION_REF.match(raw.strip())
     if not m:
-        warnings.append(f"{item_id}: source_of_truth {raw!r} not understood; kept")
+        report.warnings.append(f"{item_id}: source_of_truth {raw!r} not understood; kept")
+        report.actions.append({"item": item_id, "file": display(project.root, item_path),
+                               "action": f"rewrite source_of_truth {raw!r} as <file>#<anchor>"})
         return raw
     path, section, anchor = m.group(1), m.group(2), m.group(3)
     target = (project.root / path.lstrip("/")) if path.startswith("/") else (item_path.parent / path)
@@ -189,7 +201,13 @@ def _sot(project: Project, item_path: Path, raw: str, warnings: list[str], item_
     if anchor and target.is_file() and markdown.has_anchor(target, anchor):
         return f"{path}#{anchor}"
     if anchor:
-        warnings.append(f"{item_id}: section {anchor!r} of {path} has no matching heading; kept file only")
+        # never invent an anchor: keep the file and say what the operator has to decide
+        report.warnings.append(f"{item_id}: section {anchor!r} of {path} has no matching heading; kept file only")
+        report.actions.append({
+            "item": item_id, "file": display(project.root, item_path), "target": path, "section": anchor,
+            "action": (f"either add a heading starting with '{anchor}' to {path} and set source_of_truth to "
+                       f"{path}#{anchor}, or repoint it to an existing section (rite anchors {path})"),
+        })
     return path
 
 
@@ -263,7 +281,7 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
             up["status"] = status
             if "fonte_de_verdade" in f or "source_of_truth" in f:
                 up["source_of_truth"] = _sot(project, item.path, str(f.get("fonte_de_verdade") or
-                                                                      f.get("source_of_truth")), report.warnings, item.id)
+                                                                      f.get("source_of_truth")), report, item.id)
             if f.get("type") in TYPE_MAP:
                 up["type"] = TYPE_MAP[f["type"]]
             done_on = row.get("done_on") if status == "done" else None
@@ -293,17 +311,23 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
         up["depends_on"] = item.depends_on
         up["done_on"] = done_on
         commit = None
+        approximated = False
         if status == "done":
             commit = f.get("done_commit") or finder.find(item.id, done_on)
             if not commit and gitutil.is_repo(project.root):
                 commit = finder.last_touch(item.path, done_on)
                 if commit:
+                    approximated = True
                     report.approximated_commits.append(item.id)
             if not commit:
                 report.unresolved_commits.append(item.id)
         up["done_commit"] = commit
         text = item.path.read_text(encoding="utf-8")
         new = frontmatter.remove_fields(frontmatter.set_fields(text, up), LEGACY_KEYS)
+        if approximated and PROVENANCE_MARK not in new:
+            # the report is read once; the item is read every time the item is — record the doubt there
+            new = markdown.append_to_section(new, project.cfg["sections"]["execution_log"],
+                                             PROVENANCE_LINE.format(date=_today()))
         if new != text:
             report.changed.append(display(project.root, item.path))
             if write:

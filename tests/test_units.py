@@ -70,10 +70,21 @@ class NamingTest(unittest.TestCase):
         self.assertEqual(n.fix_id("ALP", 14), "FIX-ALP-014")
         self.assertEqual(n.task_file("ALP", 5, "card-diff"), "05-card-diff.md")
         self.assertEqual(n.fix_file("ALP", 14, "x"), "FIX-ALP-014.md")
-        self.assertEqual(n.parse_id("FIX-ALP-014"), ("fix", {"prefix": "ALP", "n": "014"}))
+        self.assertEqual(n.parse_id("FIX-ALP-014"), ("fix", {"prefix": "ALP", "n": "014", "pattern": 0}))
         self.assertEqual(n.parse_id("ALP-TASK-05")[0], "task")
         self.assertIsNone(n.parse_id("nope"))
-        self.assertEqual(n.fix_file_re.match("FIX-ALP-014.md").group("n"), "014")
+        self.assertEqual(n.match_file("fix", "FIX-ALP-014.md").group("n"), "014")
+
+    def test_list_templates_first_is_canonical(self):
+        n = Naming({**DEFAULTS["naming"],
+                    "task_id": ["{prefix}-TASK-{n:02}", "{prefix}-{n:03}"],
+                    "task_file": ["{n:02}-{slug}.md", "{id}.md"]})
+        self.assertEqual(n.task_id("ALP", 5), "ALP-TASK-05")          # creation uses the first
+        self.assertEqual(n.task_file("ALP", 5, "x"), "05-x.md")
+        self.assertEqual(n.parse_id("OLD-007"), ("task", {"prefix": "OLD", "n": "007", "pattern": 1}))
+        self.assertEqual(n.match_file("task", "PAR-TASK-03.md").group("n"), "03")   # read-only shape
+        self.assertEqual(n.match_file("task", "OLD-007.md").group("prefix"), "OLD")
+        self.assertIsNone(n.match_file("task", "notes.md"))
 
     def test_slugify(self):
         self.assertEqual(slugify("Extração de Tabelas!"), "extracao-de-tabelas")
