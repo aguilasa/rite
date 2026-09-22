@@ -160,6 +160,20 @@ Statuses and severities are fixed, not configurable:
 | --- | --- | --- |
 | `max_kb` | `12` | Size limit of a cycle profile; `check` fails above it. `0` disables. The pitfalls file has no limit — it is searched, not read whole. |
 
+## `[output]`
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `context_kb` | `24` | Cap of what `rite.py context` prints. What does not fit is named, with the `sed -n` command that reads it. |
+
+## `[limits]`
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `read_kb` | `8` | Above this a command slices a file (`rite.py context`, `grep -n`, `sed -n`) instead of opening it whole. |
+| `delegate_above_kb` | `5000` | Repository size (git's own object count) above which `/rite:execute` hands the implementation to a worker agent. |
+| `sweep_hits` | `40` | Cap of hits `rite.py sweep` prints per term. |
+
 ## `[status]`
 
 | Key | Default | Meaning |

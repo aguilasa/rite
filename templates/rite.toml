@@ -59,6 +59,14 @@ task_types = ["feature", "tool", "research", "verification", "closing"]
 [profile]
 max_kb = 12
 
+[output]
+context_kb = 24                             # cap of what `rite context` prints; the rest is named, not printed
+
+[limits]
+read_kb            = 8                      # above this, commands slice a file instead of opening it whole
+delegate_above_kb  = 5000                   # repository size above which /rite:execute delegates to a worker
+sweep_hits         = 40                     # cap of hits `rite sweep` prints per term
+
 [status]
 review_age_days = 7
 

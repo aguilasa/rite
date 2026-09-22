@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import ROOT, Fixture, rite, task, write
+from fixtures import PROFILE, ROOT, Fixture, rite, task, write
 
 from rite_lib import frontmatter
 
@@ -401,6 +401,77 @@ class HookTest(FixtureCase):
         self.ok("commit-new", res["id"])
         self.assertEqual(self.log(1), [f"chore(rite): open {res['id']}"])
         self.assertEqual(self.fx.git("status", "--porcelain"), "")
+
+
+class ComposeTest(FixtureCase):
+    """begin / gates / sweep / finish: one call where the rite used to spend several turns."""
+
+    def test_begin_takes_the_item_and_answers_the_first_turn(self):
+        data = self.js("begin", "task", "--cycle", "alpha")
+        self.assertEqual(data["item"]["id"], "ALP-TASK-01")
+        self.assertEqual(data["item"]["status"], "in-progress")
+        self.assertTrue(data["taken"])
+        self.assertEqual(data["item"]["source_of_truth"], "/docs/plans/PLAN-alpha.md#2.1")
+        self.assertEqual(data["paths"]["profile"], "docs/rite/profiles/alpha.md")
+        self.assertEqual(data["commit"]["trailers"], ["Refs: ALP-TASK-01"])
+        self.assertEqual(data["config"]["read_only"], ["vendor/**"])
+        self.assertTrue(data["config"]["generated"][0]["generator"])
+        self.assertIsInstance(data["repo_kb"], int)
+
+        again = self.js("begin", "task", "--cycle", "alpha")  # idempotent
+        self.assertEqual(again["item"]["id"], "ALP-TASK-01")
+        self.assertFalse(again["taken"])
+        self.assertEqual(self.fx.git("status", "--porcelain").count("01-harness"), 1)
+
+    def test_begin_named_item_and_refusals(self):
+        data = self.js("begin", "task", "--cycle", "alpha", "--id", "ALP-TASK-01")
+        self.assertEqual(data["reason"], "named explicitly")
+        code, _, err = self.fx.rite("begin", "task", "--cycle", "alpha", "--id", "ALP-TASK-02")
+        self.assertEqual(code, 1)
+        self.assertIn("waits for ALP-TASK-01", err)
+        code, _, err = self.fx.rite("begin", "fix", "--cycle", "alpha", "--id", "ALP-TASK-01")
+        self.assertEqual(code, 1)
+        self.assertIn("is a task", err)
+        code, out, _ = self.fx.rite("begin", "review", "--cycle", "alpha", "--json")
+        self.assertEqual(code, 1)  # nothing to review yet
+        self.assertIsNone(json.loads(out)["item"])
+
+    def test_gates_pass_fail_and_truncation(self):
+        gates_section = '## Gates\n\n- `python -c "print(7)"`\n\n## Confirmed decisions'
+        write(self.root / "docs/rite/profiles/alpha.md",
+              PROFILE.format(cycle="alpha").replace("## Confirmed decisions", gates_section))
+        data = self.js("gates", "--cycle", "alpha")
+        self.assertTrue(data["passed"])
+        self.assertEqual(data["gates"][0]["command"], 'python -c "print(7)"')
+        self.assertIn("7", data["gates"][0]["output"])
+
+        cfg = self.root / "rite.toml"
+        red = '\n[gates]\nglobal = ["python -c \\"import sys; sys.exit(\'boom\')\\""]\n'
+        cfg.write_text(cfg.read_text(encoding="utf-8") + red, encoding="utf-8", newline="\n")
+        code, out, _ = self.fx.rite("gates", "--cycle", "alpha", "--json")
+        self.assertEqual(code, 1)
+        failing = json.loads(out)["gates"][0]
+        self.assertFalse(failing["passed"])
+        self.assertIn("boom", failing["output"])  # a red gate keeps its whole output
+
+    def test_sweep_finds_mentions_outside_the_item(self):
+        write(self.root / "docs/rite/cycles/alpha/03-close-phase.md",
+              (self.root / "docs/rite/cycles/alpha/03-close-phase.md").read_text(encoding="utf-8")
+              + "\nMentions card_diff() here.\n")
+        data = self.js("sweep", "--terms", "card_diff,absent_term", "--cycle", "alpha",
+                       "--id", "ALP-TASK-01")
+        hits = data["results"]["card_diff"]["hits"]
+        self.assertTrue(any(h["file"].endswith("03-close-phase.md") for h in hits), hits)
+        self.assertEqual(data["results"]["absent_term"]["hits"], [])
+
+    def test_finish_closes_checks_and_names_the_next_item(self):
+        self.js("begin", "task", "--cycle", "alpha")
+        self.fx.work_commit("src/a.py", "a\n", "feat: harness")
+        data = self.js("finish", "ALP-TASK-01", "--cycle", "alpha")
+        self.assertEqual(data["closed"]["done_commit"], self.fx.git("rev-parse", "--short", "HEAD~1").strip())
+        self.assertEqual(data["check"]["errors"], [])
+        self.assertEqual((data["next"]["kind"], data["next"]["id"]), ("review", "ALP-TASK-01"))
+        self.assertEqual(self.log(1), ["chore(rite): close ALP-TASK-01"])
 
 
 class NoConfigTest(unittest.TestCase):

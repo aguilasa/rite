@@ -57,6 +57,8 @@ DEFAULTS: dict = {
     "resources": {"serialized": []},
     "vocab": {"task_types": ["feature", "tool", "research", "verification", "closing"]},
     "profile": {"max_kb": 12},
+    "output": {"context_kb": 24},
+    "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40},
     "status": {"review_age_days": 7},
     "hooks": {"stop_check": False},
 }

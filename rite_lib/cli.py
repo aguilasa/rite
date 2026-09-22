@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, check as checkmod, config, ops, selection, views
+from . import __version__, check as checkmod, compose, config, ops, selection, views
 from .gitutil import GitError
 from .model import Project, RiteError, display, make_link
 
@@ -70,6 +70,64 @@ def cmd_commit_refs(project: Project, args) -> int:
         lines.append(f"local cycle {cycle.name}: no Refs to the item; never stage its documents")
     _emit(args, data, "\n".join(lines))
     return EXIT_OK
+
+
+def cmd_begin(project: Project, args) -> int:
+    data = compose.begin(project, kind=args.kind, cycle_name=args.cycle, item_id=args.id)
+    item = data.get("item")
+    if not item:
+        _emit(args, data, f"no {args.kind} selectable in {data['cycle']}: {data['reason']}")
+        return EXIT_FAIL
+    lines = [f"{item['id']} — {item['title']} ({data['cycle']}; {data['reason']})",
+             f"  file: {item['path']}" + (f"  repo: {item['repo']}" if item["repo"] else ""),
+             f"  source_of_truth: {item['source_of_truth']}",
+             f"  profile: {data['paths']['profile']}   pitfalls: {data['paths']['pitfalls']}",
+             f"  commit: {data['commit']['subject_template']}"
+             + ("".join(f" | {x}" for x in data["commit"]["trailers"])),
+             f"  next: {data['next_step']}"]
+    _emit(args, data, "\n".join(lines))
+    return EXIT_OK
+
+
+def cmd_context(project: Project, args) -> int:
+    data = compose.context(project, item_id=args.id, cycle_name=args.cycle)
+    _emit(args, data, compose.render_context(data))
+    return EXIT_OK
+
+
+def cmd_gates(project: Project, args) -> int:
+    data = compose.gates(project, cycle_name=args.cycle, item_id=args.id, tail=args.tail)
+    lines = [f"gates in {data['where']} ({data['count']}):"]
+    for g in data["gates"]:
+        lines.append(f"  {'pass' if g['passed'] else 'FAIL'}  {g['command']}")
+        if g["output"].strip():
+            lines += [f"    {line}" for line in g["output"].splitlines()[-args.tail:]]
+    _emit(args, data, "\n".join(lines) if data["count"] else "no gate declared")
+    return EXIT_OK if data["passed"] else EXIT_FAIL
+
+
+def cmd_sweep(project: Project, args) -> int:
+    data = compose.sweep(project, terms=_ids(args.terms), cycle_name=args.cycle, item_id=args.id)
+    lines = []
+    for term, found in data["results"].items():
+        lines.append(f"{term}: {len(found['hits'])} hit(s)" + (" (capped)" if found["capped"] else ""))
+        lines += [f"  {h['file']}:{h['line']}: {h['text']}" for h in found["hits"]]
+    _emit(args, data, "\n".join(lines) or "no mention found")
+    return EXIT_OK
+
+
+def cmd_finish(project: Project, args) -> int:
+    data = compose.finish(project, item_id=args.id, cycle_name=args.cycle, sha=args.sha,
+                          commit=not args.no_commit)
+    closed = data["closed"]
+    lines = [_result_text("closed", closed)]
+    lines.append("  check: " + ("clean" if not data["check"]["errors"]
+                                else f"{len(data['check']['errors'])} error(s)"))
+    lines += [f"    {e}" for e in data["check"]["errors"]]
+    nxt = data["next"]
+    lines.append(f"  next {nxt['kind']}: {nxt['id'] or '— ' + nxt['reason']}")
+    _emit(args, data, "\n".join(lines))
+    return EXIT_FAIL if data["check"]["errors"] else EXIT_OK
 
 
 def cmd_next(project: Project, args) -> int:
@@ -372,6 +430,33 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("resolve-cycle", parents=[common], help="print the cycle the rules select")
     s.add_argument("name", nargs="?")
     s.set_defaults(fn=cmd_resolve_cycle)
+
+    s = sub.add_parser("begin", parents=[common],
+                       help="resolve cycle and item, take it, and return everything the work needs")
+    s.add_argument("kind", choices=["task", "fix", "review"])
+    s.add_argument("--id", help="work on this item instead of the selected one")
+    s.set_defaults(fn=cmd_begin)
+
+    s = sub.add_parser("context", parents=[common],
+                       help="the item, its plan section, the profile's rules and matching pitfalls")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_context)
+
+    s = sub.add_parser("gates", parents=[common], help="run the global and profile gates")
+    s.add_argument("--id", help="run them in this item's repository")
+    s.add_argument("--tail", type=int, default=20, help="lines kept from a passing gate")
+    s.set_defaults(fn=cmd_gates)
+
+    s = sub.add_parser("sweep", parents=[common], help="find stale mentions of what an item changed")
+    s.add_argument("--terms", action="append", required=True, help="comma-separated or repeated")
+    s.add_argument("--id", help="skip this item's own file")
+    s.set_defaults(fn=cmd_sweep)
+
+    s = sub.add_parser("finish", parents=[common], help="close the item, check the cycle, pick the next")
+    s.add_argument("id")
+    s.add_argument("--sha", default="HEAD")
+    s.add_argument("--no-commit", action="store_true")
+    s.set_defaults(fn=cmd_finish)
 
     s = sub.add_parser("next", parents=[common], help="select the next task, review or fix")
     s.add_argument("what", choices=["task", "review", "fix"])
