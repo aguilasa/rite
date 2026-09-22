@@ -23,7 +23,7 @@ Each layer knows only what is its own. The rite never names a project, a path, a
 
 | Layer | Where | Holds |
 | --- | --- | --- |
-| **Rite** | the plugin: `commands/`, `shared/`, `agents/` | the generic procedure: selection, order, evidence, commits |
+| **Rite** | the plugin: `commands/` (assembled from `parts/`), `agents/` | the generic procedure: selection, order, evidence, commits |
 | **Repo config** | `rite.toml` | folders, naming, languages, commit policy, guarded paths, generators, global gates, serialized resources |
 | **Cycle profile** | `<profiles_dir>/<cycle>.md` + pitfalls file | confirmed decisions, sources of truth, cycle gates, hot files, pull-ahead precedents, phase-specific checks; dated pitfalls live in the pitfalls file, searched on demand |
 | **Item** | task / fix file | scope, `source_of_truth`, done criteria, execution log |

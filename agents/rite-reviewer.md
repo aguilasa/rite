@@ -17,7 +17,7 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
 - **Measure, do not read.** The task's Execution Log, commit messages and ticked checkboxes are leads.
   A claim counts only if you ran its command now and saw the output.
 - **Every number is recounted** with the tool that produced it. A number you cannot reproduce is a finding.
-- Read the CLI rules at `${CLAUDE_PLUGIN_ROOT}/shared/cli.md`; you may run read-only subcommands
+- Read the CLI rules at `${CLAUDE_PLUGIN_ROOT}/parts/cli.md`; you may run read-only subcommands
   (`resolve-cycle`, `next`, `status`, `check`, `guard`) only.
 
 ## Procedure

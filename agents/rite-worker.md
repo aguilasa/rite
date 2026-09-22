@@ -18,7 +18,7 @@ the serialized resources you may use. Other workers may be editing other files a
 - **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
   every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
 - Use a serialized resource only if the main thread assigned it to you.
-- Follow `${CLAUDE_PLUGIN_ROOT}/shared/evidence.md`, `guards.md` and `discrepancy-sweep.md`
+- Follow `${CLAUDE_PLUGIN_ROOT}/parts/evidence.md`, `guards.md` and `sweep.md`
   (sweep edits also stay inside your file list; mentions elsewhere go in your report as forwards).
 
 ## Procedure

@@ -1,11 +1,11 @@
-"""The rite (commands, shared fragments, agents) must not name any concrete project, tool or path."""
+"""The rite (commands, parts, agents) must not name any concrete project, tool or path."""
 
 import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RITE_DIRS = ("commands", "shared", "agents")
+RITE_DIRS = ("commands", "parts", "agents")
 
 # Names that leaked into the original prompts, plus common tool/stack names. Extend when a leak is found.
 BLACKLIST = [
@@ -42,9 +42,16 @@ class AgnosticTest(unittest.TestCase):
         self.assertEqual(leaks, [], "rite names concrete things:\n" + "\n".join(leaks))
 
     def test_command_size(self):
+        """A command carries its rules, so the cap is what one turn may load, not what prose wants."""
         big = [f"{f.relative_to(ROOT)}: {f.stat().st_size} B" for f in (ROOT / "commands").glob("*.md")
-               if f.stat().st_size > 6 * 1024]
-        self.assertEqual(big, [], "commands must stay <= 6 KB; move shared rules to shared/")
+               if f.stat().st_size > 8 * 1024]
+        self.assertEqual(big, [], "commands must stay <= 8 KB; condense a body or drop a part")
+
+    def test_commands_do_not_send_the_reader_to_another_file(self):
+        """Fragments read at runtime were a third of an invocation's cost; parts are inlined instead."""
+        leaks = [f"{f.relative_to(ROOT)}" for f in (ROOT / "commands").glob("*.md")
+                 if "shared/" in f.read_text(encoding="utf-8")]
+        self.assertEqual(leaks, [])
 
 
 if __name__ == "__main__":

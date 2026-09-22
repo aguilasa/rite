@@ -219,7 +219,7 @@ forbids them in prose.
 | --- | --- | --- |
 | 0 | plugin skeleton, templates, config schema, `/rite:status` | done |
 | 1 | `rite.py` CLI + tests | done |
-| 2 | shared fragments, `execute` / `review` / `fix`, agents, guard hook | done; e2e loop passes on both examples |
+| 2 | rule parts, `execute` / `review` / `fix`, agents, guard hook | done; e2e loop passes on both examples |
 | 3 | `execute-batch`, `fix-all`, `batch-plan` | done; e2e lifecycle passes on both examples |
 | 4 | `init`, `new-cycle`, `plan-to-tasks`, `close-cycle`, `retro`, `archive` | done; e2e lifecycle passes on both examples |
 | 5 | migration guide, `rite.py migrate --from we2002`, `relink` | done; measured on a clone of the source repository (no delta against the old tables) |

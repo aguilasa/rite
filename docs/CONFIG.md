@@ -11,7 +11,7 @@ Where things are decided:
 
 | Layer | Where | Changes when |
 | --- | --- | --- |
-| Rite | the plugin (`commands/`, `shared/`) | plugin version |
+| Rite | the plugin (`commands/`, built from `parts/`) | plugin version |
 | Repo config | `rite.toml` | rarely |
 | Cycle profile | `<profiles_dir>/<profile_file>` (+ pitfalls file) | every cycle |
 | Item | task / fix file frontmatter | every item |
