@@ -39,6 +39,11 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 
 | Subcommand | Does |
 | --- | --- |
+| `begin task\|fix\|review [--id ID]` | resolve the cycle, take the item, return paths, config digest and commit template |
+| `context ID` | the item, its anchored source-of-truth section, the profile rules that apply and matching pitfalls, capped |
+| `gates [--id ID]` | run the global and profile gates; tail of a passing one, whole output of a red one |
+| `sweep --terms a,b [--id ID]` | mentions of what an item changed, across cycle, plans and top-level docs |
+| `finish ID [--sha S]` | close the item, `check --quick`, and name the next one |
 | `resolve-cycle [name]` | cycle chosen by the rules, with prefix, profile, pitfalls, plan, ticket, local, workspace and its repos |
 | `next task\|review\|fix` | deterministic selection |
 | `new-task`, `new-fix` `[--repo R]`, `commit-new ID` | atomic ID allocation (`--repo`: the item's repository in a workspace); commit a new filled-in item |

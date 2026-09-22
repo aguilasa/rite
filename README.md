@@ -156,7 +156,8 @@ sh bin/rite <subcommand> [--cycle C] [--root R] [--json]     # finds Python 3.11
 python3 bin/rite.py <subcommand> ...                          # direct
 ```
 
-`resolve-cycle`, `next`, `new-task`, `new-fix`, `commit-new`, `commit-refs`, `close`, `rebind`, `mark`,
+`begin`, `context`, `gates`, `sweep`, `finish` (the composites a command uses), plus `resolve-cycle`,
+`next`, `new-task`, `new-fix`, `commit-new`, `commit-refs`, `close`, `rebind`, `mark`,
 `mark-reviewed`, `mark-stale`, `sync`, `check`, `status`, `batch-plan`, `new-cycle`, `archive`,
 `publish`, `anchors`, `stats`, `relink`, `migrate`, `guard` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
 selected, `3` no `rite.toml`.
