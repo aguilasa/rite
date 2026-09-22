@@ -2,6 +2,58 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [0.4.0] — 2026-09-22
+
+Cutting what an invocation costs. The measurement came first: `tools/token_report.py` reads Claude
+Code's transcripts and reports, per command, the median billed tokens, cache reads, turns and the tool
+calls behind them. On the 0.3.0 runs of the examples it found the three generators — ceremony in
+separate turns (8 fragment reads plus 8 CLI calls around one trivial task), whole documents read (a
+84 KB profile, a 191 KB plan), and untruncated command output.
+
+### Added
+
+- **Composite subcommands**, each answering a whole step instead of a part of it: `begin` (resolve,
+  select, take, config digest, commit template — idempotent), `context` (the item, its anchored
+  source-of-truth section, the profile rules that apply and the matching pitfalls, capped by
+  `[output].context_kb`), `gates` (global and profile gates, truncated unless red), `sweep` and
+  `finish` (close + check + next).
+- `tools/token_report.py` and `tests/baselines/*.json`: the 0.3.0 measurement, with `--check` failing
+  when a command regresses beyond a tolerance.
+- `tools/build_commands.py`: commands are assembled from `commands/_<name>.body.md` plus the rules in
+  `parts/`, each rule written once. `--check` (in the test suite) fails when a command on disk differs.
+- `[output].context_kb`, `[limits].read_kb`, `[limits].delegate_above_kb`, `[limits].sweep_hits`.
+
+### Changed
+
+- **Commands carry their rules**: `shared/` is gone and no command sends the reader to another file.
+  Each stays under 8 KB, enforced by a test.
+- The work commands run `begin → context → work → gates → sweep → commit → finish`: **5 CLI calls and
+  no fragment reads**, against 8 reads plus 8 calls in 0.3.0.
+- Reading rules are explicit: never open a document above `[limits].read_kb` whole, never read one
+  twice, and reports stop at 15 lines. The reviewer, worker and reproducer agents are handed the
+  `rite context` payload and may not reopen what it contains.
+- `/rite:execute` delegates the implementation to a worker when the repository is above
+  `[limits].delegate_above_kb` — the pattern that made `review` cost three times less.
+- The CLI is found by `${CLAUDE_PLUGIN_ROOT}`, then `RITE_HOME`, then `PATH`; no command searches the
+  disk for it.
+
+### Measured, on the two repositories that use Rite
+
+| | 0.3.0 | 0.4.0 |
+| --- | --: | --: |
+| Ceremony per `/rite:execute` (fragment reads + CLI calls) | 16 | 5 |
+| Documents loaded for `LOOKS-TASK-39` (84 KB profile + 191 KB plan + item) | 277 KB | 33 KB (24 KB context + the 8 KB command) |
+| `context` for `TOOL-TASK-04` (12-task cycle, `mastersystem`) | — | 4 KB |
+
+The end-to-end token comparison per command was not re-measured: the examples' e2e runs were replaced
+by exercising the new CLI against both real repositories (`begin`, `context`, `gates`, `sweep`,
+`finish`, `check`), which is where the budget-sharing defect below was found.
+
+### Fixed
+
+- `context` shares its budget smallest-first instead of filling it in order: a 26 KB item file used to
+  leave the plan section and the profile rules at zero bytes.
+
 ## [0.3.0] — 2026-09-21
 
 ### Added
