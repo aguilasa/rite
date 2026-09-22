@@ -1,0 +1,179 @@
+{
+  "example": "node-minimal",
+  "version": "0.3.0",
+  "measured_on": "2026-09-22",
+  "invocations": 32,
+  "commands": {
+    "/rite:close-cycle": {
+      "n": 1,
+      "billed": 31277,
+      "cache_read": 357070,
+      "output": 936,
+      "turns": 8,
+      "ceremony": 5,
+      "tools": {
+        "rite:cli": 5,
+        "git": 1,
+        "other": 1
+      }
+    },
+    "/rite:execute": {
+      "n": 3,
+      "billed": 70229,
+      "cache_read": 1924397,
+      "output": 8790,
+      "turns": 33,
+      "ceremony": 16,
+      "tools": {
+        "rite:fragment": 8,
+        "rite:cli": 8,
+        "git": 5,
+        "read:project": 4,
+        "read:shell": 9,
+        "gate": 1,
+        "edit": 3,
+        "other": 3
+      }
+    },
+    "/rite:execute-batch": {
+      "n": 7,
+      "billed": 59863,
+      "cache_read": 1492859,
+      "output": 7798,
+      "turns": 25,
+      "ceremony": 18,
+      "tools": {
+        "rite:fragment": 9,
+        "rite:cli": 9,
+        "git": 5,
+        "read:project": 5,
+        "read:shell": 2,
+        "gate": 1,
+        "edit": 0,
+        "subagent": 1,
+        "other": 1
+      }
+    },
+    "/rite:fix": {
+      "n": 1,
+      "billed": 64736,
+      "cache_read": 2054295,
+      "output": 8840,
+      "turns": 33,
+      "ceremony": 13,
+      "tools": {
+        "rite:fragment": 7,
+        "rite:cli": 6,
+        "git": 3,
+        "read:project": 10,
+        "read:shell": 11,
+        "gate": 2,
+        "edit": 2,
+        "other": 1
+      }
+    },
+    "/rite:fix-all": {
+      "n": 4,
+      "billed": 58455,
+      "cache_read": 1678854,
+      "output": 7879,
+      "turns": 28,
+      "ceremony": 15,
+      "tools": {
+        "rite:fragment": 8,
+        "rite:cli": 7,
+        "git": 4,
+        "read:project": 5,
+        "read:shell": 2,
+        "gate": 1,
+        "edit": 2,
+        "subagent": 1,
+        "other": 3
+      }
+    },
+    "/rite:init": {
+      "n": 2,
+      "billed": 77614,
+      "cache_read": 615022,
+      "output": 4360,
+      "turns": 12,
+      "ceremony": 4,
+      "tools": {
+        "rite:fragment": 3,
+        "rite:cli": 1,
+        "git": 3,
+        "read:project": 3,
+        "read:shell": 2,
+        "edit": 2,
+        "other": 1
+      }
+    },
+    "/rite:new-cycle": {
+      "n": 2,
+      "billed": 37587,
+      "cache_read": 571603,
+      "output": 3085,
+      "turns": 12,
+      "ceremony": 4,
+      "tools": {
+        "rite:fragment": 2,
+        "rite:cli": 2,
+        "git": 1,
+        "read:project": 4,
+        "read:shell": 3,
+        "edit": 1,
+        "other": 0
+      }
+    },
+    "/rite:plan-to-tasks": {
+      "n": 2,
+      "billed": 74093,
+      "cache_read": 2147963,
+      "output": 14902,
+      "turns": 34,
+      "ceremony": 15,
+      "tools": {
+        "rite:fragment": 5,
+        "rite:cli": 10,
+        "git": 3,
+        "read:project": 12,
+        "read:shell": 9,
+        "edit": 14,
+        "other": 1
+      }
+    },
+    "/rite:retro": {
+      "n": 1,
+      "billed": 65040,
+      "cache_read": 1383993,
+      "output": 10520,
+      "turns": 23,
+      "ceremony": 11,
+      "tools": {
+        "rite:fragment": 5,
+        "rite:cli": 6,
+        "git": 1,
+        "read:project": 6,
+        "read:shell": 7,
+        "edit": 2
+      }
+    },
+    "/rite:review": {
+      "n": 9,
+      "billed": 44708,
+      "cache_read": 762106,
+      "output": 3511,
+      "turns": 15,
+      "ceremony": 9,
+      "tools": {
+        "rite:fragment": 4,
+        "rite:cli": 5,
+        "read:project": 2,
+        "read:shell": 5,
+        "edit": 0,
+        "subagent": 1,
+        "other": 0
+      }
+    }
+  }
+}
