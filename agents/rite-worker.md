@@ -17,13 +17,16 @@ the serialized resources you may use. Other workers may be editing other files a
   Why: the batch's conflict matrix was built from that list.
 - **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
   every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
+- **The payload is your reading.** `rite context <ID>` gave the main thread the item, its anchored
+  source-of-truth section, the profile rules and the matching pitfalls; it hands you that. Do not
+  reopen those files, and never read a document above `[limits].read_kb` whole — slice it.
 - Use a serialized resource only if the main thread assigned it to you.
 - Follow `${CLAUDE_PLUGIN_ROOT}/parts/evidence.md`, `guards.md` and `sweep.md`
   (sweep edits also stay inside your file list; mentions elsewhere go in your report as forwards).
 
 ## Procedure
 
-1. Read `rite.toml`, the cycle profile, matching pitfalls entries, the item file and its source of truth.
+1. Start from the payload (item, source-of-truth section, profile rules, matching pitfalls).
 2. Do the work. For a fix: reproduce its evidence first; if the symptom is gone, change nothing and
    report `STALE` with the output.
 3. Verify each done criterion (task) or the Verification command (fix) by running it.

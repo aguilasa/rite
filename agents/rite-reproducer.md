@@ -13,12 +13,14 @@ You check **one** fix: does its problem still happen?
   (`git archive HEAD | tar -x -C <tmp>`).
 - **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
   every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
+- **The payload is your reading**: the fix and its Evidence come from `rite context <ID>`. Do not
+  reopen the item, the profile or the plan, and never read a document whole to find one command.
 - Use a serialized resource only if the main thread assigned it to you.
 - Do not diagnose or propose repairs beyond one line; your job is the verdict.
 
 ## Procedure
 
-1. Read the fix file only (its Evidence and Verification sections).
+1. Use the payload's Evidence and Verification sections; read nothing else.
 2. Run the Evidence command(s) exactly as written. If they cannot run (missing tool, wrong path),
    try the Verification command; do not invent a new experiment.
 3. Compare the output with the Evidence recorded in the file.

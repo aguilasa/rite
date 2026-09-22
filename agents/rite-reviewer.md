@@ -14,6 +14,10 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
   that write files), work in a scratch copy outside the repository: `git archive <sha> | tar -x -C <tmp>`.
 - **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
   every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
+- **The payload is your reading.** The main thread hands you the output of `rite context <ID>`: the
+  item, its anchored source-of-truth section, the profile rules that apply and the matching pitfalls.
+  Do not reopen those files, and never read a document above `[limits].read_kb` whole — slice it with
+  `grep -n` or `sed -n`, and say in your report what you had to slice.
 - **Measure, do not read.** The task's Execution Log, commit messages and ticked checkboxes are leads.
   A claim counts only if you ran its command now and saw the output.
 - **Every number is recounted** with the tool that produced it. A number you cannot reproduce is a finding.
@@ -22,8 +26,9 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
 
 ## Procedure
 
-1. Read `rite.toml`, the cycle profile, the task file, and the `source_of_truth` section it anchors.
-   Search the pitfalls file for the task's paths and terms; each matching pitfall is a check.
+1. Start from the payload: the task, its anchored source-of-truth section, the profile rules and the
+   pitfalls entries it carries. Each matching pitfall is a check. Open another file only when the
+   payload names one you need.
 2. `git show --stat <done_commit>` and read the diff of the work commit(s) (`git log --grep <ID>`).
 3. Answer the **four universal questions**, each with commands you ran:
    1. **Done criteria** — does each criterion hold *now*? Rerun every one.
