@@ -199,6 +199,21 @@ def _plan_part(project: Project, item: Item) -> dict:
             "note": f"section and its subsections (`sed -n '{first},{last}p' {rel}` for the same text)"}
 
 
+def _shares(parts: list[dict], budget: int) -> list[int]:
+    """Budget per part, smallest first: everyone gets an equal share, and what a small part does not
+    use goes to the bigger ones. Why: a 26 KB item file once ate the whole budget and left its plan
+    section and its profile rules at zero bytes — the cut has to hurt the biggest part, not the rest."""
+    sizes = [len(((p.get("text") or "")).encode("utf-8")) for p in parts]
+    shares = [0] * len(parts)
+    remaining, left = budget, len(parts)
+    for index in sorted(range(len(parts)), key=lambda i: sizes[i]):
+        share = remaining // left if left else 0
+        shares[index] = min(sizes[index], share)
+        remaining -= shares[index]
+        left -= 1
+    return shares
+
+
 def context(project: Project, *, item_id: str, cycle_name: str | None = None) -> dict:
     """Everything one item needs read, sliced: the item, its plan section, the profile's rules for it,
     and the pitfalls that mention its files, type or phase. Deterministic for the same inputs."""
@@ -233,9 +248,8 @@ def context(project: Project, *, item_id: str, cycle_name: str | None = None) ->
 
     budget = int(project.cfg["output"]["context_kb"]) * 1024
     used, cut = 0, []
-    for part in parts:
+    for part, room in zip(parts, _shares(parts, budget)):
         text = part.get("text") or ""
-        room = max(budget - used, 0)
         if len(text.encode("utf-8")) > room:
             keep = text.encode("utf-8")[:room].decode("utf-8", "ignore")
             dropped = len(text.encode("utf-8")) - len(keep.encode("utf-8"))

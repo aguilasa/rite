@@ -74,6 +74,24 @@ class ContextTest(FixtureCase):
         self.assertIn("sed -n", cut["command"])
         self.assertIn("bytes cut", self.ok("context", "ALP-TASK-01"))
 
+    def test_the_biggest_part_absorbs_the_cut(self):
+        """Measured on a real repository: a 26 KB item file ate the whole budget and left the plan
+        section and the profile rules at zero bytes."""
+        write(self.root / "docs/plans/PLAN-alpha.md", BIG_PLAN.format(filler="plan line\n" * 200))
+        path = self.root / "docs/rite/cycles/alpha/01-harness.md"
+        path.write_text(path.read_text(encoding="utf-8") + "\nfiller line\n" * 4000,
+                        encoding="utf-8", newline="\n")
+        cfg = self.root / "rite.toml"
+        cfg.write_text(cfg.read_text(encoding="utf-8") + "\n[output]\ncontext_kb = 8\n",
+                       encoding="utf-8", newline="\n")
+        data = self.context("ALP-TASK-01")
+        sizes = {p["name"]: len(p["text"].encode("utf-8")) for p in data["parts"]}
+        plan = next(v for k, v in sizes.items() if "PLAN-alpha" in k)
+        self.assertGreater(plan, 1000)                     # the small part is served whole
+        self.assertLessEqual(data["bytes"], 8 * 1024)
+        self.assertEqual([t["part"] for t in data["truncated"]],
+                         [p["name"] for p in data["parts"] if "01-harness" in p["name"]])
+
     def test_profile_rules_phase_checks_and_matching_pitfalls_only(self):
         write(self.root / "docs/rite/profiles/alpha.md", """
             # Profile — alpha
