@@ -8,6 +8,7 @@ those facts in the example is what lets the same run exercise any stack.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,15 @@ def defect_edits(manifest: dict) -> list[dict]:
     return manifest["defect"]["candidates"]
 
 
+def defect_list(manifest: dict) -> list[dict]:
+    """The manifest's ``defects`` (several, for the cost experiment), else its single ``defect``."""
+    defects = manifest.get("defects") or [manifest["defect"]]
+    for defect in defects:
+        if "candidates" not in defect:
+            defect["candidates"] = [{k: defect[k] for k in ("find", "replace", "append") if k in defect}]
+    return defects
+
+
 # --- processes -----------------------------------------------------------------
 def sh(cwd: Path, *cmd: str, check: bool = True, timeout: int | None = None) -> str:
     res = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -76,10 +86,11 @@ def rite_json(repo: Path, *args: str) -> dict:
     return data
 
 
-def claude(repo: Path, prompt: str, model: str, log: list[str] | None = None, timeout: int = 45 * 60) -> str:
+def claude(repo: Path, prompt: str, model: str, log: list[str] | None = None, timeout: int = 45 * 60,
+           plugin: Path = ROOT) -> str:
     print(f"\n$ claude -p {prompt!r}", flush=True)
     try:
-        out = sh(repo, "claude", "-p", prompt, "--plugin-dir", str(ROOT), "--model", model,
+        out = sh(repo, "claude", "-p", prompt, "--plugin-dir", str(plugin), "--model", model,
                  "--dangerously-skip-permissions", check=False, timeout=timeout)
     except subprocess.TimeoutExpired:
         out = "TIMEOUT"
@@ -111,23 +122,112 @@ def make_repo(example: str, *, strip: tuple[str, ...] = ()) -> tuple[Path, Path,
 
 def plant_defect(repo: Path, manifest: dict) -> Path | None:
     """Apply the manifest's declarative defect and commit it. Returns the file, or None if it did not apply."""
-    defect = manifest["defect"]
+    return apply_defect(repo, manifest["defect"])
+
+
+def apply_defect(repo: Path, defect: dict) -> Path | None:
+    """Apply one declarative defect and commit it. With ``after`` (a generator whose output follows
+    the edited file) it runs that command and commits what it rewrote too. Returns the file, or None."""
     for path in sorted(repo.glob(defect["file_glob"])):
         text = path.read_text(encoding="utf-8")
-        for edit in defect_edits(manifest):
+        for edit in defect["candidates"]:
             if edit.get("find") and edit["find"] in text:
                 broken = text.replace(edit["find"], edit["replace"], 1) + edit.get("append", "")
                 path.write_text(broken, encoding="utf-8", newline="\n")
                 sh(repo, "git", "add", "--", str(path.relative_to(repo)).replace("\\", "/"))
+                if defect.get("after"):
+                    shell(repo, defect["after"])
+                    sh(repo, "git", "add", "-A")
                 sh(repo, "git", "commit", "-q", "-m", defect.get("commit_subject", "refactor: tweak"))
                 print(f"planted defect in {path.relative_to(repo)}", flush=True)
                 return path
     return None
 
 
+# --- seeding: the cost experiment starts from finished tasks and open fixes --------
+def seed_done(repo: Path, manifest: dict, example: str) -> list[str]:
+    """Apply the example's reference solution task by task: a work commit, then ``rite close``."""
+    solution = manifest["solution"]
+    source = EXAMPLES / example / solution["dir"]
+    closed = []
+    for item_id, task in solution["tasks"].items():
+        for rel in task["files"]:
+            target = repo / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((source / (rel + solution.get("suffix", ""))).read_bytes())
+        if solution.get("after"):
+            shell(repo, solution["after"])
+        sh(repo, "git", "add", "-A")
+        refs = rite_json(repo, "commit-refs", item_id)
+        subject = refs["subject_template"].format(subject=task["subject"])
+        sh(repo, "git", "commit", "-q", "-m", subject + "\n\n" + "\n".join(refs["trailers"]))
+        code, out = rite(repo, "close", item_id)
+        if code:
+            raise AssertionError(f"rite close {item_id}: {out}")
+        closed.append(item_id)
+    return closed
+
+
+def fill_fix(path: Path, defect: dict, seen: str) -> None:
+    """Write what a reviewer would: the observable, its evidence as run, the files, the check."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from rite_lib import frontmatter
+    text = frontmatter.set_fields(path.read_text(encoding="utf-8"), {"files": defect["files"]})
+    command, good = defect["symptom_command"], defect["good_output"]
+    swaps = [
+        ("<!-- What is wrong, stated as an observable fact. -->",
+         f"{defect['title']}: `{command}` prints `{seen}`, expected `{good}`."),
+        ("```text\n$\n```", f"```text\n$ {command}\n{seen}\n```"),
+        ("## Files\n\n-\n", "## Files\n\n" + "".join(f"- `{f}`\n" for f in defect["files"])),
+        ("<!-- Command(s) that turn red before the fix and green after it. -->",
+         f"`{command}` prints `{good}`."),
+    ]
+    for old, new in swaps:
+        if old not in text:
+            raise AssertionError(f"{path.name}: the fix template changed, cannot fill {old!r}")
+        text = text.replace(old, new, 1)
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def seed_fixes(repo: Path, manifest: dict, defects: list[dict]) -> list[str]:
+    """Open one fix per planted defect, as a review would, and record the reviews that opened them."""
+    opened: dict[str, list[str]] = {item_id: [] for item_id in manifest["solution"]["tasks"]}
+    for defect in defects:
+        seen = symptom_of(repo, defect)
+        if seen != defect["bad_output"]:
+            raise AssertionError(f"{defect['title']}: symptom prints {seen!r}, not {defect['bad_output']!r}")
+        new = rite_json(repo, "new-fix", "--origin", defect["origin"], "--title", defect["title"],
+                        "--severity", defect["severity"])
+        if new.get("_code"):
+            raise AssertionError(f"rite new-fix: {new}")
+        fill_fix(repo / new["path"].lstrip("/"), defect, seen)
+        opened[defect["origin"]].append(new["id"])
+    for item_id, fixes in opened.items():
+        args = ["mark-reviewed", item_id] + (["--fixes", ",".join(fixes)] if fixes else [])
+        code, out = rite(repo, *args)
+        if code:
+            raise AssertionError(f"rite {' '.join(args)}: {out}")
+    return [f for fixes in opened.values() for f in fixes]
+
+
+def open_fixes(repo: Path, cycle: str) -> int:
+    status = rite_json(repo, "status", "--cycle", cycle)
+    return sum(status["cycles"][0]["open_fixes"].values())
+
+
+def transcripts_for(repo: Path) -> Path:
+    """Where Claude Code keeps the transcripts of the sessions run in ``repo``."""
+    return Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(repo.resolve()))
+
+
 def symptom(repo: Path, manifest: dict) -> str:
     """Last line of the manifest's symptom command — the observable the defect changes."""
-    out = shell(repo, manifest["defect"]["symptom_command"])
+    return symptom_of(repo, manifest["defect"])
+
+
+def symptom_of(repo: Path, defect: dict) -> str:
+    out = shell(repo, defect["symptom_command"])
     return out.splitlines()[-1].strip() if out else ""
 
 

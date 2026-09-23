@@ -1,10 +1,15 @@
 """Every example must be a valid Rite repository and carry a usable e2e manifest (no tokens spent)."""
 
 import json
+import shutil
+import sys
 import unittest
 from pathlib import Path
 
 from fixtures import ROOT, rite
+
+sys.path.insert(0, str(ROOT / "tests" / "e2e"))
+import _example as example  # noqa: E402
 
 EXAMPLES = ROOT / "examples"
 REQUIRED = ("name", "cycle", "prefix", "plan", "gate", "read_only_probe", "defect")
@@ -56,6 +61,44 @@ class ExamplesTest(unittest.TestCase):
                 self.assertEqual(info["prefix"], manifest["prefix"])
                 self.assertTrue(info["profile_exists"], info["profile"])
                 self.assertEqual(info.get("plan"), "/" + manifest["plan"].lstrip("/"))
+
+    def test_seeding_data_is_complete(self):
+        for directory in example_dirs():
+            manifest = json.loads((directory / "e2e.json").read_text(encoding="utf-8"))
+            if "defects" not in manifest:
+                continue
+            with self.subTest(example=directory.name):
+                solution = manifest["solution"]
+                for task in solution["tasks"].values():
+                    for rel in task["files"]:
+                        source = directory / solution["dir"] / (rel + solution.get("suffix", ""))
+                        self.assertTrue(source.is_file(), source)
+                touched = []
+                for defect in manifest["defects"]:
+                    for key in (*DEFECT_REQUIRED, "title", "severity", "origin", "files", "candidates"):
+                        self.assertIn(key, defect, defect.get("title"))
+                    self.assertIn(defect["origin"], solution["tasks"])
+                    touched += defect["files"]
+                # one wave: the slope of the experiment must not also count waves
+                self.assertEqual(len(touched), len(set(touched)), "two defects share a file")
+
+    @unittest.skipUnless(shutil.which("node") and shutil.which("git"), "needs node and git")
+    def test_node_minimal_seeds_open_fixes_without_a_model(self):
+        tmp, repo, manifest = example.make_repo("node-minimal", strip=("e2e", "e2e.json"))
+        try:
+            self.assertFalse((repo / "e2e.json").exists())
+            self.assertEqual(example.seed_done(repo, manifest, "node-minimal"),
+                             ["SLG-TASK-01", "SLG-TASK-02"])
+            defects = example.defect_list(manifest)
+            for defect in defects:
+                self.assertIsNotNone(example.apply_defect(repo, defect), defect["title"])
+            self.assertEqual(len(example.seed_fixes(repo, manifest, defects)), len(defects))
+            self.assertEqual(example.open_fixes(repo, manifest["cycle"]), len(defects))
+            self.assertEqual(example.rite(repo, "check", "--all")[0], 0)
+            plan = example.rite_json(repo, "batch-plan", "all", "--kind", "fix", "--cycle", manifest["cycle"])
+            self.assertEqual(len(plan["waves"]), 1)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def test_read_only_probe_is_guarded(self):
         for directory in example_dirs():
