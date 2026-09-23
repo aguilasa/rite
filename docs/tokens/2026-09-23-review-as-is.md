@@ -40,10 +40,15 @@ Least squares over every valid repetition, billed tokens against N. The intercep
 
 ## Triage decision
 
-- `as-is`: **none** — no cell measured a reproducer.
+Is a `rite:rite-reproducer` per fix dearer than running the evidence in the main thread? Judged per batch, in effective tokens (w = 0.1). The agent side is what the reproducers used. The inline side is **one** main-thread turn for the whole batch (`reproduce --all`: the run's average main turn) plus the output it holds — shell bytes / 4 as tokens, bounded by `--tail`, written once and read back on each main-thread turn that followed a reproducer's result. A side wins an N only by more than the dispersion between repetitions. The output limit is what one fix may hold inline before its own reproducer would have been cheaper.
+
+### `as-is`
+
+**none** — no cell measured a reproducer.
 
 ## Caveats
 
 - 1 repetition(s) per N: the line is a trend, not a law. One repetition measures no dispersion at all.
 - `as-is`: spread of total billed between repetitions — N=1: 0. Invalid runs: 0; runs with an unknown agent side: 0.
 - Not controlled: the model's own variance; fixes written by the seeding harness rather than by a review (same evidence and files, plainer prose); prompt-cache state across runs.
+- The inline side is modelled, not measured: 4 bytes per token, and the cost of its one turn is the run's average main-thread turn, while a later turn costs more than an early one.

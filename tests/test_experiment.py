@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import experiment  # noqa: E402
 import token_report as tr  # noqa: E402
 
+
 def invocation() -> tr.Invocation:
     inv = tr.Invocation("/rite:fix-all", "s")
     inv.add_usage({"input_tokens": 10, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 1000,
@@ -98,7 +99,40 @@ class ReportTest(unittest.TestCase):
         self.assertIsNone(experiment.fit([(1, 10.0), (1, 12.0)]))  # one N: no line
 
     def test_triage_verdicts(self):
+        cells = [c for c in self.matrix()["cells"] if c.get("valid")]
         self.assertEqual(experiment.triage_verdict([])["verdict"], "none")
+        verdict = experiment.triage_verdict(cells)
+        self.assertEqual((verdict["verdict"], verdict["turn_over"]), ("apply", 1))
+        self.assertIn("inline_triage_max_output_kb", verdict)
+        self.assertNotIn("inline_triage_max", verdict)  # never a cap on the number of fixes
+        # an output read back for ever makes the reproducer the cheaper side
+        heavy = json.loads(json.dumps(cells))
+        for cell in heavy:
+            cell["agent"]["by_type"]["rite:rite-reproducer"]["shell_bytes"] = 4_000_000 * cell["n"]
+        self.assertEqual(experiment.triage_verdict(heavy)["verdict"], "do not apply")
+        # a difference within the dispersion decides nothing
+        noisy = json.loads(json.dumps(cells))
+        for cell in noisy:
+            if cell["rep"] == 2:
+                cell["agent"]["by_type"]["rite:rite-reproducer"]["billed"] *= 50
+        self.assertEqual(experiment.triage_verdict(noisy)["verdict"], "inconclusive")
+        # the weight is part of the verdict: cache reads at full rate make the main thread's turn dearer
+        light, full = (experiment.triage_verdict(cells, weight=w)["rows"][0] for w in (0.1, 1.0))
+        self.assertGreater(full["inline"]["effective"] - light["inline"]["effective"],
+                           full["agent"]["effective"] - light["agent"]["effective"])
+
+    def test_triage_of_the_measured_fix_all(self):
+        """The matrix of 2026-09-23 gives the table CONCEPTS.md quotes: inline from N = 2 up."""
+        path = Path(__file__).resolve().parent.parent / "docs" / "tokens" / "2026-09-23-fixall-as-is.json"
+        cells = [c for c in json.loads(path.read_text(encoding="utf-8"))["cells"] if c.get("valid")]
+        verdict = experiment.triage_verdict(cells)
+        self.assertEqual((verdict["verdict"], verdict["turn_over"]), ("apply", 2))
+        rows = {r["n"]: r for r in verdict["rows"]}
+        self.assertEqual([round(rows[n]["agent"]["effective"]) for n in (1, 2, 4)], [6183, 8215, 16416])
+        self.assertEqual([round(rows[n]["inline"]["effective"]) for n in (1, 2, 4)], [7570, 7535, 9266])
+        self.assertEqual([rows[n]["side"] for n in (1, 2, 4)], ["open", "inline", "inline"])
+        self.assertEqual(verdict["inline_triage_max_output_kb"], 6)
+
 
 if __name__ == "__main__":
     unittest.main()

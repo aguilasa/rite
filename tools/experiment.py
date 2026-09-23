@@ -175,10 +175,6 @@ REPRODUCER = "rite:rite-reproducer"
 BYTES_PER_TOKEN = 4  # rough, and said so in the report
 
 
-def _mean(values: list[float]) -> float:
-    return sum(values) / len(values) if values else 0.0
-
-
 def _series(cells: list[dict], value) -> list[tuple[int, float]]:
     points = []
     for cell in cells:
@@ -214,11 +210,84 @@ def _type(cell: dict, kind: str) -> dict | None:
     return agent["by_type"].get(kind) if agent else None
 
 
-def triage_verdict(cells: list[dict]) -> dict:
-    """Is a reproducer per fix dearer than triage inline? Judged in tokens; see the report."""
-    if not any(_type(c, REPRODUCER) for c in cells):
+def _median(values: list[float]) -> float:
+    import statistics
+    return statistics.median(values)
+
+
+def _range(values: list[float]) -> float:
+    return max(values) - min(values)
+
+
+def agent_side(cell: dict, weight: float) -> dict | None:
+    """What the reproducers of one run used, for the whole batch."""
+    row = _type(cell, REPRODUCER)
+    if not row or not row["n"]:
+        return None
+    return {"billed": row["billed"], "cache_read": row["cache_read"],
+            "effective": tr.effective(row["billed"], row["cache_read"], weight)}
+
+
+def inline_estimate(cell: dict, weight: float) -> dict | None:
+    """Triage inline, for the whole batch: **one** main-thread turn runs every fix's evidence
+    (`reproduce --all`), and its output — bytes / 4 as tokens, bounded by `--tail` — is written once
+    and read back on each main-thread turn that followed a reproducer's result."""
+    row, main = _type(cell, REPRODUCER), cell["main"]
+    if not row or not row["n"] or not main.get("turns"):
+        return None
+    held = row["shell_bytes"] / BYTES_PER_TOKEN
+    after = row["main_turns_after"] / row["n"]
+    turn_billed, turn_read = main["billed"] / main["turns"], main["cache_read"] / main["turns"]
+    billed, read = turn_billed + held, turn_read + held * after
+    return {"billed": billed, "cache_read": read, "effective": tr.effective(billed, read, weight),
+            "after": after}
+
+
+def triage_verdict(cells: list[dict], weight: float = tr.CACHE_WEIGHT) -> dict:
+    """Is a reproducer per fix dearer than triage inline? Judged per batch, in effective tokens: the
+    agents multiply a fresh context per fix, while inline one main-thread turn serves the whole batch.
+    A side wins an N only by more than the dispersion between repetitions. The turn-over is the
+    smallest N from which inline wins at every N measured; the output limit is what one fix may hold
+    inline before its own reproducer would have been cheaper."""
+    rows = []
+    for n in sorted({c["n"] for c in cells}):
+        group = [c for c in cells if c["n"] == n]
+        agent = [agent_side(c, weight) for c in group]
+        inline = [inline_estimate(c, weight) for c in group]
+        if any(v is None for v in agent + inline):
+            continue
+        row = {"n": n,
+               "agent": {k: _median([a[k] for a in agent]) for k in ("billed", "cache_read", "effective")},
+               "inline": {k: _median([i[k] for i in inline]) for k in ("billed", "cache_read", "effective")},
+               "noise": max(_range([a["effective"] for a in agent]), _range([i["effective"] for i in inline])),
+               "after": _median([i["after"] for i in inline])}
+        row["agent_per_fix"] = row["agent"]["effective"] / n
+        row["inline_per_fix"] = row["inline"]["effective"] / n
+        # one more fix held inline costs its output (written, then read back); its agent costs a context
+        row["break_even_kb"] = (row["agent_per_fix"] * BYTES_PER_TOKEN / (1 + weight * row["after"])) / 1024
+        gain = row["agent"]["effective"] - row["inline"]["effective"]
+        row["side"] = "inline" if gain > row["noise"] else "agent" if gain < -row["noise"] else "open"
+        rows.append(row)
+    if not rows:
         return {"verdict": "none", "why": "no cell measured a reproducer"}
-    return {"verdict": "none", "why": "not judged: the verdict in tokens is not written yet"}
+    turn_over = None
+    for row in reversed(rows):
+        if row["side"] != "inline":
+            break
+        turn_over = row["n"]
+    if all(r["side"] == "agent" for r in rows):
+        return {"verdict": "do not apply", "rows": rows,
+                "why": "a reproducer per fix is cheaper than one main-thread turn holding the output"}
+    if turn_over is None:
+        return {"verdict": "inconclusive", "rows": rows,
+                "why": "at the largest N measured the difference is within the dispersion"}
+    limit = min(r["break_even_kb"] for r in rows if r["n"] >= turn_over)
+    below = [r["n"] for r in rows if r["n"] < turn_over]
+    return {"verdict": "apply", "rows": rows, "turn_over": turn_over,
+            "inline_triage_max_output_kb": max(int(limit), 1),
+            "why": f"inline triage is cheaper from N = {turn_over} up, and the gap grows with the batch"
+                   + (f"; at N = {', '.join(map(str, below))} the difference is within the dispersion"
+                      if below else "")}
 
 
 def analyze(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> dict:
@@ -237,7 +306,7 @@ def analyze(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> dict:
             "by_type": {k: fit(_series(known, lambda c, k=k: (_type(c, k) or {}).get("billed", 0)))
                         for k in kinds},
             "spread": spread(total),
-            "triage": triage_verdict(known),
+            "triage": triage_verdict(known, weight),
             "effective": {
                 "main": fit(_series(cells, lambda c: tr.effective(c["main"]["billed"], c["main"]["cache_read"],
                                                                   weight))),
@@ -337,11 +406,36 @@ def render_markdown(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> str:
                      f"of this on every invocation that starts it, before it does any work.")
     lines.append("")
 
-    lines += ["## Triage decision", ""]
+    lines += ["## Triage decision", "",
+              f"Is a `{REPRODUCER}` per fix dearer than running the evidence in the main thread? Judged per "
+              "batch, in effective tokens "
+              f"(w = {weight:g}). The agent side is what the reproducers used. The inline side is **one** "
+              "main-thread turn for the whole batch (`reproduce --all`: the run's average main turn) plus "
+              f"the output it holds — shell bytes / {BYTES_PER_TOKEN} as tokens, bounded by `--tail`, "
+              "written once and read back on each main-thread turn that followed a reproducer's result. "
+              "A side wins an N only by more than the dispersion between repetitions. The output limit "
+              "is what one fix may hold inline before its own reproducer would have been cheaper.", ""]
     for label, a in analysis.items():
         t = a["triage"]
-        lines.append(f"- `{label}`: **{t['verdict']}** — {t['why']}.")
-    lines.append("")
+        lines.append(f"### `{label}`")
+        lines.append("")
+        if t.get("rows"):
+            lines += ["| N | reproducers (agent) | inline (1 turn per batch) | effective agent | effective inline "
+                      "| per fix agent | per fix inline | dispersion | side | output limit per fix |",
+                      "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |"]
+            for r in t["rows"]:
+                ag, il = r["agent"], r["inline"]
+                lines.append(f"| {r['n']} | {_tok(ag['billed'])} billed + {_tok(ag['cache_read'])} cache read | "
+                             f"{_tok(il['billed'])} billed + {_tok(il['cache_read'])} cache read | "
+                             f"{_tok(ag['effective'])} | {_tok(il['effective'])} | {_tok(r['agent_per_fix'])} | "
+                             f"{_tok(r['inline_per_fix'])} | {_tok(r['noise'])} | {r['side']} | "
+                             f"{r['break_even_kb']:.1f} KB |")
+            lines.append("")
+        lines.append(f"**{t['verdict']}** — {t['why']}."
+                     + (f" Turn-over: N = {t['turn_over']}." if "turn_over" in t else "")
+                     + (f" `[limits].inline_triage_max_output_kb` = {t['inline_triage_max_output_kb']}."
+                        if "inline_triage_max_output_kb" in t else ""))
+        lines.append("")
 
     lines += ["## Caveats", ""]
     lines.append(f"- {meta['repeat']} repetition(s) per N: the line is a trend, not a law. "
@@ -354,6 +448,8 @@ def render_markdown(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> str:
     lines += [
         "- Not controlled: the model's own variance; fixes written by the seeding harness rather than by "
         "a review (same evidence and files, plainer prose); prompt-cache state across runs.",
+        f"- The inline side is modelled, not measured: {BYTES_PER_TOKEN} bytes per token, and the cost of its "
+        "one turn is the run's average main-thread turn, while a later turn costs more than an early one.",
         "",
     ]
     return "\n".join(lines)

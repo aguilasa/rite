@@ -52,10 +52,21 @@ Least squares over every valid repetition, billed tokens against N. The intercep
 
 ## Triage decision
 
-- `as-is`: **none** — not judged: the verdict in tokens is not written yet.
+Is a `rite:rite-reproducer` per fix dearer than running the evidence in the main thread? Judged per batch, in effective tokens (w = 0.1). The agent side is what the reproducers used. The inline side is **one** main-thread turn for the whole batch (`reproduce --all`: the run's average main turn) plus the output it holds — shell bytes / 4 as tokens, bounded by `--tail`, written once and read back on each main-thread turn that followed a reproducer's result. A side wins an N only by more than the dispersion between repetitions. The output limit is what one fix may hold inline before its own reproducer would have been cheaper.
+
+### `as-is`
+
+| N | reproducers (agent) | inline (1 turn per batch) | effective agent | effective inline | per fix agent | per fix inline | dispersion | side | output limit per fix |
+| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| 1 | 6,900 billed + 24,000 cache read | 2,197 billed + 50,450 cache read | 9,300 | 7,242 | 9,300 | 7,242 | 200 | inline | 14.5 KB |
+| 2 | 13,800 billed + 48,000 cache read | 2,164 billed + 51,080 cache read | 18,600 | 7,272 | 9,300 | 3,636 | 400 | inline | 13.0 KB |
+| 4 | 27,600 billed + 96,000 cache read | 2,137 billed + 52,880 cache read | 37,200 | 7,425 | 9,300 | 1,856 | 800 | inline | 10.7 KB |
+
+**apply** — inline triage is cheaper from N = 1 up, and the gap grows with the batch. Turn-over: N = 1. `[limits].inline_triage_max_output_kb` = 10.
 
 ## Caveats
 
 - 2 repetition(s) per N: the line is a trend, not a law. Two points per N bound the noise only loosely.
 - `as-is`: spread of total billed between repetitions — N=1: 1,700, N=2: 2,400, N=4: 3,800. Invalid runs: 1; runs with an unknown agent side: 0.
 - Not controlled: the model's own variance; fixes written by the seeding harness rather than by a review (same evidence and files, plainer prose); prompt-cache state across runs.
+- The inline side is modelled, not measured: 4 bytes per token, and the cost of its one turn is the run's average main-thread turn, while a later turn costs more than an early one.
