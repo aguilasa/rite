@@ -1,0 +1,354 @@
+{
+  "cells": [
+    {
+      "agent": {
+        "billed": 20744,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 7572,
+            "cache_read": 6262,
+            "cache_write": 7236,
+            "input": 4,
+            "main_turns_after": 5,
+            "n": 1,
+            "output": 332,
+            "shell_bytes": 11,
+            "turns": 2,
+            "usd": 0.02267
+          },
+          "rite:rite-worker": {
+            "billed": 13172,
+            "cache_read": 38010,
+            "cache_write": 12031,
+            "input": 10,
+            "main_turns_after": 3,
+            "n": 1,
+            "output": 1131,
+            "shell_bytes": 1899,
+            "turns": 5,
+            "usd": 0.049009
+          }
+        },
+        "cache_read": 44272,
+        "cache_write": 19267,
+        "input": 14,
+        "output": 1463,
+        "turns": 7,
+        "usd": 0.07168
+      },
+      "agents": 2,
+      "label": "as-is",
+      "main": {
+        "billed": 28825,
+        "cache_read": 398001,
+        "cache_write": 25371,
+        "ceremony": 5,
+        "input": 18,
+        "output": 3436,
+        "turns": 9,
+        "usd": 0.177424
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 10015,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 3082,
+            "cache_read": 10849,
+            "cache_write": 2761,
+            "input": 4,
+            "main_turns_after": 5,
+            "n": 1,
+            "output": 317,
+            "shell_bytes": 11,
+            "turns": 2,
+            "usd": 0.01225
+          },
+          "rite:rite-worker": {
+            "billed": 6933,
+            "cache_read": 33507,
+            "cache_write": 6292,
+            "input": 8,
+            "main_turns_after": 3,
+            "n": 1,
+            "output": 633,
+            "shell_bytes": 824,
+            "turns": 4,
+            "usd": 0.028777
+          }
+        },
+        "cache_read": 44356,
+        "cache_write": 9053,
+        "input": 12,
+        "output": 950,
+        "turns": 6,
+        "usd": 0.041028
+      },
+      "agents": 2,
+      "label": "as-is",
+      "main": {
+        "billed": 27900,
+        "cache_read": 396663,
+        "cache_write": 24798,
+        "ceremony": 5,
+        "input": 18,
+        "output": 3084,
+        "turns": 9,
+        "usd": 0.172204
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 20276,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 6076,
+            "cache_read": 21522,
+            "cache_write": 5384,
+            "input": 8,
+            "main_turns_after": 24,
+            "n": 2,
+            "output": 684,
+            "shell_bytes": 12,
+            "turns": 4,
+            "usd": 0.02462
+          },
+          "rite:rite-worker": {
+            "billed": 14200,
+            "cache_read": 88302,
+            "cache_write": 12660,
+            "input": 20,
+            "main_turns_after": 16,
+            "n": 2,
+            "output": 1520,
+            "shell_bytes": 2397,
+            "turns": 10,
+            "usd": 0.06455
+          }
+        },
+        "cache_read": 109824,
+        "cache_write": 18044,
+        "input": 28,
+        "output": 2204,
+        "turns": 14,
+        "usd": 0.089171
+      },
+      "agents": 4,
+      "label": "as-is",
+      "main": {
+        "billed": 37398,
+        "cache_read": 799396,
+        "cache_write": 32917,
+        "ceremony": 7,
+        "input": 32,
+        "output": 4449,
+        "turns": 16,
+        "usd": 0.286726
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 20093,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 6039,
+            "cache_read": 21622,
+            "cache_write": 5435,
+            "input": 8,
+            "main_turns_after": 26,
+            "n": 2,
+            "output": 596,
+            "shell_bytes": 12,
+            "turns": 4,
+            "usd": 0.023888
+          },
+          "rite:rite-worker": {
+            "billed": 14054,
+            "cache_read": 85761,
+            "cache_write": 12477,
+            "input": 20,
+            "main_turns_after": 14,
+            "n": 2,
+            "output": 1557,
+            "shell_bytes": 719,
+            "turns": 10,
+            "usd": 0.063955
+          }
+        },
+        "cache_read": 107383,
+        "cache_write": 17912,
+        "input": 28,
+        "output": 2153,
+        "turns": 14,
+        "usd": 0.087843
+      },
+      "agents": 4,
+      "label": "as-is",
+      "main": {
+        "billed": 43765,
+        "cache_read": 875351,
+        "cache_write": 38209,
+        "ceremony": 7,
+        "input": 34,
+        "output": 5522,
+        "turns": 17,
+        "usd": 0.325881
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 36492,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 12080,
+            "cache_read": 43094,
+            "cache_write": 11042,
+            "input": 16,
+            "main_turns_after": 44,
+            "n": 4,
+            "output": 1022,
+            "shell_bytes": 193,
+            "turns": 8,
+            "usd": 0.046476
+          },
+          "rite:rite-worker": {
+            "billed": 24412,
+            "cache_read": 167116,
+            "cache_write": 20129,
+            "input": 40,
+            "main_turns_after": 24,
+            "n": 4,
+            "output": 4243,
+            "shell_bytes": 2512,
+            "turns": 20,
+            "usd": 0.126256
+          }
+        },
+        "cache_read": 210210,
+        "cache_write": 31171,
+        "input": 56,
+        "output": 5265,
+        "turns": 28,
+        "usd": 0.172732
+      },
+      "agents": 8,
+      "label": "as-is",
+      "main": {
+        "billed": 55696,
+        "cache_read": 830000,
+        "cache_write": 47794,
+        "ceremony": 6,
+        "input": 30,
+        "output": 7872,
+        "turns": 15,
+        "usd": 0.364265
+      },
+      "n": 4,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 4,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 36074,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 12120,
+            "cache_read": 43234,
+            "cache_write": 10958,
+            "input": 16,
+            "main_turns_after": 64,
+            "n": 4,
+            "output": 1146,
+            "shell_bytes": 113,
+            "turns": 8,
+            "usd": 0.047534
+          },
+          "rite:rite-worker": {
+            "billed": 23954,
+            "cache_read": 122449,
+            "cache_write": 20926,
+            "input": 30,
+            "main_turns_after": 44,
+            "n": 4,
+            "output": 2998,
+            "shell_bytes": 1797,
+            "turns": 15,
+            "usd": 0.106845
+          }
+        },
+        "cache_read": 165683,
+        "cache_write": 31884,
+        "input": 46,
+        "output": 4144,
+        "turns": 23,
+        "usd": 0.154379
+      },
+      "agents": 8,
+      "label": "as-is",
+      "main": {
+        "billed": 61424,
+        "cache_read": 1207888,
+        "cache_write": 50691,
+        "ceremony": 8,
+        "input": 40,
+        "output": 10693,
+        "turns": 20,
+        "usd": 0.475315
+      },
+      "n": 4,
+      "open_fixes_after": 1,
+      "rep": 2,
+      "symptoms_fixed": 4,
+      "valid": true
+    }
+  ],
+  "meta": {
+    "command": "/rite:fix-all",
+    "date": "2026-09-23",
+    "defects": [
+      1,
+      2,
+      4
+    ],
+    "example": "node-minimal",
+    "labels": [
+      {
+        "commit": "6143762",
+        "label": "as-is",
+        "version": "0.4.0"
+      }
+    ],
+    "model": "sonnet",
+    "prices": {
+      "cache_read": 0.2,
+      "cache_write": 2.5,
+      "input": 2.0,
+      "output": 10.0
+    },
+    "prices_file": "docs/cost/prices.toml",
+    "repeat": 2
+  }
+}
