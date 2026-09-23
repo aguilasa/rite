@@ -115,6 +115,16 @@ class ReportTest(unittest.TestCase):
             if cell["rep"] == 2:
                 cell["agent"]["by_type"]["rite:rite-reproducer"]["usd"] *= 50
         self.assertEqual(experiment.triage_verdict(noisy, PRICES)["verdict"], "inconclusive")
+        # a reproducer worth half a main-thread turn: it hangs on turns the matrix cannot count
+        half = json.loads(json.dumps(cells))
+        for cell in half:
+            turn = cell["main"]["usd"] / cell["main"]["turns"]
+            cell["agent"]["by_type"]["rite:rite-reproducer"]["usd"] = 0.5 * turn * cell["n"]
+        verdict = experiment.triage_verdict(half, PRICES)
+        self.assertEqual(verdict["verdict"], "inconclusive")
+        for row in verdict["rows"]:
+            self.assertAlmostEqual(row["break_even_turns"], 0.5, delta=0.02)
+        self.assertIn("main-thread turns per fix", verdict["why"])
 
 
 if __name__ == "__main__":

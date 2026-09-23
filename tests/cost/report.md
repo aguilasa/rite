@@ -54,16 +54,16 @@ Least squares over every valid repetition, billed tokens against N. The intercep
 
 ## Triage decision
 
-Does a `rite:rite-reproducer` per fix cost more than keeping its output in the main context? The inline cost is an estimate: the reproducer's shell output (bytes / 4 as tokens) written once, then read from cache on every main-thread turn that followed it.
+Is a `rite:rite-reproducer` per fix dearer than running its evidence in the main thread? Inline, the main thread pays twice: for holding the output (estimated: bytes / 4 as tokens, written once, then read from cache on every later turn) and for the turns spent running the commands, which only a run with inline triage can count. Each N is judged with no extra turn and with one extra turn per fix; the break-even is the number of main-thread turns per fix at which both cost the same.
 
-- `as-is`: **apply** — the reproducer costs more than its output would inline, beyond the dispersion, at every N measured — no crossover inside the range, so the limit is the largest N measured, not a measured crossover. `[limits].inline_triage_max` = 4.
-  - N=1: reproducer $0.0408 per fix, inline $0.0002 per fix, difference $0.0406, dispersion $0.0010.
-  - N=2: reproducer $0.0408 per fix, inline $0.0003 per fix, difference $0.0406, dispersion $0.0010.
-  - N=4: reproducer $0.0408 per fix, inline $0.0003 per fix, difference $0.0405, dispersion $0.0010.
+- `as-is`: **apply** — the reproducer costs more than inline triage even at one extra main-thread turn per fix, at every N measured; no crossover inside the range, so the limit is the largest N measured. `[limits].inline_triage_max` = 4.
+  - N=1: reproducer $0.0408 per fix; output held inline $0.0002 per fix; one main-thread turn $0.0256; break-even 1.59 turns per fix; dispersion $0.0010.
+  - N=2: reproducer $0.0408 per fix; output held inline $0.0003 per fix; one main-thread turn $0.0253; break-even 1.61 turns per fix; dispersion $0.0010.
+  - N=4: reproducer $0.0408 per fix; output held inline $0.0003 per fix; one main-thread turn $0.0248; break-even 1.63 turns per fix; dispersion $0.0010.
 
 ## Caveats
 
 - 2 repetition(s) per N: the line is a trend, not a law. Two points per N bound the noise only loosely.
 - `as-is`: spread of total billed between repetitions — N=1: 1,700, N=2: 2,400, N=4: 3,800. Invalid runs: 1; runs with an unknown agent side: 0.
 - Not controlled: the model's own variance; fixes written by the seeding harness rather than by a review (same evidence and files, plainer prose); prompt-cache state across runs; the price table's date.
-- The inline estimate assumes 4 bytes per token, that the output would be held until the end of the invocation, and that running the evidence commands inline takes no more main-thread turns than starting the reproducers does (both fit in one message).
+- The inline estimate assumes 4 bytes per token and that the output would be held until the end of the invocation. The cost of one main-thread turn is the run's main-thread dollars divided by its turns: an average, while a later turn costs more than an early one.

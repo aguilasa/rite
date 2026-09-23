@@ -245,8 +245,11 @@ def inline_estimate(cell: dict, prices: dict) -> float | None:
 
 
 def triage_verdict(cells: list[dict], prices: dict | None) -> dict:
-    """The question the floor answers: does a reproducer per fix cost more than keeping its output
-    in the main context? Compared per N, against the dispersion between repetitions."""
+    """The question the floor answers: is a reproducer per fix dearer than triage inline? Inline, the
+    main thread pays for holding the reproduction output and for the turns it spends running the
+    evidence, whose count the matrix cannot see. So each N is judged at the two ends — no extra turn,
+    one extra turn per fix — against the dispersion between repetitions; in between, the report gives
+    the break-even number of main-thread turns."""
     if not prices:
         return {"verdict": "none", "why": "no [cost] table: tokens alone cannot price a fresh context "
                                           "against a growing one"}
@@ -255,32 +258,37 @@ def triage_verdict(cells: list[dict], prices: dict | None) -> dict:
         group = [c for c in cells if c["n"] == n]
         agent = [(_type(c, REPRODUCER) or {}).get("usd") for c in group]
         inline = [inline_estimate(c, prices) for c in group]
-        if any(v is None for v in agent + inline):
+        turns = [c["main"]["usd"] / c["main"]["turns"] for c in group if c["main"].get("turns")]
+        if any(v is None for v in agent + inline) or len(turns) != len(group):
             continue
         per_fix = [v / n for v in agent]
-        diff = _mean(per_fix) - _mean(inline)
         noise = max(max(per_fix) - min(per_fix), max(inline) - min(inline))
-        rows.append({"n": n, "agent_per_fix": _mean(per_fix), "inline_per_fix": _mean(inline),
-                     "diff": diff, "noise": noise})
+        row = {"n": n, "agent_per_fix": _mean(per_fix), "inline_per_fix": _mean(inline),
+               "main_turn": _mean(turns), "noise": noise}
+        row["break_even_turns"] = (row["agent_per_fix"] - row["inline_per_fix"]) / row["main_turn"]
+        if row["agent_per_fix"] + noise < row["inline_per_fix"]:
+            row["side"] = "agent"      # cheaper even if inline triage cost no turn at all
+        elif row["agent_per_fix"] - noise > row["inline_per_fix"] + row["main_turn"]:
+            row["side"] = "inline"     # cheaper even at a whole extra main-thread turn per fix
+        else:
+            row["side"] = "open"
+        rows.append(row)
     if not rows:
         return {"verdict": "none", "why": "no cell measured a reproducer"}
-    if all(abs(r["diff"]) <= r["noise"] for r in rows):
-        return {"verdict": "inconclusive", "rows": rows,
-                "why": "every difference is within the dispersion between repetitions"}
-    cheaper_inline = [r["n"] for r in rows if r["diff"] > r["noise"]]
-    cheaper_agent = [r["n"] for r in rows if -r["diff"] > r["noise"]]
-    if cheaper_inline and not cheaper_agent:
-        return {"verdict": "apply", "rows": rows, "inline_triage_max": max(cheaper_inline),
-                "why": "the reproducer costs more than its output would inline, beyond the dispersion, "
-                       "at every N measured — no crossover inside the range, so the limit is the largest "
-                       "N measured, not a measured crossover"}
-    if cheaper_agent and not cheaper_inline:
+    sides = [r["side"] for r in rows]
+    if all(side == "inline" for side in sides):
+        return {"verdict": "apply", "rows": rows, "inline_triage_max": max(r["n"] for r in rows),
+                "why": "the reproducer costs more than inline triage even at one extra main-thread turn "
+                       "per fix, at every N measured; no crossover inside the range, so the limit is the "
+                       "largest N measured"}
+    if all(side == "agent" for side in sides):
         return {"verdict": "do not apply", "rows": rows,
-                "why": "keeping the output inline costs more than the reproducer, beyond the dispersion"}
-    if cheaper_inline and max(cheaper_inline) < min(cheaper_agent):
-        return {"verdict": "apply", "rows": rows, "inline_triage_max": max(cheaper_inline),
-                "why": "inline is cheaper up to this N, the reproducer beyond it"}
-    return {"verdict": "inconclusive", "rows": rows, "why": "the sign changes with N without a crossover"}
+                "why": "the reproducer is cheaper than holding its output inline, even with no extra turn"}
+    low = min(r["break_even_turns"] for r in rows)
+    high = max(r["break_even_turns"] for r in rows)
+    return {"verdict": "inconclusive", "rows": rows,
+            "why": f"inline triage is cheaper only if it adds fewer than {low:.2f}–{high:.2f} main-thread "
+                   f"turns per fix, which this matrix does not measure; apply it and measure the turns"}
 
 
 def analyze(matrix: dict) -> dict:
@@ -422,17 +430,20 @@ def render_markdown(matrix: dict) -> str:
     lines.append("")
 
     lines += ["## Triage decision", "",
-              f"Does a `{REPRODUCER}` per fix cost more than keeping its output in the main context? The "
-              f"inline cost is an estimate: the reproducer's shell output (bytes / {BYTES_PER_TOKEN} as "
-              "tokens) written once, then read from cache on every main-thread turn that followed it.", ""]
+              f"Is a `{REPRODUCER}` per fix dearer than running its evidence in the main thread? Inline, "
+              "the main thread pays twice: for holding the output (estimated: bytes / "
+              f"{BYTES_PER_TOKEN} as tokens, written once, then read from cache on every later turn) and "
+              "for the turns spent running the commands, which only a run with inline triage can count. "
+              "Each N is judged with no extra turn and with one extra turn per fix; the break-even is the "
+              "number of main-thread turns per fix at which both cost the same.", ""]
     for label, a in analysis.items():
         t = a["triage"]
         lines.append(f"- `{label}`: **{t['verdict']}** — {t['why']}."
                      + (f" `[limits].inline_triage_max` = {t['inline_triage_max']}." if "inline_triage_max" in t else ""))
         for r in t.get("rows", []):
-            lines.append(f"  - N={r['n']}: reproducer {_usd(r['agent_per_fix'])} per fix, inline "
-                         f"{_usd(r['inline_per_fix'])} per fix, difference {_usd(r['diff'])}, "
-                         f"dispersion {_usd(r['noise'])}.")
+            lines.append(f"  - N={r['n']}: reproducer {_usd(r['agent_per_fix'])} per fix; output held inline "
+                         f"{_usd(r['inline_per_fix'])} per fix; one main-thread turn {_usd(r['main_turn'])}; "
+                         f"break-even {r['break_even_turns']:.2f} turns per fix; dispersion {_usd(r['noise'])}.")
     lines.append("")
 
     lines += ["## Caveats", ""]
@@ -447,9 +458,9 @@ def render_markdown(matrix: dict) -> str:
         "- Not controlled: the model's own variance; fixes written by the seeding harness rather than by "
         "a review (same evidence and files, plainer prose); prompt-cache state across runs; the price "
         "table's date.",
-        f"- The inline estimate assumes {BYTES_PER_TOKEN} bytes per token, that the output would be "
-        "held until the end of the invocation, and that running the evidence commands inline takes no "
-        "more main-thread turns than starting the reproducers does (both fit in one message).",
+        f"- The inline estimate assumes {BYTES_PER_TOKEN} bytes per token and that the output would be "
+        "held until the end of the invocation. The cost of one main-thread turn is the run's main-thread "
+        "dollars divided by its turns: an average, while a later turn costs more than an early one.",
         "",
     ]
     return "\n".join(lines)
