@@ -186,6 +186,19 @@ Statuses and severities are fixed, not configurable:
 | --- | --- | --- |
 | `stop_check` | `false` | At the end of each turn, run `rite.py check --quick` and warn if views are out of sync. |
 
+## `[cost]`
+
+Prices in USD per million tokens, read only by `rite cost` (see [COST.md](COST.md)). Declare all four or
+none: with none, the report leaves dollars out instead of guessing. Write the date you copied them
+next to the table; prices change.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `input` | `0` | Uncached input tokens. |
+| `output` | `0` | Output tokens. |
+| `cache_write` | `0` | Tokens written to the prompt cache. |
+| `cache_read` | `0` | Tokens read from the prompt cache — a fraction of `input`, which is why a context that grows is not priced like a fresh one. |
+
 ## Example: legacy layout
 
 A repository with Portuguese file names, flat `docs/tasks/<cycle>/` folders and `CORR-*` fixes:

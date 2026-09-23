@@ -117,6 +117,176 @@ class TokenReportTest(unittest.TestCase):
             self.assertEqual(tr.main(["--dir", empty]), 2)
 
 
+AGENT_USAGE = {"input_tokens": 1, "cache_creation_input_tokens": 200, "cache_read_input_tokens": 3000,
+               "output_tokens": 20}
+# 20 + 201 is billed per agent turn; 115 per main turn
+
+
+def agent_call(msg_id: str, tid: str, kind: str, uuid: str = "") -> dict:
+    entry = assistant(msg_id, usage=USAGE, tool=("Agent", {"subagent_type": kind}, tid))
+    if uuid:
+        entry["uuid"] = uuid
+    return entry
+
+
+def agent_result(tid: str, agent_id: str) -> dict:
+    entry = result(tid, "REPRODUCED")
+    entry["toolUseResult"] = {"agentId": agent_id, "usage": {"output_tokens": 999}}
+    return entry
+
+
+def sidechain(entry: dict, **fields) -> dict:
+    return {**entry, "isSidechain": True, **fields}
+
+
+def write_jsonl(path: Path, entries: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(json.dumps(e) for e in entries), encoding="utf-8")
+
+
+class AgentAttributionTest(unittest.TestCase):
+    """The subagent's tokens belong to the invocation that started it, reported apart."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="rite-agents-")
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def measure(self, prices=None) -> dict:
+        return tr.summarize(tr.collect(self.dir, None), prices)
+
+    def fix_all_session(self) -> None:
+        write_jsonl(self.dir / "s1.jsonl", [
+            user("<command-name>/rite:fix-all</command-name>"),
+            agent_call("m1", "call-a", "rite:rite-reproducer"),
+            agent_result("call-a", "aaa"),
+            agent_call("m2", "call-b", "rite:rite-worker"),
+            agent_result("call-b", "bbb"),
+            assistant("m3", usage=USAGE),
+        ])
+        subagents = self.dir / "s1" / "subagents"
+        write_jsonl(subagents / "agent-aaa.jsonl", [
+            sidechain(user("reproduce FIX-1"), agentId="aaa"),
+            sidechain(assistant("a1", usage=AGENT_USAGE,
+                                tool=("Bash", {"command": "node -e x"}, "sh1")), agentId="aaa"),
+            sidechain(result("sh1", "HELLO-WORLD"), agentId="aaa"),
+            sidechain(assistant("a1", usage=AGENT_USAGE), agentId="aaa"),  # same message, split
+            sidechain(assistant("a2", usage=AGENT_USAGE), agentId="aaa"),
+        ])
+        (subagents / "agent-aaa.meta.json").write_text(json.dumps(
+            {"agentType": "rite:rite-reproducer", "toolUseId": "call-a"}), encoding="utf-8")
+        # no meta file: linked through the agentId the main thread's result carries
+        write_jsonl(subagents / "agent-bbb.jsonl", [
+            sidechain(assistant("b1", usage=AGENT_USAGE), agentId="bbb"),
+        ])
+
+    def test_subagent_files_are_attributed_to_their_call(self):
+        self.fix_all_session()
+        c = self.measure()["commands"]["/rite:fix-all"]
+        self.assertEqual(c["billed"], 3 * 115)  # the main thread only, as before
+        self.assertEqual(c["agents"], 2)
+        self.assertEqual(c["agent"]["billed"], 3 * 221)
+        self.assertEqual(c["agent"]["cache_read"], 3 * 3000)
+        self.assertEqual(c["agent"]["turns"], 3)
+        reproducer = c["agent"]["by_type"]["rite:rite-reproducer"]
+        self.assertEqual((reproducer["n"], reproducer["billed"], reproducer["turns"]), (1, 442, 2))
+        self.assertEqual(reproducer["shell_bytes"], len("HELLO-WORLD"))
+        self.assertEqual(reproducer["main_turns_after"], 2)  # m2 and m3 carried its result
+        self.assertEqual(c["agent"]["by_type"]["rite:rite-worker"]["billed"], 221)
+
+    def test_inline_sidechain_follows_parent_uuid(self):
+        write_jsonl(self.dir / "s2.jsonl", [
+            user("<command-name>/rite:review</command-name>"),
+            agent_call("m1", "call-r", "rite:rite-reviewer", uuid="u-call"),
+            sidechain(user("review it"), uuid="u1", parentUuid="u-call"),
+            sidechain(assistant("r1", usage=AGENT_USAGE), uuid="u2", parentUuid="u1"),
+            sidechain(assistant("r2", usage=AGENT_USAGE), uuid="u3", parentUuid="u2"),
+            result("call-r", "PASS"),
+            assistant("m2", usage=USAGE),
+        ])
+        c = self.measure()["commands"]["/rite:review"]
+        self.assertEqual(c["billed"], 2 * 115)  # sidechain turns are not the main thread's
+        self.assertEqual(c["agent"]["billed"], 2 * 221)
+        self.assertEqual(list(c["agent"]["by_type"]), ["rite:rite-reviewer"])
+
+    def test_an_agent_without_a_trace_is_unknown_not_zero(self):
+        write_jsonl(self.dir / "s3.jsonl", [
+            user("<command-name>/rite:review</command-name>"),
+            agent_call("m1", "call-x", "rite:rite-reviewer"),
+            result("call-x", "PASS"),
+        ])
+        c = self.measure()["commands"]["/rite:review"]
+        self.assertEqual(c["agents"], 1)
+        self.assertEqual(c["agent"], "unknown")
+        self.assertIn("unknown", tr.render(self.measure(), []))
+
+    def test_no_agent_means_a_measured_zero(self):
+        write_jsonl(self.dir / "s4.jsonl", TRANSCRIPT[:2])
+        c = self.measure()["commands"]["/rite:execute"]
+        self.assertEqual((c["agents"], c["agent"]["billed"]), (0, 0))
+
+    def test_check_compares_agents_only_when_both_sides_have_them(self):
+        self.fix_all_session()
+        data = self.measure()
+        c = data["commands"]["/rite:fix-all"]
+        baseline = self.dir / "baseline.json"
+        # an old baseline, without agent fields, still passes
+        baseline.write_text(json.dumps({"commands": {"/rite:fix-all": {
+            "billed": c["billed"], "turns": c["turns"]}}}), encoding="utf-8")
+        self.assertEqual(tr.check(data, baseline, 15.0)[0], 0)
+        # one more agent than the baseline fails, whatever the tolerance
+        baseline.write_text(json.dumps({"commands": {"/rite:fix-all": {
+            "billed": c["billed"], "turns": c["turns"], "agents": 1,
+            "agent": {"billed": c["agent"]["billed"]}}}}), encoding="utf-8")
+        failures, messages = tr.check(data, baseline, 50.0)
+        self.assertEqual(failures, 1)
+        self.assertTrue(any("WORSE" in m and "agents" in m for m in messages), messages)
+        # a costlier agent side fails beyond the tolerance
+        baseline.write_text(json.dumps({"commands": {"/rite:fix-all": {
+            "billed": c["billed"], "turns": c["turns"], "agents": 2,
+            "agent": {"billed": c["agent"]["billed"] // 2}}}}), encoding="utf-8")
+        failures, messages = tr.check(data, baseline, 15.0)
+        self.assertEqual(failures, 1)
+        self.assertTrue(any("WORSE" in m and "agent.billed" in m for m in messages), messages)
+
+    def test_check_fails_when_the_agent_side_went_missing(self):
+        write_jsonl(self.dir / "s3.jsonl", [
+            user("<command-name>/rite:review</command-name>"),
+            agent_call("m1", "call-x", "rite:rite-reviewer"),
+            result("call-x", "PASS"),
+        ])
+        data = self.measure()
+        baseline = self.dir / "baseline.json"
+        baseline.write_text(json.dumps({"commands": {"/rite:review": {
+            "billed": 115, "turns": 1, "agents": 1, "agent": {"billed": 100}}}}), encoding="utf-8")
+        failures, messages = tr.check(data, baseline, 15.0)
+        self.assertEqual(failures, 1)
+        self.assertTrue(any(m.startswith("UNKN") for m in messages), messages)
+
+    def test_dollars_only_with_a_complete_price_table(self):
+        self.fix_all_session()
+        self.assertNotIn("usd", self.measure()["commands"]["/rite:fix-all"])
+        prices_file = self.dir / "prices.toml"
+        prices_file.write_text("[cost]\ninput = 3.0\noutput = 15.0\n", encoding="utf-8")
+        self.assertIsNone(tr.load_prices(prices_file))  # partial: omitted, never guessed
+        prices_file.write_text("[cost]\ninput = 3.0\noutput = 15.0\ncache_write = 3.75\n"
+                               "cache_read = 0.3\n", encoding="utf-8")
+        prices = tr.load_prices(prices_file)
+        data = self.measure(prices)
+        c = data["commands"]["/rite:fix-all"]
+        main = 3 * (10 * 3.0 + 100 * 3.75 + 1000 * 0.3 + 5 * 15.0) / 1e6
+        agent = 3 * (1 * 3.0 + 200 * 3.75 + 3000 * 0.3 + 20 * 15.0) / 1e6
+        self.assertAlmostEqual(c["usd"], round(main, 4))
+        self.assertAlmostEqual(c["agent"]["usd"], round(agent, 4))
+        self.assertEqual(data["prices"], prices)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(tr.main(["--dir", str(self.dir), "--prices", str(prices_file)]), 0)
+        self.assertIn("usd agent", out.getvalue())
+
+
 class BaselineFilesTest(unittest.TestCase):
     def test_baselines_are_present_and_shaped(self):
         for name in ("node-minimal", "python-minimal"):

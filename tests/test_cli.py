@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -511,6 +513,41 @@ class NoConfigTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("link_style", err)
         self.assertIn("unknown section [bogus]", err)
+
+    def test_cost_prices_are_all_or_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp) / "rite.toml", "[cost]\ninput = 3.0\n")
+            code, _, err = rite(Path(tmp), "status")
+        self.assertEqual(code, 1)
+        self.assertIn("[cost] declare all four", err)
+
+
+class CostTest(unittest.TestCase):
+    """`rite cost` is the token report, run without a rite.toml."""
+
+    def test_same_numbers_as_the_tool(self):
+        sys.path.insert(0, str(ROOT / "tools"))
+        import token_report
+        with tempfile.TemporaryDirectory() as tmp:
+            transcripts = Path(tmp) / "projects"
+            write(transcripts / "s.jsonl", "\n".join(json.dumps(e) for e in [
+                {"type": "user", "message": {"content": "<command-name>/rite:review</command-name>"}},
+                {"type": "assistant", "message": {"id": "m1", "content": [], "usage": {
+                    "input_tokens": 3, "cache_creation_input_tokens": 40, "output_tokens": 7}}},
+            ]))
+            code, out, _ = rite(Path(tmp), "cost", "--dir", str(transcripts), "--json")
+            self.assertEqual(code, 0)
+            direct = io.StringIO()
+            with contextlib.redirect_stdout(direct):
+                self.assertEqual(token_report.main(["--dir", str(transcripts), "--json"]), 0)
+        self.assertEqual(json.loads(out), json.loads(direct.getvalue()))
+        self.assertEqual(json.loads(out)["commands"]["/rite:review"]["billed"], 50)
+
+    def test_nothing_measured(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, _, err = rite(Path(tmp), "cost", "--dir", tmp)
+        self.assertEqual(code, 2)
+        self.assertIn("no invocation", err)
 
 
 if __name__ == "__main__":
