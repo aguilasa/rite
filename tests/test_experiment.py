@@ -1,4 +1,4 @@
-"""The cost experiment without a model: its matrix, its measurement of one cell, its estimate."""
+"""The token experiment without a model: its matrix, its measurement of one cell, its estimate."""
 
 import io
 import json
@@ -12,9 +12,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 import experiment  # noqa: E402
 import token_report as tr  # noqa: E402
-
-PRICES = {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.3}
-
 
 def invocation() -> tr.Invocation:
     inv = tr.Invocation("/rite:fix-all", "s")
@@ -39,26 +36,26 @@ class ExperimentTest(unittest.TestCase):
         self.assertEqual([c["n"] for c in experiment.plan_cells(["a", "b"], [1, 2, 4], 1, "review")], [1, 1])
 
     def test_measure_keeps_raw_numbers_per_side_and_type(self):
-        cell = experiment.measure(invocation(), PRICES)
+        cell = experiment.measure(invocation())
         self.assertEqual((cell["main"]["billed"], cell["main"]["ceremony"], cell["agents"]), (115, 1, 2))
         self.assertEqual(cell["agent"]["billed"], 120)
         reproducer = cell["agent"]["by_type"]["rite:rite-reproducer"]
         self.assertEqual((reproducer["n"], reproducer["billed"], reproducer["shell_bytes"]), (1, 50, 40))
-        self.assertAlmostEqual(cell["main"]["usd"], round(invocation().usd(PRICES), 6))
+        self.assertEqual(set(cell["main"]), {"billed", "input", "cache_write", "cache_read", "output",
+                                             "turns", "ceremony"})
 
     def test_an_unmeasured_agent_is_unknown(self):
         inv = invocation()
         inv.agents[1].measured = False
-        self.assertEqual(experiment.measure(inv, None)["agent"], "unknown")
+        self.assertEqual(experiment.measure(inv)["agent"], "unknown")
 
     def test_estimate_scales_agents_with_n(self):
         ref = {"source": "x", "main": {"billed": 100, "cache_read": 1000, "output": 10},
                "per_agent": {"billed": 50, "cache_read": 500, "output": 5}}
         cells = experiment.plan_cells(["as-is"], [1, 2], 1, "fix-all")
-        guess = experiment.estimate(cells, ref, "fix-all", None)
+        guess = experiment.estimate(cells, ref, "fix-all")
         self.assertEqual(guess["tokens"], 2 * 1100 + (2 + 4) * 550)
-        self.assertIsNone(guess["usd"])
-        self.assertGreater(experiment.estimate(cells, ref, "fix-all", PRICES)["usd"] or 0, -1)
+        self.assertEqual(set(guess), {"tokens", "agents_included"})
 
     def test_nothing_runs_without_yes(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -72,21 +69,21 @@ class ExperimentTest(unittest.TestCase):
         self.assertIn("3 run(s)", out.getvalue())
 
 
-COST = Path(__file__).resolve().parent / "cost"
+TOKENS = Path(__file__).resolve().parent / "tokens"
 
 
 class ReportTest(unittest.TestCase):
     """The report is deterministic: a fixed matrix gives fixed bytes."""
 
     def matrix(self) -> dict:
-        return json.loads((COST / "matrix.json").read_text(encoding="utf-8"))
+        return json.loads((TOKENS / "matrix.json").read_text(encoding="utf-8"))
 
     def test_markdown_is_byte_for_byte(self):
-        expected = (COST / "report.md").read_bytes()
+        expected = (TOKENS / "report.md").read_bytes()
         self.assertEqual(experiment.render_markdown(self.matrix()).encode("utf-8"), expected)
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "2026-09-23-x.json"
-            copy.write_bytes((COST / "matrix.json").read_bytes())
+            copy.write_bytes((TOKENS / "matrix.json").read_bytes())
             first = experiment.write_report(copy).read_bytes()
             second = experiment.write_report(copy).read_bytes()
         self.assertEqual(first, expected)
@@ -101,31 +98,7 @@ class ReportTest(unittest.TestCase):
         self.assertIsNone(experiment.fit([(1, 10.0), (1, 12.0)]))  # one N: no line
 
     def test_triage_verdicts(self):
-        cells = [c for c in self.matrix()["cells"] if c.get("valid")]
-        self.assertEqual(experiment.triage_verdict(cells, None)["verdict"], "none")
-        self.assertEqual(experiment.triage_verdict(cells, PRICES)["verdict"], "apply")
-        # an output that would be read back for ever makes the reproducer the cheaper side
-        heavy = json.loads(json.dumps(cells))
-        for cell in heavy:
-            cell["agent"]["by_type"]["rite:rite-reproducer"]["shell_bytes"] = 4_000_000 * cell["n"]
-        self.assertEqual(experiment.triage_verdict(heavy, PRICES)["verdict"], "do not apply")
-        # a difference within the dispersion decides nothing
-        noisy = json.loads(json.dumps(cells))
-        for cell in noisy:
-            if cell["rep"] == 2:
-                cell["agent"]["by_type"]["rite:rite-reproducer"]["usd"] *= 50
-        self.assertEqual(experiment.triage_verdict(noisy, PRICES)["verdict"], "inconclusive")
-        # a reproducer worth half a main-thread turn: it hangs on turns the matrix cannot count
-        half = json.loads(json.dumps(cells))
-        for cell in half:
-            turn = cell["main"]["usd"] / cell["main"]["turns"]
-            cell["agent"]["by_type"]["rite:rite-reproducer"]["usd"] = 0.5 * turn * cell["n"]
-        verdict = experiment.triage_verdict(half, PRICES)
-        self.assertEqual(verdict["verdict"], "inconclusive")
-        for row in verdict["rows"]:
-            self.assertAlmostEqual(row["break_even_turns"], 0.5, delta=0.02)
-        self.assertIn("main-thread turns per fix", verdict["why"])
-
+        self.assertEqual(experiment.triage_verdict([])["verdict"], "none")
 
 if __name__ == "__main__":
     unittest.main()

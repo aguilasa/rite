@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What one invocation of a command costs, measured from Claude Code transcripts.
+"""The tokens one invocation of a command uses, measured from Claude Code transcripts.
 
 Reads the JSONL transcripts Claude Code writes under ``~/.claude/projects`` and groups them by
 invoked command (`/rite:execute`, …): every assistant message after a command belongs to it until
@@ -13,9 +13,8 @@ started it), or inline as ``isSidechain`` entries. Both are attributed to the in
 the call and reported apart, as ``agent``. A call whose agent left no trace makes the command's agent
 side ``"unknown"`` — a declared gap, never a silent zero.
 
-With a ``[cost]`` table (USD per million tokens; ``--prices`` or ``rite.toml`` in the working folder)
-the report adds dollars; without one it leaves them out rather than guess. Only metrics are kept:
-sizes, tool names and targets, never the text of a transcript.
+Everything is counted in tokens, never in money. Only metrics are kept: sizes, tool names and
+targets, never the text of a transcript.
 
     python tools/token_report.py --dir ~/.claude/projects --glob "*node-minimal*" --top 10
     python tools/token_report.py --glob "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
@@ -29,7 +28,6 @@ import json
 import re
 import statistics
 import sys
-import tomllib
 from pathlib import Path
 
 COMMAND_RE = re.compile(r"<command-name>([^<]+)</command-name>")
@@ -44,7 +42,7 @@ GIT_RE = re.compile(SEGMENT + r"\s*git\b|\bgit -C\b")
 RITE_CLI_RE = re.compile(r"(rite\.py|bin/rite|\brite)[\"']?\s+(resolve-cycle|next|new-task|new-fix|"
                          r"commit-new|commit-refs|close|rebind|mark|mark-reviewed|mark-stale|sync|"
                          r"check|status|batch-plan|new-cycle|archive|publish|anchors|stats|relink|"
-                         r"migrate|guard|begin|context|gates|sweep|finish|cost)\b")
+                         r"migrate|guard|begin|context|gates|sweep|finish|tokens|cost)\b")
 # a plugin's own prose: the fragments and command files commands read at runtime
 FRAGMENT_RE = re.compile(r"(plugins[\\/].*[\\/])?(shared|parts|commands|agents)[\\/][^\\/]+\.md$",
                          re.IGNORECASE)
@@ -53,7 +51,6 @@ CATEGORIES = ("rite:fragment", "rite:cli", "git", "read:project", "read:shell", 
               "subagent", "other")
 AGENT_TOOLS = ("Task", "Agent")
 SHELL_TOOLS = ("Bash", "PowerShell")
-PRICE_KEYS = ("input", "output", "cache_write", "cache_read")
 
 
 def classify(tool: str, target: str) -> str:
@@ -108,9 +105,6 @@ class Usage:
     @property
     def billed(self) -> int:
         return self.input + self.cache_write + self.output
-
-    def usd(self, prices: dict) -> float:
-        return sum(getattr(self, key) * prices[key] for key in PRICE_KEYS) / 1_000_000
 
 
 class AgentRun(Usage):
@@ -344,27 +338,11 @@ def collect(root: Path, pattern: str | None) -> list[Invocation]:
     return invocations
 
 
-def load_prices(path: Path) -> dict | None:
-    """``[cost]`` of a TOML file in USD per million tokens; None unless every price is declared."""
-    try:
-        table = tomllib.loads(path.read_text(encoding="utf-8")).get("cost") or {}
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    prices = {key: table.get(key) for key in PRICE_KEYS}
-    if all(isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 for v in prices.values()):
-        return {key: float(v) for key, v in prices.items()}
-    return None
-
-
 def median(values: list[float]) -> int:
     return int(statistics.median(values)) if values else 0
 
 
-def _usd(values: list[float]) -> float:
-    return round(statistics.median(values), 4) if values else 0.0
-
-
-def _agent_side(group: list[Invocation], prices: dict | None) -> dict | str:
+def _agent_side(group: list[Invocation]) -> dict | str:
     """Medians of what the invocations' subagents cost, in total and per agent type."""
     if any(inv.agent_unknown for inv in group):
         return "unknown"
@@ -387,8 +365,6 @@ def _agent_side(group: list[Invocation], prices: dict | None) -> dict | str:
             "output": median([t.output for t in totals]),
             "turns": median([t.turns for t in totals]),
         })
-        if prices:
-            out["usd"] = _usd([t.usd(prices) for t in totals])
         return out
 
     side = block([sums(inv.agents) for inv in group])
@@ -403,7 +379,7 @@ def _agent_side(group: list[Invocation], prices: dict | None) -> dict | str:
     return side
 
 
-def summarize(invocations: list[Invocation], prices: dict | None = None) -> dict:
+def summarize(invocations: list[Invocation]) -> dict:
     """Medians per command. The top-level numbers are the main thread; ``agent`` is its subagents."""
     by_command: dict[str, list[Invocation]] = {}
     for inv in invocations:
@@ -420,14 +396,9 @@ def summarize(invocations: list[Invocation], prices: dict | None = None) -> dict
             "tools": {c: median([i.tools.get(c, 0) for i in group])
                       for c in CATEGORIES if any(i.tools.get(c) for i in group)},
             "agents": median([len(i.agents) for i in group]),
-            "agent": _agent_side(group, prices),
+            "agent": _agent_side(group),
         }
-        if prices:
-            commands[name]["usd"] = _usd([i.usd(prices) for i in group])
-    data = {"invocations": len(invocations), "commands": commands}
-    if prices:
-        data["prices"] = prices
-    return data
+    return {"invocations": len(invocations), "commands": commands}
 
 
 def largest_results(invocations: list[Invocation], top: int) -> list[dict]:
@@ -438,21 +409,15 @@ def largest_results(invocations: list[Invocation], top: int) -> list[dict]:
 
 
 def render(data: dict, top: list[dict]) -> str:
-    priced = "prices" in data
     lines = [f"{data['invocations']} invocation(s)", ""]
     head = (f"{'command':28} {'n':>3} {'billed':>9} {'cache read':>11} {'turns':>6} {'ceremony':>9}"
             f" {'agents':>7} {'agent billed':>13}")
-    if priced:
-        head += f" {'usd main':>9} {'usd agent':>10}"
     lines += [head, "-" * len(head)]
     for name, c in data["commands"].items():
         agent = c.get("agent", {})
         agent_billed = agent if isinstance(agent, str) else f"{agent.get('billed', 0):,}"
         row = (f"{name[:28]:28} {c['n']:>3} {c['billed']:>9,} {c['cache_read']:>11,} "
                f"{c['turns']:>6} {c['ceremony']:>9} {c.get('agents', 0):>7} {agent_billed:>13}")
-        if priced:
-            agent_usd = "?" if isinstance(agent, str) else f"{agent.get('usd', 0):.4f}"
-            row += f" {c.get('usd', 0):>9.4f} {agent_usd:>10}"
         lines.append(row)
         tools = ", ".join(f"{k} {v}" for k, v in c["tools"].items())
         if tools:
@@ -515,17 +480,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--write-baseline", help="write the measurement as a baseline file")
     p.add_argument("--example", default="", help="example name stored in a written baseline")
     p.add_argument("--version", default="", help="version stored in a written baseline")
-    p.add_argument("--prices", help="TOML file with a [cost] table (default: ./rite.toml, if it has one)")
     args = p.parse_args(argv)
-
-    prices = None
-    if args.prices:
-        prices = load_prices(Path(args.prices))
-        if prices is None:
-            print(f"token_report: no complete [cost] table in {args.prices}", file=sys.stderr)
-            return 2
-    elif Path("rite.toml").is_file():
-        prices = load_prices(Path("rite.toml"))
 
     invocations = collect(Path(args.dir).expanduser(), args.glob)
     if args.command:
@@ -534,7 +489,7 @@ def main(argv: list[str] | None = None) -> int:
     if not invocations:
         print(f"token_report: no invocation found under {args.dir}", file=sys.stderr)
         return 2
-    data = summarize(invocations, prices)
+    data = summarize(invocations)
     top = largest_results(invocations, args.top)
 
     if args.write_baseline:

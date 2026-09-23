@@ -514,16 +514,8 @@ class NoConfigTest(unittest.TestCase):
         self.assertIn("link_style", err)
         self.assertIn("unknown section [bogus]", err)
 
-    def test_cost_prices_are_all_or_none(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            write(Path(tmp) / "rite.toml", "[cost]\ninput = 3.0\n")
-            code, _, err = rite(Path(tmp), "status")
-        self.assertEqual(code, 1)
-        self.assertIn("[cost] declare all four", err)
-
-
-class CostTest(unittest.TestCase):
-    """`rite cost` is the token report, run without a rite.toml."""
+class TokensTest(unittest.TestCase):
+    """`rite tokens` is the token report, run without a rite.toml."""
 
     def test_same_numbers_as_the_tool(self):
         sys.path.insert(0, str(ROOT / "tools"))
@@ -535,7 +527,7 @@ class CostTest(unittest.TestCase):
                 {"type": "assistant", "message": {"id": "m1", "content": [], "usage": {
                     "input_tokens": 3, "cache_creation_input_tokens": 40, "output_tokens": 7}}},
             ]))
-            code, out, _ = rite(Path(tmp), "cost", "--dir", str(transcripts), "--json")
+            code, out, _ = rite(Path(tmp), "tokens", "--dir", str(transcripts), "--json")
             self.assertEqual(code, 0)
             direct = io.StringIO()
             with contextlib.redirect_stdout(direct):
@@ -545,7 +537,7 @@ class CostTest(unittest.TestCase):
 
     def test_nothing_measured(self):
         with tempfile.TemporaryDirectory() as tmp:
-            code, _, err = rite(Path(tmp), "cost", "--dir", tmp)
+            code, _, err = rite(Path(tmp), "tokens", "--dir", tmp)
         self.assertEqual(code, 2)
         self.assertIn("no invocation", err)
 

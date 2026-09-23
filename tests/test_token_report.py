@@ -78,7 +78,7 @@ class TokenReportTest(unittest.TestCase):
         tools = self.measure()["commands"]["/rite:execute"]["tools"]
         self.assertEqual(tools, {"rite:fragment": 1, "rite:cli": 1, "git": 1, "gate": 1,
                                  "edit": 1, "subagent": 1})
-        # ceremony is what the rite costs around the work: its own prose plus its CLI
+        # ceremony is what the rite spends around the work: its own prose plus its CLI
         self.assertEqual(self.measure()["commands"]["/rite:execute"]["ceremony"], 2)
         self.assertEqual(self.measure()["commands"]["/rite:review"]["tools"], {"read:shell": 1})
 
@@ -154,8 +154,8 @@ class AgentAttributionTest(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def measure(self, prices=None) -> dict:
-        return tr.summarize(tr.collect(self.dir, None), prices)
+    def measure(self) -> dict:
+        return tr.summarize(tr.collect(self.dir, None))
 
     def fix_all_session(self) -> None:
         write_jsonl(self.dir / "s1.jsonl", [
@@ -265,26 +265,13 @@ class AgentAttributionTest(unittest.TestCase):
         self.assertEqual(failures, 1)
         self.assertTrue(any(m.startswith("UNKN") for m in messages), messages)
 
-    def test_dollars_only_with_a_complete_price_table(self):
+    def test_tokens_never_money(self):
         self.fix_all_session()
-        self.assertNotIn("usd", self.measure()["commands"]["/rite:fix-all"])
-        prices_file = self.dir / "prices.toml"
-        prices_file.write_text("[cost]\ninput = 3.0\noutput = 15.0\n", encoding="utf-8")
-        self.assertIsNone(tr.load_prices(prices_file))  # partial: omitted, never guessed
-        prices_file.write_text("[cost]\ninput = 3.0\noutput = 15.0\ncache_write = 3.75\n"
-                               "cache_read = 0.3\n", encoding="utf-8")
-        prices = tr.load_prices(prices_file)
-        data = self.measure(prices)
-        c = data["commands"]["/rite:fix-all"]
-        main = 3 * (10 * 3.0 + 100 * 3.75 + 1000 * 0.3 + 5 * 15.0) / 1e6
-        agent = 3 * (1 * 3.0 + 200 * 3.75 + 3000 * 0.3 + 20 * 15.0) / 1e6
-        self.assertAlmostEqual(c["usd"], round(main, 4))
-        self.assertAlmostEqual(c["agent"]["usd"], round(agent, 4))
-        self.assertEqual(data["prices"], prices)
+        self.assertEqual(set(self.measure()), {"invocations", "commands"})
         out = io.StringIO()
         with redirect_stdout(out):
-            self.assertEqual(tr.main(["--dir", str(self.dir), "--prices", str(prices_file)]), 0)
-        self.assertIn("usd agent", out.getvalue())
+            self.assertEqual(tr.main(["--dir", str(self.dir)]), 0)
+        self.assertNotIn("$", out.getvalue())
 
 
 class BaselineFilesTest(unittest.TestCase):

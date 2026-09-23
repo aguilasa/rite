@@ -1,14 +1,14 @@
-# Measuring what a command costs
+# Where the tokens go
 
-`rite cost` (the same code as `tools/token_report.py`) reads the transcripts Claude Code writes under
+`rite tokens` (the same code as `tools/token_report.py`) reads the transcripts Claude Code writes under
 `~/.claude/projects` and reports, per command, the median of each invocation: billed tokens, cache
 reads, output, turns, ceremony (turns spent on the rite's own prose and CLI), the tools used — and,
-apart, what its subagents cost. It is a tool **about** the rite: no command calls it, and it needs
-no `rite.toml`.
+apart, what its subagents used. Counts are tokens, never money. It is a tool **about** the rite: no
+command calls it, and it needs no `rite.toml`.
 
 ```sh
-rite cost --glob "*slugkit*" --top 10
-rite cost --glob "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
+rite tokens --glob "*slugkit*" --top 10
+rite tokens --glob "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
 ```
 
 ## Main thread and subagents
@@ -27,13 +27,6 @@ baseline, whatever the tolerance: a new agent in the rite shows up in the gate.
 
 The `usage` a main-thread `Agent` result carries is the agent's **last** turn, not its total; the
 report sums the agent's own transcript instead.
-
-## Dollars
-
-`cache_read` tokens cost a fraction of fresh input, so a context that keeps growing is not priced
-like a fresh one, and tokens alone cannot compare them. With a `[cost]` table — `--prices FILE`, or
-the `rite.toml` of the folder it runs in — the report adds USD per command, main and agent. Without
-one it prints no dollars at all. See [CONFIG.md](CONFIG.md#cost).
 
 ## What is kept
 

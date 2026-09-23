@@ -57,6 +57,6 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth`; retro numbers |
 | `relink [--write]`, `migrate --from we2002 [--write]` | normalize link style; convert a legacy backlog (see [MIGRATING.md](MIGRATING.md)) |
 | `guard PATH` | read-only / generated verdict (the hook uses it) |
-| `cost [--dir D] [--glob G] [--command C]… [--top N] [--check BASELINE --tolerance P] [--prices F]` | tokens (and USD) per command, main thread and subagents apart; runs without `rite.toml` (see [COST.md](COST.md)) |
+| `tokens [--dir D] [--glob G] [--command C]… [--top N] [--check BASELINE --tolerance P]` | tokens per command, main thread and subagents apart; runs without `rite.toml` (see [TOKENS.md](TOKENS.md)) |
 
 Exit codes: `0` ok · `1` failure or nothing selected · `3` no `rite.toml`.

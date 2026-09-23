@@ -410,7 +410,7 @@ def cmd_migrate(args) -> int:
     return EXIT_OK
 
 
-def cmd_cost(args) -> int:
+def cmd_tokens(args) -> int:
     """Thin on purpose: the measurement is tools/token_report.py, so the two cannot disagree."""
     tools = Path(__file__).resolve().parent.parent / "tools"
     if str(tools) not in sys.path:
@@ -421,11 +421,6 @@ def cmd_cost(args) -> int:
     argv += [x for c in args.command or [] for x in ("--command", c)]
     argv += ["--check", args.check] if args.check else []
     argv += ["--json"] if args.json else []
-    prices = args.prices
-    if not prices:
-        toml = (Path(args.root).resolve() if args.root else Path.cwd()) / config.CONFIG_NAME
-        prices = str(toml) if toml.is_file() and token_report.load_prices(toml) else None
-    argv += ["--prices", prices] if prices else []
     return token_report.main(argv)
 
 
@@ -611,8 +606,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
     s.set_defaults(fn=cmd_migrate, needs_project=False)
 
-    s = sub.add_parser("cost", parents=[common],
-                       help="tokens (and USD) per command, main thread and subagents, from transcripts")
+    s = sub.add_parser("tokens", parents=[common],
+                       help="tokens per command, main thread and subagents, from transcripts")
     s.add_argument("--dir", default=str(Path.home() / ".claude" / "projects"),
                    help="folder of Claude Code transcripts (default: ~/.claude/projects)")
     s.add_argument("--glob", help="only transcripts whose path matches this pattern")
@@ -620,8 +615,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--top", type=int, default=0, help="also list the N largest tool results")
     s.add_argument("--check", help="baseline JSON to compare against")
     s.add_argument("--tolerance", type=float, default=15.0, help="percent a metric may grow")
-    s.add_argument("--prices", help="TOML with a [cost] table (default: rite.toml, if it declares one)")
-    s.set_defaults(fn=cmd_cost, needs_project=False)
+    s.set_defaults(fn=cmd_tokens, needs_project=False)
 
     s = sub.add_parser("guard", parents=[common], help="is this path read-only or generated?")
     s.add_argument("path")

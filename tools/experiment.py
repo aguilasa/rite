@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What one more fix costs a `/rite:fix-all` — main thread and subagents apart — measured, not argued.
+"""The tokens one more fix adds to a `/rite:fix-all` — main thread and subagents apart — measured, not argued.
 
 Each cell of the matrix (label × number of fixes × repetition) starts from nothing: the example copied
 into a new temporary git repository (without its seeding data, so the model never sees the answer),
@@ -11,10 +11,10 @@ measurement, with the plugin tree the label names. The transcripts of that sessi
     python tools/experiment.py --example node-minimal --plugin . --label as-is --defects 1,2,4 \\
         --repeat 2 --model sonnet --dry-run
     python tools/experiment.py ... --yes                  # spends tokens: run --dry-run first
-    python tools/experiment.py --report docs/cost/<date>-<name>.json    # rewrite the markdown only
+    python tools/experiment.py --report docs/tokens/<date>-<name>.json  # rewrite the markdown only
 
-A run writes ``docs/cost/<date>-<name>.json`` (the raw matrix, after every cell) and its sibling
-``.md``: setup, matrix, fitted line (intercept = fixed ceremony, slope = cost per fix, the slope of
+A run writes ``docs/tokens/<date>-<name>.json`` (the raw matrix, after every cell) and its sibling
+``.md``: setup, matrix, fitted line (intercept = fixed ceremony, slope = tokens per fix, the slope of
 the agent side = the subagent floor), reading, triage decision, caveats. The markdown is rendered from
 the JSON alone, so the same matrix always gives the same bytes.
 
@@ -54,11 +54,9 @@ def _usage(u: tr.Usage) -> dict:
             "cache_read": u.cache_read, "output": u.output, "turns": u.turns}
 
 
-def measure(inv: tr.Invocation, prices: dict | None) -> dict:
+def measure(inv: tr.Invocation) -> dict:
     """One invocation's raw numbers — no medians: the report aggregates across repetitions."""
     out = {"main": {**_usage(inv), "ceremony": inv.ceremony}, "agents": len(inv.agents)}
-    if prices:
-        out["main"]["usd"] = round(inv.usd(prices), 6)
     if inv.agent_unknown:
         out["agent"] = "unknown"
         return out
@@ -70,8 +68,6 @@ def measure(inv: tr.Invocation, prices: dict | None) -> dict:
         kind["shell_bytes"] += run.shell_bytes
         kind["main_turns_after"] += run.main_turns_after
     agent = _usage(total)
-    if prices:
-        agent["usd"] = round(total.usd(prices), 6)
     agent["by_type"] = {}
     for name in sorted(by_type):
         kind, subtotal = by_type[name], tr.Usage()
@@ -79,21 +75,12 @@ def measure(inv: tr.Invocation, prices: dict | None) -> dict:
             subtotal.merge(run)
         row = {"n": len(kind["runs"]), **_usage(subtotal), "shell_bytes": kind["shell_bytes"],
                "main_turns_after": kind["main_turns_after"]}
-        if prices:
-            row["usd"] = round(subtotal.usd(prices), 6)
         agent["by_type"][name] = row
     out["agent"] = agent
     return out
 
 
 # --- estimate (dry run) -----------------------------------------------------------
-def _usd_rough(side: dict, prices: dict) -> float:
-    """Billed minus output priced as cache writes (the upper side), output as output, reads as reads."""
-    written = max(side.get("billed", 0) - side.get("output", 0), 0)
-    return (written * prices["cache_write"] + side.get("output", 0) * prices["output"]
-            + side.get("cache_read", 0) * prices["cache_read"]) / 1_000_000
-
-
 def reference(example: str, command: str, estimate_from: str | None) -> dict:
     """The per-invocation numbers an estimate scales: live transcripts, else the example's baseline."""
     name = COMMANDS[command]
@@ -115,24 +102,19 @@ def reference(example: str, command: str, estimate_from: str | None) -> dict:
             "per_agent": per_agent}
 
 
-def estimate(cells: list[dict], ref: dict, command: str, prices: dict | None) -> dict:
-    """Rough cost of the whole matrix: the main thread once per cell, agents scaled by N."""
-    main_usd = _usd_rough(ref["main"], prices) if prices else None
-    agent_usd = _usd_rough(ref["per_agent"], prices) if prices and ref["per_agent"] else None
-    tokens = usd = 0.0
+def estimate(cells: list[dict], ref: dict, command: str) -> dict:
+    """Rough size of the whole matrix: the main thread once per cell, agents scaled by N."""
+    tokens = 0.0
     for cell in cells:
         agents = AGENTS_PER_UNIT[command] * cell["n"]
         tokens += ref["main"]["billed"] + ref["main"]["cache_read"]
         if ref["per_agent"]:
             tokens += agents * (ref["per_agent"]["billed"] + ref["per_agent"]["cache_read"])
-        if main_usd is not None:
-            usd += main_usd + (agents * agent_usd if agent_usd is not None else 0)
-    return {"tokens": int(tokens), "usd": round(usd, 2) if prices else None,
-            "agents_included": ref["per_agent"] is not None}
+    return {"tokens": int(tokens), "agents_included": ref["per_agent"] is not None}
 
 
 # --- one cell ---------------------------------------------------------------------
-def run_cell(args, cell: dict, plugin: Path, prices: dict | None) -> dict:
+def run_cell(args, cell: dict, plugin: Path) -> dict:
     tmp, repo, manifest = ex.make_repo(args.example, strip=("e2e", "e2e.json"))
     cycle, result = manifest["cycle"], {**cell, "valid": False}
     try:
@@ -156,7 +138,7 @@ def run_cell(args, cell: dict, plugin: Path, prices: dict | None) -> dict:
         if len(found) != 1:
             result["reason"] = f"{len(found)} {COMMANDS[args.command]} invocations in the transcripts"
             return result
-        result.update(measure(found[0], prices))
+        result.update(measure(found[0]))
         result["symptoms_fixed"] = sum(ex.symptom_of(repo, d) == d["good_output"] for d in defects)
         if args.command == "fix-all":
             result["open_fixes_after"] = ex.open_fixes(repo, cycle)
@@ -232,74 +214,21 @@ def _type(cell: dict, kind: str) -> dict | None:
     return agent["by_type"].get(kind) if agent else None
 
 
-def inline_estimate(cell: dict, prices: dict) -> float | None:
-    """What keeping the reproduction output in the main context would have cost, per fix: its tokens
-    written once, then read back on every main turn that followed the triage."""
-    row = _type(cell, REPRODUCER)
-    if not row or not row["n"]:
-        return None
-    tokens = row["shell_bytes"] / BYTES_PER_TOKEN
-    turns_after = row["main_turns_after"] / row["n"]
-    usd = (tokens * prices["cache_write"] + tokens * turns_after * prices["cache_read"]) / 1_000_000
-    return usd / cell["n"]
-
-
-def triage_verdict(cells: list[dict], prices: dict | None) -> dict:
-    """The question the floor answers: is a reproducer per fix dearer than triage inline? Inline, the
-    main thread pays for holding the reproduction output and for the turns it spends running the
-    evidence, whose count the matrix cannot see. So each N is judged at the two ends — no extra turn,
-    one extra turn per fix — against the dispersion between repetitions; in between, the report gives
-    the break-even number of main-thread turns."""
-    if not prices:
-        return {"verdict": "none", "why": "no [cost] table: tokens alone cannot price a fresh context "
-                                          "against a growing one"}
-    rows = []
-    for n in sorted({c["n"] for c in cells}):
-        group = [c for c in cells if c["n"] == n]
-        agent = [(_type(c, REPRODUCER) or {}).get("usd") for c in group]
-        inline = [inline_estimate(c, prices) for c in group]
-        turns = [c["main"]["usd"] / c["main"]["turns"] for c in group if c["main"].get("turns")]
-        if any(v is None for v in agent + inline) or len(turns) != len(group):
-            continue
-        per_fix = [v / n for v in agent]
-        noise = max(max(per_fix) - min(per_fix), max(inline) - min(inline))
-        row = {"n": n, "agent_per_fix": _mean(per_fix), "inline_per_fix": _mean(inline),
-               "main_turn": _mean(turns), "noise": noise}
-        row["break_even_turns"] = (row["agent_per_fix"] - row["inline_per_fix"]) / row["main_turn"]
-        if row["agent_per_fix"] + noise < row["inline_per_fix"]:
-            row["side"] = "agent"      # cheaper even if inline triage cost no turn at all
-        elif row["agent_per_fix"] - noise > row["inline_per_fix"] + row["main_turn"]:
-            row["side"] = "inline"     # cheaper even at a whole extra main-thread turn per fix
-        else:
-            row["side"] = "open"
-        rows.append(row)
-    if not rows:
+def triage_verdict(cells: list[dict]) -> dict:
+    """Is a reproducer per fix dearer than triage inline? Judged in tokens; see the report."""
+    if not any(_type(c, REPRODUCER) for c in cells):
         return {"verdict": "none", "why": "no cell measured a reproducer"}
-    sides = [r["side"] for r in rows]
-    if all(side == "inline" for side in sides):
-        return {"verdict": "apply", "rows": rows, "inline_triage_max": max(r["n"] for r in rows),
-                "why": "the reproducer costs more than inline triage even at one extra main-thread turn "
-                       "per fix, at every N measured; no crossover inside the range, so the limit is the "
-                       "largest N measured"}
-    if all(side == "agent" for side in sides):
-        return {"verdict": "do not apply", "rows": rows,
-                "why": "the reproducer is cheaper than holding its output inline, even with no extra turn"}
-    low = min(r["break_even_turns"] for r in rows)
-    high = max(r["break_even_turns"] for r in rows)
-    return {"verdict": "inconclusive", "rows": rows,
-            "why": f"inline triage is cheaper only if it adds fewer than {low:.2f}–{high:.2f} main-thread "
-                   f"turns per fix, which this matrix does not measure; apply it and measure the turns"}
+    return {"verdict": "none", "why": "not judged: the verdict in tokens is not written yet"}
 
 
 def analyze(matrix: dict) -> dict:
-    prices = matrix["meta"].get("prices")
     out = {}
     for label in [l["label"] for l in matrix["meta"]["labels"]]:
         cells = [c for c in matrix["cells"] if c["label"] == label and c.get("valid")]
         known = [c for c in cells if _agent(c)]
         total = _series(known, lambda c: c["main"]["billed"] + c["agent"]["billed"])
         kinds = sorted({k for c in known for k in c["agent"]["by_type"]})
-        result = {
+        out[label] = {
             "cells": len(cells), "invalid": sum(1 for c in matrix["cells"]
                                                 if c["label"] == label and not c.get("valid")),
             "unknown": len(cells) - len(known),
@@ -308,16 +237,8 @@ def analyze(matrix: dict) -> dict:
             "by_type": {k: fit(_series(known, lambda c, k=k: (_type(c, k) or {}).get("billed", 0)))
                         for k in kinds},
             "spread": spread(total),
+            "triage": triage_verdict(known),
         }
-        if prices:
-            result["usd"] = {
-                "total": fit(_series(known, lambda c: c["main"]["usd"] + c["agent"]["usd"])),
-                "agent": fit(_series(known, lambda c: c["agent"]["usd"])),
-                "by_type": {k: fit(_series(known, lambda c, k=k: (_type(c, k) or {}).get("usd", 0)))
-                            for k in kinds},
-            }
-        result["triage"] = triage_verdict(known, prices)
-        out[label] = result
     return out
 
 
@@ -325,23 +246,18 @@ def _tok(value: float) -> str:
     return f"{round(value):,}"
 
 
-def _usd(value: float) -> str:
-    return f"${value:.4f}"
-
-
-def _line(f: dict | None, money: bool = False) -> str:
+def _line(f: dict | None) -> str:
     if not f:
         return "n/a (fewer than two values of N)"
-    fmt = _usd if money else _tok
-    return f"intercept {fmt(f['intercept'])}, slope {fmt(f['slope'])} per fix"
+    return f"intercept {_tok(f['intercept'])}, slope {_tok(f['slope'])} per fix"
 
 
 def render_markdown(matrix: dict) -> str:
     """The report. Pure: the same matrix gives the same bytes (no clock, sorted, fixed formats)."""
-    meta, prices = matrix["meta"], matrix["meta"].get("prices")
+    meta = matrix["meta"]
     analysis = analyze(matrix)
     runs = len(matrix["cells"])
-    lines = [f"# Cost of {meta['command']} on {meta['example']} — {meta['date']}", "", "## Setup", ""]
+    lines = [f"# Tokens of {meta['command']} on {meta['example']} — {meta['date']}", "", "## Setup", ""]
     lines += [
         f"- Example: `{meta['example']}`, command `{meta['command']}`, model `{meta['model']}`.",
         f"- Fixes per run (N): {', '.join(str(n) for n in meta['defects'])}; "
@@ -349,35 +265,24 @@ def render_markdown(matrix: dict) -> str:
     ]
     for label in meta["labels"]:
         lines.append(f"- Label `{label['label']}`: plugin {label['version'] or '?'} at `{label['commit'] or '?'}`.")
-    if prices:
-        lines.append(f"- Prices (USD per million tokens, from `{meta.get('prices_file') or '?'}`, "
-                     f"used on {meta['date']}): " + ", ".join(f"{k} {prices[k]}" for k in tr.PRICE_KEYS) + ".")
-    else:
-        lines.append("- No `[cost]` table: tokens only, no dollars.")
     lines += ["- Each run: a fresh copy of the example, its tasks finished from a reference solution, N "
               "defects planted and N fixes opened through the CLI; only the command under measurement "
               "calls the model.", ""]
 
     lines += ["## Matrix", "",
-              "Billed = input + cache writes + output. Main thread and subagents apart.", ""]
-    head = "| label | N | rep | main billed | main cache read | main turns | ceremony | agents | agent billed | agent cache read |"
-    rule = "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
-    if prices:
-        head += " USD main | USD agent |"
-        rule += " ---: | ---: |"
-    lines += [head, rule]
+              "Billed = input + cache writes + output. Main thread and subagents apart.", "",
+              "| label | N | rep | main billed | main cache read | main turns | ceremony | agents "
+              "| agent billed | agent cache read |",
+              "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for cell in matrix["cells"]:
         if not cell.get("valid"):
             lines.append(f"| {cell['label']} | {cell['n']} | {cell['rep']} | invalid: {cell.get('reason', '?')} |"
-                         + " |" * (8 if prices else 6))
+                         + " |" * 6)
             continue
         main, agent = cell["main"], _agent(cell)
-        row = (f"| {cell['label']} | {cell['n']} | {cell['rep']} | {_tok(main['billed'])} | "
-               f"{_tok(main['cache_read'])} | {main['turns']} | {main['ceremony']} | {cell['agents']} | "
-               + (f"{_tok(agent['billed'])} | {_tok(agent['cache_read'])} |" if agent else "unknown | unknown |"))
-        if prices:
-            row += f" {_usd(main['usd'])} | " + (f"{_usd(agent['usd'])} |" if agent else "? |")
-        lines.append(row)
+        lines.append(f"| {cell['label']} | {cell['n']} | {cell['rep']} | {_tok(main['billed'])} | "
+                     f"{_tok(main['cache_read'])} | {main['turns']} | {main['ceremony']} | {cell['agents']} | "
+                     + (f"{_tok(agent['billed'])} | {_tok(agent['cache_read'])} |" if agent else "unknown | unknown |"))
     lines.append("")
     kinds = sorted({k for c in matrix["cells"] if _agent(c) for k in c["agent"]["by_type"]})
     if kinds:
@@ -397,7 +302,7 @@ def render_markdown(matrix: dict) -> str:
 
     lines += ["## Fitted line", "",
               "Least squares over every valid repetition, billed tokens against N. The intercept is the "
-              "fixed ceremony of an invocation; the slope is what one more fix costs. **The subagent floor "
+              "fixed ceremony of an invocation; the slope is what one more fix adds. **The subagent floor "
               "is the slope of the agent side**: what the rite spends in fresh contexts per fix.", ""]
     for label, a in analysis.items():
         lines.append(f"### `{label}`")
@@ -407,43 +312,24 @@ def render_markdown(matrix: dict) -> str:
         lines.append(f"- **Subagent floor: {_line(a['agent'])}.**")
         for kind, f in a["by_type"].items():
             lines.append(f"  - `{kind}`: {_line(f)}.")
-        if prices:
-            lines.append(f"- In dollars — total: {_line(a['usd']['total'], True)}; "
-                         f"**agent: {_line(a['usd']['agent'], True)}**.")
-            for kind, f in a["usd"]["by_type"].items():
-                lines.append(f"  - `{kind}`: {_line(f, True)}.")
         lines.append("")
 
     lines += ["## Reading", ""]
     for label, a in analysis.items():
-        floor, money = a["agent"], (a.get("usd") or {}).get("agent")
+        floor = a["agent"]
         if not floor:
             lines.append(f"- `{label}`: no floor — fewer than two values of N measured the agent side.")
             continue
-        sentence = f"- `{label}`: each fix adds {_tok(floor['slope'])} billed tokens in subagents"
-        if money:
-            sentence += f" ({_usd(money['slope'])})"
         per_type = ", ".join(f"`{k}` {_tok(f['slope'])}" for k, f in a["by_type"].items() if f)
-        sentence += (f" — {per_type}. An agent added to the rite costs at least its own per-call share "
+        lines.append(f"- `{label}`: each fix adds {_tok(floor['slope'])} billed tokens in subagents — "
+                     f"{per_type}. An agent added to the rite takes at least its own per-call share "
                      f"of this on every invocation that starts it, before it does any work.")
-        lines.append(sentence)
     lines.append("")
 
-    lines += ["## Triage decision", "",
-              f"Is a `{REPRODUCER}` per fix dearer than running its evidence in the main thread? Inline, "
-              "the main thread pays twice: for holding the output (estimated: bytes / "
-              f"{BYTES_PER_TOKEN} as tokens, written once, then read from cache on every later turn) and "
-              "for the turns spent running the commands, which only a run with inline triage can count. "
-              "Each N is judged with no extra turn and with one extra turn per fix; the break-even is the "
-              "number of main-thread turns per fix at which both cost the same.", ""]
+    lines += ["## Triage decision", ""]
     for label, a in analysis.items():
         t = a["triage"]
-        lines.append(f"- `{label}`: **{t['verdict']}** — {t['why']}."
-                     + (f" `[limits].inline_triage_max` = {t['inline_triage_max']}." if "inline_triage_max" in t else ""))
-        for r in t.get("rows", []):
-            lines.append(f"  - N={r['n']}: reproducer {_usd(r['agent_per_fix'])} per fix; output held inline "
-                         f"{_usd(r['inline_per_fix'])} per fix; one main-thread turn {_usd(r['main_turn'])}; "
-                         f"break-even {r['break_even_turns']:.2f} turns per fix; dispersion {_usd(r['noise'])}.")
+        lines.append(f"- `{label}`: **{t['verdict']}** — {t['why']}.")
     lines.append("")
 
     lines += ["## Caveats", ""]
@@ -456,11 +342,7 @@ def render_markdown(matrix: dict) -> str:
                      f"Invalid runs: {a['invalid']}; runs with an unknown agent side: {a['unknown']}.")
     lines += [
         "- Not controlled: the model's own variance; fixes written by the seeding harness rather than by "
-        "a review (same evidence and files, plainer prose); prompt-cache state across runs; the price "
-        "table's date.",
-        f"- The inline estimate assumes {BYTES_PER_TOKEN} bytes per token and that the output would be "
-        "held until the end of the invocation. The cost of one main-thread turn is the run's main-thread "
-        "dollars divided by its turns: an average, while a later turn costs more than an early one.",
+        "a review (same evidence and files, plainer prose); prompt-cache state across runs.",
         "",
     ]
     return "\n".join(lines)
@@ -483,10 +365,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repeat", type=int, default=2)
     p.add_argument("--model", default="sonnet")
     p.add_argument("--command", choices=sorted(COMMANDS), default="fix-all")
-    p.add_argument("--prices", help="TOML with a [cost] table (USD per million tokens)")
     p.add_argument("--estimate-from", help="glob of past transcripts to estimate from (default: baseline)")
     p.add_argument("--name", help="report name (default: <command>-<labels>)")
-    p.add_argument("--out", default=str(ROOT / "docs" / "cost"))
+    p.add_argument("--out", default=str(ROOT / "docs" / "tokens"))
     p.add_argument("--dry-run", action="store_true", help="print the matrix and its estimated cost")
     p.add_argument("--yes", action="store_true", help="run it: spends tokens")
     p.add_argument("--keep", action="store_true", help="keep the temporary repositories")
@@ -501,18 +382,14 @@ def main(argv: list[str] | None = None) -> int:
     labels = args.label or (["as-is"] if len(plugins) == 1 else [])
     if len(labels) != len(plugins):
         p.error("give one --label per --plugin")
-    prices = tr.load_prices(Path(args.prices)) if args.prices else None
-    if args.prices and prices is None:
-        p.error(f"no complete [cost] table in {args.prices}")
     defects = [int(x) for x in args.defects.split(",") if x.strip()]
     cells = plan_cells(labels, defects, args.repeat, args.command)
 
-    guess = estimate(cells, reference(args.example, args.command, args.estimate_from), args.command, prices)
+    guess = estimate(cells, reference(args.example, args.command, args.estimate_from), args.command)
     print(f"{args.command} on {args.example}, model {args.model}: {len(cells)} run(s)")
     for cell in cells:
         print(f"  {cell['label']:<12} N={cell['n']}  rep {cell['rep']}")
     print(f"estimate: ~{guess['tokens']:,} tokens"
-          + (f", ~${guess['usd']:.2f}" if guess["usd"] is not None else " (no [cost]: no dollars)")
           + ("" if guess["agents_included"] else "; agent side NOT included (the reference has none)"))
     if args.dry_run:
         return 0
@@ -526,14 +403,13 @@ def main(argv: list[str] | None = None) -> int:
     matrix = {
         "meta": {"example": args.example, "command": COMMANDS[args.command], "model": args.model,
                  "date": today, "defects": defects, "repeat": args.repeat,
-                 "labels": [{"label": l, **plugin_info(pl)} for l, pl in zip(labels, plugins)],
-                 "prices": prices, "prices_file": args.prices},
+                 "labels": [{"label": l, **plugin_info(pl)} for l, pl in zip(labels, plugins)]},
         "cells": [],
     }
     by_label = dict(zip(labels, plugins))
     for cell in cells:
         print(f"\n=== {cell['label']} N={cell['n']} rep {cell['rep']}", flush=True)
-        matrix["cells"].append(run_cell(args, cell, by_label[cell["label"]], prices))
+        matrix["cells"].append(run_cell(args, cell, by_label[cell["label"]]))
         write_matrix(json_path, matrix)  # after every cell: a crash keeps what was paid for
     print(f"\nmatrix: {json_path}\nreport: {write_report(json_path)}")
     return 0

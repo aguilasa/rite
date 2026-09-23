@@ -61,8 +61,6 @@ DEFAULTS: dict = {
     "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40},
     "status": {"review_age_days": 7},
     "hooks": {"stop_check": False},
-    # USD per million tokens, read by `rite cost`; all zero = not declared, and no dollars are shown
-    "cost": {"input": 0.0, "output": 0.0, "cache_write": 0.0, "cache_read": 0.0},
 }
 
 ENUMS = {
@@ -163,11 +161,6 @@ def parse(root: Path, text: str) -> Config:
     for res in data["resources"]["serialized"]:
         if not isinstance(res, dict) or "name" not in res:
             errors.append("[resources].serialized entries need a 'name'")
-    prices = data["cost"].values()
-    if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in prices):
-        errors.append("[cost] prices must be numbers >= 0")
-    elif any(prices) and not all(prices):
-        errors.append("[cost] declare all four prices (input, output, cache_write, cache_read) or none")
     if errors:
         raise ConfigError(f"{CONFIG_NAME}: " + "; ".join(errors))
     return Config(root=root, data=data)

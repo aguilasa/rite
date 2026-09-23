@@ -13,8 +13,7 @@
             "n": 1,
             "output": 332,
             "shell_bytes": 11,
-            "turns": 2,
-            "usd": 0.02267
+            "turns": 2
           },
           "rite:rite-worker": {
             "billed": 13172,
@@ -25,16 +24,14 @@
             "n": 1,
             "output": 1131,
             "shell_bytes": 1899,
-            "turns": 5,
-            "usd": 0.049009
+            "turns": 5
           }
         },
         "cache_read": 44272,
         "cache_write": 19267,
         "input": 14,
         "output": 1463,
-        "turns": 7,
-        "usd": 0.07168
+        "turns": 7
       },
       "agents": 2,
       "label": "as-is",
@@ -45,8 +42,7 @@
         "ceremony": 5,
         "input": 18,
         "output": 3436,
-        "turns": 9,
-        "usd": 0.177424
+        "turns": 9
       },
       "n": 1,
       "open_fixes_after": 0,
@@ -67,8 +63,7 @@
             "n": 1,
             "output": 317,
             "shell_bytes": 11,
-            "turns": 2,
-            "usd": 0.01225
+            "turns": 2
           },
           "rite:rite-worker": {
             "billed": 6933,
@@ -79,16 +74,14 @@
             "n": 1,
             "output": 633,
             "shell_bytes": 824,
-            "turns": 4,
-            "usd": 0.028777
+            "turns": 4
           }
         },
         "cache_read": 44356,
         "cache_write": 9053,
         "input": 12,
         "output": 950,
-        "turns": 6,
-        "usd": 0.041028
+        "turns": 6
       },
       "agents": 2,
       "label": "as-is",
@@ -99,8 +92,7 @@
         "ceremony": 5,
         "input": 18,
         "output": 3084,
-        "turns": 9,
-        "usd": 0.172204
+        "turns": 9
       },
       "n": 1,
       "open_fixes_after": 0,
@@ -121,8 +113,7 @@
             "n": 2,
             "output": 684,
             "shell_bytes": 12,
-            "turns": 4,
-            "usd": 0.02462
+            "turns": 4
           },
           "rite:rite-worker": {
             "billed": 14200,
@@ -133,16 +124,14 @@
             "n": 2,
             "output": 1520,
             "shell_bytes": 2397,
-            "turns": 10,
-            "usd": 0.06455
+            "turns": 10
           }
         },
         "cache_read": 109824,
         "cache_write": 18044,
         "input": 28,
         "output": 2204,
-        "turns": 14,
-        "usd": 0.089171
+        "turns": 14
       },
       "agents": 4,
       "label": "as-is",
@@ -153,8 +142,7 @@
         "ceremony": 7,
         "input": 32,
         "output": 4449,
-        "turns": 16,
-        "usd": 0.286726
+        "turns": 16
       },
       "n": 2,
       "open_fixes_after": 0,
@@ -175,8 +163,7 @@
             "n": 2,
             "output": 596,
             "shell_bytes": 12,
-            "turns": 4,
-            "usd": 0.023888
+            "turns": 4
           },
           "rite:rite-worker": {
             "billed": 14054,
@@ -187,16 +174,14 @@
             "n": 2,
             "output": 1557,
             "shell_bytes": 719,
-            "turns": 10,
-            "usd": 0.063955
+            "turns": 10
           }
         },
         "cache_read": 107383,
         "cache_write": 17912,
         "input": 28,
         "output": 2153,
-        "turns": 14,
-        "usd": 0.087843
+        "turns": 14
       },
       "agents": 4,
       "label": "as-is",
@@ -207,8 +192,7 @@
         "ceremony": 7,
         "input": 34,
         "output": 5522,
-        "turns": 17,
-        "usd": 0.325881
+        "turns": 17
       },
       "n": 2,
       "open_fixes_after": 0,
@@ -229,8 +213,7 @@
             "n": 4,
             "output": 1022,
             "shell_bytes": 193,
-            "turns": 8,
-            "usd": 0.046476
+            "turns": 8
           },
           "rite:rite-worker": {
             "billed": 24412,
@@ -241,16 +224,14 @@
             "n": 4,
             "output": 4243,
             "shell_bytes": 2512,
-            "turns": 20,
-            "usd": 0.126256
+            "turns": 20
           }
         },
         "cache_read": 210210,
         "cache_write": 31171,
         "input": 56,
         "output": 5265,
-        "turns": 28,
-        "usd": 0.172732
+        "turns": 28
       },
       "agents": 8,
       "label": "as-is",
@@ -261,8 +242,7 @@
         "ceremony": 6,
         "input": 30,
         "output": 7872,
-        "turns": 15,
-        "usd": 0.364265
+        "turns": 15
       },
       "n": 4,
       "open_fixes_after": 0,
@@ -283,8 +263,7 @@
             "n": 4,
             "output": 1146,
             "shell_bytes": 113,
-            "turns": 8,
-            "usd": 0.047534
+            "turns": 8
           },
           "rite:rite-worker": {
             "billed": 23954,
@@ -295,16 +274,14 @@
             "n": 4,
             "output": 2998,
             "shell_bytes": 1797,
-            "turns": 15,
-            "usd": 0.106845
+            "turns": 15
           }
         },
         "cache_read": 165683,
         "cache_write": 31884,
         "input": 46,
         "output": 4144,
-        "turns": 23,
-        "usd": 0.154379
+        "turns": 23
       },
       "agents": 8,
       "label": "as-is",
@@ -315,8 +292,7 @@
         "ceremony": 8,
         "input": 40,
         "output": 10693,
-        "turns": 20,
-        "usd": 0.475315
+        "turns": 20
       },
       "n": 4,
       "open_fixes_after": 1,
@@ -342,13 +318,6 @@
       }
     ],
     "model": "sonnet",
-    "prices": {
-      "cache_read": 0.2,
-      "cache_write": 2.5,
-      "input": 2.0,
-      "output": 10.0
-    },
-    "prices_file": "docs/cost/prices.toml",
     "repeat": 2
   }
 }

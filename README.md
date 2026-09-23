@@ -159,14 +159,14 @@ python3 bin/rite.py <subcommand> ...                          # direct
 `begin`, `context`, `gates`, `sweep`, `finish` (the composites a command uses), plus `resolve-cycle`,
 `next`, `new-task`, `new-fix`, `commit-new`, `commit-refs`, `close`, `rebind`, `mark`,
 `mark-reviewed`, `mark-stale`, `sync`, `check`, `status`, `batch-plan`, `new-cycle`, `archive`,
-`publish`, `anchors`, `stats`, `relink`, `migrate`, `guard`, `cost` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
+`publish`, `anchors`, `stats`, `relink`, `migrate`, `guard`, `tokens` — see [docs/COMMANDS.md](docs/COMMANDS.md#cli). Exit codes: `0` ok, `1` failure / nothing
 selected, `3` no `rite.toml`.
 
 ## Configuration
 
 See [docs/CONFIG.md](docs/CONFIG.md). A commented default file is in [templates/rite.toml](templates/rite.toml).
-Adopting an existing backlog: [docs/MIGRATING.md](docs/MIGRATING.md). What a command costs, subagents
-included: [docs/COST.md](docs/COST.md).
+Adopting an existing backlog: [docs/MIGRATING.md](docs/MIGRATING.md). Where the tokens go, subagents
+included: [docs/TOKENS.md](docs/TOKENS.md).
 
 ## Development
 

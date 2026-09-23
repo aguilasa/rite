@@ -120,19 +120,18 @@ main thread commits, one item at a time. Default size 2; never "all" for tasks.
 
 A subagent is a fresh context: it pays for reading its payload again, but not for the main thread's
 history. Measured on `node-minimal` with Sonnet 5 (`tools/experiment.py`, report in
-[cost/2026-09-23-fixall-as-is.md](cost/2026-09-23-fixall-as-is.md)), one more fix in `/rite:fix-all`
-costs:
+[tokens/2026-09-23-fixall-as-is.md](tokens/2026-09-23-fixall-as-is.md)), one more fix in `/rite:fix-all`
+adds:
 
-| | Billed tokens | USD |
-| --- | ---: | ---: |
-| main thread | 9,912 | — |
-| **subagents (the floor)** | **7,122** | **$0.036** |
-| `rite-reproducer` | 2,367 | $0.010 |
-| `rite-worker` | 4,756 | $0.026 |
-| all | 17,034 | $0.114 |
+| | Billed tokens |
+| --- | ---: |
+| main thread | 9,912 |
+| **subagents (the floor)** | **7,122** |
+| `rite-reproducer` | 2,367 |
+| `rite-worker` | 4,756 |
+| all | 17,034 |
 
-One main-thread turn in the same runs costs $0.018–0.024, and it gets dearer as the context grows.
-A `/rite:review` (the control) spends 12,686 tokens, $0.055, in its reviewer.
+A `/rite:review` (the control) spends 12,686 billed tokens in its reviewer.
 
 **The rule it supports: delegate work that would cost the main thread more than about one turn.** An
 agent call costs roughly half a main-thread turn to one, so work that fits in less than half a turn
@@ -145,6 +144,6 @@ which needs a run with inline triage to count. Until that run exists the verdict
 **inconclusive**. Do not replace the reproducers on intuition, and do not "optimise" them away without
 that number.
 
-`rite cost` (`tools/token_report.py`) reports the agent side apart, per agent type. With the agent
+`rite tokens` (`tools/token_report.py`) reports the agent side apart, per agent type. With the agent
 fields in a baseline, `--check` fails on one agent more than the baseline, whatever the tolerance, so
 a new agent in the rite shows up in the gate.
