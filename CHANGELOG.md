@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `close`/`finish --no-repo --reason "…"`: close an item that has no work commit — its only artifact
+  is a document outside git, as in a workspace. `done_commit` records the sentinel `none`, which `check`
+  accepts; before, the item either borrowed an unrelated HEAD or had its frontmatter edited by hand and
+  left `check` red.
+
 ## [0.4.0] — 2026-09-22
 
 Cutting what an invocation costs. The measurement came first: `tools/token_report.py` reads Claude

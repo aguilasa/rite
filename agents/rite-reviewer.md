@@ -30,6 +30,8 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
    pitfalls entries it carries. Each matching pitfall is a check. Open another file only when the
    payload names one you need.
 2. `git show --stat <done_commit>` and read the diff of the work commit(s) (`git log --grep <ID>`).
+   `done_commit: none` means the task was closed with `--no-repo`: there is no diff. Read the documents
+   its Execution Log names instead, and measure them the same way.
 3. Answer the **four universal questions**, each with commands you ran:
    1. **Done criteria** — does each criterion hold *now*? Rerun every one.
    2. **Source of truth** — does the delivered work do what the anchored section says — no less, no

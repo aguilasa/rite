@@ -30,7 +30,7 @@ One task per invocation, then stop: small runs stay reviewable and resumable. Ba
    (payload of `rite context`, allowed files, gates) and verify its report: a clean context is cheaper.
 5. `rite gates --id <ID> --json`. Red → fix and rerun; if you cannot, go to *Blocked*.
 6. **Sweep**, then the **work commit**: code, docs, sweep edits and the task file's prose together.
-7. `rite finish <ID> --json` — closes the task, checks the cycle, names what comes next.
+7. `rite finish <ID> --json` — close, check, next.
 
 **Blocked** (missing dependency, gate you cannot fix, guarded path, contradiction with the source of
 truth): commit useful partial work, `rite mark <ID> blocked --reason "<cause, command, output>"
@@ -62,10 +62,10 @@ asked) · `3` no `rite.toml` — stop and tell the user to run `/rite:init`.
 Item frontmatter is the only state; the tables are views the CLI regenerates.
 
 - `rite begin <kind> [--cycle C] [--id ID] --json` resolves the cycle, takes the item and returns its
-  paths, the config digest and the commit template. Called twice it returns the same item, unchanged.
+  paths, the config digest and the commit template. Idempotent.
 - `rite finish <ID> [--sha S] --json` closes the item from its work commit, runs `check --quick` and
-  names the next one. Two commits per item — the work, then the CLI's record, because a commit cannot
-  contain its own SHA.
+  names the next one. Two commits per item — the work, then the CLI's record (a commit cannot hold its
+  own SHA). No work commit, only a document outside git: `--no-repo --reason "…"`, never borrow HEAD.
 - Others: `rite mark <ID> blocked|skipped --reason "…" --commit`, `mark-reviewed <ID> [--fixes …]`,
   `mark-stale <FIX> --reason "…"`, `rebind <ID> --sha <commit>` after a squash.
 - A **local cycle** writes the same fields and commits nothing (`"local": true`) — expected, not a

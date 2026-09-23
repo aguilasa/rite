@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import gitutil, markdown, views
-from .config import FIX_STATUSES, SEVERITIES, TASK_STATUSES
+from .config import FIX_STATUSES, NO_COMMIT, SEVERITIES, TASK_STATUSES
 from .model import Cycle, Item, Project, RiteError, display, resolve_link
 
 REQUIRED = {
@@ -201,6 +201,8 @@ class Checker:
         if item.status == "done":
             if not sha:
                 self.err(item.path, "status done without done_commit (use rite.py close)")
+            elif str(sha) == NO_COMMIT:  # closed with --no-repo: nothing to resolve
+                pass
             elif (root := self.git_root(item)) is None:
                 pass
             elif not gitutil.resolve(root, str(sha)):

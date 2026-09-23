@@ -43,12 +43,12 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `context ID` | the item, its anchored source-of-truth section, the profile rules that apply and matching pitfalls, capped |
 | `gates [--id ID]` | run the global and profile gates; tail of a passing one, whole output of a red one |
 | `sweep --terms a,b [--id ID]` | mentions of what an item changed, across cycle, plans and top-level docs |
-| `finish ID [--sha S]` | close the item, `check --quick`, and name the next one |
+| `finish ID [--sha S \| --no-repo --reason R]` | close the item, `check --quick`, and name the next one |
 | `resolve-cycle [name]` | cycle chosen by the rules, with prefix, profile, pitfalls, plan, ticket, local, workspace and its repos |
 | `next task\|review\|fix` | deterministic selection |
 | `new-task`, `new-fix` `[--repo R]`, `commit-new ID` | atomic ID allocation (`--repo`: the item's repository in a workspace); commit a new filled-in item |
 | `commit-refs ID` | subject template and trailers for an item's work commit |
-| `close ID [--sha S]` | record a finished item from its work commit |
+| `close ID [--sha S \| --no-repo --reason R]` | record a finished item from its work commit; `--no-repo` when it has none (`done_commit: none`) |
 | `rebind ID --sha S` | repoint `done_commit` after a squash or rebase rewrote the work commit |
 | `mark ID STATUS`, `mark-reviewed ID [--fixes …]`, `mark-stale FIX --reason …` | other transitions |
 | `sync`, `check [--quick]`, `status` | views, validation, summary; `sync`/`check`/`relink` take `--include-archived` |

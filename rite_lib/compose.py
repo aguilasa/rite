@@ -368,11 +368,11 @@ def sweep(project: Project, *, terms: list[str], cycle_name: str | None, item_id
 
 
 # --- finish --------------------------------------------------------------------
-def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str = "HEAD",
-           commit: bool = True) -> dict:
+def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str | None = None,
+           commit: bool = True, no_repo: bool = False, reason: str = "") -> dict:
     """Close the item, verify the cycle and say what comes next — the three calls that ended every run."""
     cycle, item = project.find_item(item_id, project.resolve_cycle(cycle_name) if cycle_name else None)
-    closed = ops.close(project, cycle, item, sha=sha, commit=commit)
+    closed = ops.close(project, cycle, item, sha=sha, commit=commit, no_repo=no_repo, reason=reason)
     cycle = project.load_cycle(cycle.path, archived=cycle.archived)
     findings = checkmod.run(project, [cycle], quick=True)
     errors = [str(f) for f in findings if f.level == "error"]

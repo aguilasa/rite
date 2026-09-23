@@ -60,6 +60,12 @@ A squash or rebase rewrites the work commit and leaves `done_commit` pointing at
 HEAD's history; `rite check` warns (errors once the old commit is gone) and `rite rebind <ID> --sha
 <commit>` repoints it without reopening the item or its review.
 
+Some items have no work commit: their only artifact is a document outside git, such as a workspace
+document. `rite close <ID> --no-repo --reason "…"` (or `finish`) records `done_commit: none`, dates the
+item today and puts the reason in its Execution Log; `check` accepts the sentinel instead of resolving
+it. Never borrow HEAD for such an item, and never write the fields by hand. If a work commit turns up
+later, `rebind` attaches it.
+
 ## Local cycles
 
 Some work is planned only for yourself: the code goes to the repository, the tasks never do.

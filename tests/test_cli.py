@@ -114,6 +114,29 @@ class LoopTest(FixtureCase):
         self.assertIsNone(res["commit"])
         self.assertEqual(self.log(1), ["feat: b"])
 
+    def test_close_without_work_commit(self):
+        self.fx.work_commit("src/a.py", "a\n", "feat: unrelated")
+        code, _, err = self.fx.rite("close", "ALP-TASK-01", "--no-repo")
+        self.assertEqual(code, 1)
+        self.assertIn("needs --reason", err)
+        code, _, err = self.fx.rite("close", "ALP-TASK-01", "--no-repo", "--sha", "HEAD", "--reason", "x")
+        self.assertEqual(code, 1)
+        self.assertIn("exclude each other", err)
+
+        res = self.js("close", "ALP-TASK-01", "--no-repo", "--reason", "edited docs/notes.md outside git")
+        self.assertEqual((res["done_commit"], res["work_subject"]), ("none", None))
+        path = self.root / "docs/rite/cycles/alpha/01-harness.md"
+        f = fields(path)
+        self.assertEqual((f["status"], f["done_commit"], f["reviewed_on"]), ("done", "none", "pending"))
+        self.assertIn("no work commit", path.read_text(encoding="utf-8"))
+        self.assertEqual(self.log(1), ["chore(rite): close ALP-TASK-01"])
+        self.assertEqual(self.check_errors("--all"), [])
+        self.assertEqual(self.check_errors("--all", "--quick"), [])
+
+        # a work commit found later can still be attached
+        sha = self.fx.work_commit("src/b.py", "b\n", "feat: late work")
+        self.assertEqual(self.js("rebind", "ALP-TASK-01", "--sha", sha)["done_commit"], sha)
+
     def test_order_overrides_id_order(self):
         # a task split late (04) must run before 02 and 03, without renumbering them
         write(self.root / "docs/rite/cycles/alpha/04-split.md",

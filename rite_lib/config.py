@@ -73,6 +73,8 @@ ENUMS = {
 TASK_STATUSES = ("pending", "in-progress", "done", "blocked", "skipped")
 FIX_STATUSES = ("pending", "in-progress", "done", "stale")
 SEVERITIES = ("critical", "high", "medium", "low")
+# done_commit of an item closed with --no-repo: its only artifact lives outside git. Not hex, never a SHA.
+NO_COMMIT = "none"
 
 
 class ConfigError(Exception):

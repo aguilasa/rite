@@ -118,7 +118,7 @@ def cmd_sweep(project: Project, args) -> int:
 
 def cmd_finish(project: Project, args) -> int:
     data = compose.finish(project, item_id=args.id, cycle_name=args.cycle, sha=args.sha,
-                          commit=not args.no_commit)
+                          commit=not args.no_commit, no_repo=args.no_repo, reason=args.reason)
     closed = data["closed"]
     lines = [_result_text("closed", closed)]
     lines.append("  check: " + ("clean" if not data["check"]["errors"]
@@ -182,7 +182,8 @@ def _result_text(verb: str, res: dict) -> str:
 
 def cmd_close(project: Project, args) -> int:
     cycle, item = _item(project, args, args.id)
-    res = ops.close(project, cycle, item, sha=args.sha, commit=not args.no_commit, force=args.force)
+    res = ops.close(project, cycle, item, sha=args.sha, commit=not args.no_commit, force=args.force,
+                    no_repo=args.no_repo, reason=args.reason)
     _emit(args, res, _result_text("closed", res))
     return EXIT_OK
 
@@ -417,6 +418,15 @@ def cmd_guard(project: Project, args) -> int:
 
 
 # --- parser --------------------------------------------------------------------
+def _work_commit_args(s: argparse.ArgumentParser) -> None:
+    """close and finish: the work commit, or --no-repo when the only artifact lives outside git."""
+    s.add_argument("--sha", help="the work commit (default HEAD)")
+    s.add_argument("--no-repo", action="store_true",
+                   help=f"finished without a work commit (a document outside git); records done_commit: "
+                        f"{config.NO_COMMIT}, needs --reason")
+    s.add_argument("--reason", default="", help="with --no-repo: what was done and where")
+
+
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--root", help="repository root (default: nearest folder with rite.toml)")
@@ -454,7 +464,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("finish", parents=[common], help="close the item, check the cycle, pick the next")
     s.add_argument("id")
-    s.add_argument("--sha", default="HEAD")
+    _work_commit_args(s)
     s.add_argument("--no-commit", action="store_true")
     s.set_defaults(fn=cmd_finish)
 
@@ -487,7 +497,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("close", parents=[common], help="record a finished item from its work commit")
     s.add_argument("id")
-    s.add_argument("--sha", default="HEAD", help="the work commit (default HEAD)")
+    _work_commit_args(s)
     s.add_argument("--no-commit", action="store_true")
     s.add_argument("--force", action="store_true")
     s.set_defaults(fn=cmd_close)

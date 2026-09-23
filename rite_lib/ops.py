@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 from . import frontmatter, gitutil, views
-from .config import FIX_STATUSES, SEVERITIES, TASK_STATUSES
+from .config import FIX_STATUSES, NO_COMMIT, SEVERITIES, TASK_STATUSES
 from .markdown import append_to_section
 from .model import Cycle, Item, Project, RiteError, display, make_link
 from .naming import slugify
@@ -218,11 +218,18 @@ def commit_new(project: Project, cycle: Cycle, item: Item) -> dict:
 
 
 # --- status transitions ------------------------------------------------------
-def close(project: Project, cycle: Cycle, item: Item, *, sha: str = "HEAD", commit: bool = True,
-          force: bool = False) -> dict:
-    """Record a finished item from its work commit, then commit the bookkeeping separately."""
+def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None, commit: bool = True,
+          force: bool = False, no_repo: bool = False, reason: str = "") -> dict:
+    """Record a finished item from its work commit, then commit the bookkeeping separately.
+
+    With `no_repo` there is no work commit: the item's only artifact lives outside git (a workspace
+    document). `done_commit` gets the NO_COMMIT sentinel and the reason goes in the Execution Log.
+    """
     if item.status not in ("pending", "in-progress") and not force:
         raise RiteError(f"{item.id} has status {item.status!r}; only pending/in-progress items can be closed")
+    if no_repo:
+        return _close_without_commit(project, cycle, item, sha=sha, reason=reason, commit=commit)
+    sha = sha or "HEAD"
     root = project.git_root(item)
     if not gitutil.is_repo(root):
         raise RiteError("close needs git: done_on and the file list come from the work commit")
@@ -246,6 +253,23 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str = "HEAD", comm
     _write_item(item, updates, "\n".join(log), project.cfg["sections"]["execution_log"])
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": short, "work_subject": subj,
+            **result}
+
+
+def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: str | None, reason: str,
+                          commit: bool) -> dict:
+    if sha:
+        raise RiteError("--no-repo and --sha exclude each other: an item has a work commit or it has none")
+    if not reason.strip():
+        raise RiteError("close --no-repo needs --reason: what was done and where (which documents)")
+    date = dt.date.today().isoformat()
+    updates = {"status": "done", "done_on": date, "done_commit": NO_COMMIT}
+    if item.kind == "task":
+        updates["reviewed_on"] = "pending"
+    _write_item(item, updates, f"- **Closed** — no work commit ({date}): {reason.strip()}",
+                project.cfg["sections"]["execution_log"])
+    result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
+    return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": NO_COMMIT, "work_subject": None,
             **result}
 
 

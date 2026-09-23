@@ -29,7 +29,7 @@ One task per invocation, then stop: small runs stay reviewable and resumable. Ba
    (payload of `rite context`, allowed files, gates) and verify its report: a clean context is cheaper.
 5. `rite gates --id <ID> --json`. Red → fix and rerun; if you cannot, go to *Blocked*.
 6. **Sweep**, then the **work commit**: code, docs, sweep edits and the task file's prose together.
-7. `rite finish <ID> --json` — closes the task, checks the cycle, names what comes next.
+7. `rite finish <ID> --json` — close, check, next.
 
 **Blocked** (missing dependency, gate you cannot fix, guarded path, contradiction with the source of
 truth): commit useful partial work, `rite mark <ID> blocked --reason "<cause, command, output>"

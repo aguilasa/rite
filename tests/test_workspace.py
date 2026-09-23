@@ -96,6 +96,19 @@ class WorkspaceTest(WorkspaceCase):
                       "--severity", "low")
         self.assertEqual(fields(self.root / fix["path"])["repo"], "api")  # inherited from the origin
 
+    def test_finish_without_work_commit(self):
+        self.new_cycle()
+        before = {r: self.log(r) for r in ("api", "web")}
+        data = self.js("finish", "DEMO-TASK-01", "--no-repo", "--reason", "edited docs/plans/plan-name.md")
+        self.assertEqual((data["closed"]["done_commit"], data["closed"]["commit"]), ("none", None))
+        self.assertEqual(data["check"]["errors"], [])
+        t1 = self.root / "docs/rite/cycles/demo/01-task-1.md"
+        self.assertEqual(fields(t1)["done_commit"], "none")
+        self.assertIn("edited docs/plans/plan-name.md", t1.read_text(encoding="utf-8"))
+        self.assertEqual({r: self.log(r) for r in ("api", "web")}, before)  # nothing committed anywhere
+        errors, _ = self.check()
+        self.assertEqual([e for e in errors if "phase" not in e], [])
+
     def test_refusals_and_check(self):
         self.js("new-cycle", "demo", "--prefix", "DEMO")
         code, _, err = self.rite("new-task", "--cycle", "demo", "--title", "X", "--type", "feature",
