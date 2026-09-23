@@ -11,6 +11,17 @@ rite tokens --glob "*slugkit*" --top 10
 rite tokens --glob "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
 ```
 
+## The unit
+
+Four counts are printed apart: `input`, `cache_write`, `cache_read`, `output`, then `billed`
+(input + cache writes + output) and `turns`. Adding a cache read to the rest would hide that it is
+an order of magnitude cheaper. So every comparison uses one number:
+
+    effective = billed + w × cache_read
+
+`w` is `--cache-weight` (default `0.1`): the rate of a cache read relative to an input token — a
+ratio of rates, not a price. It is printed next to every effective number.
+
 ## Main thread and subagents
 
 Every number at the top level is the main thread. A subagent (`rite-worker`, `rite-reviewer`,

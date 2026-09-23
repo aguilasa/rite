@@ -221,7 +221,7 @@ def triage_verdict(cells: list[dict]) -> dict:
     return {"verdict": "none", "why": "not judged: the verdict in tokens is not written yet"}
 
 
-def analyze(matrix: dict) -> dict:
+def analyze(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> dict:
     out = {}
     for label in [l["label"] for l in matrix["meta"]["labels"]]:
         cells = [c for c in matrix["cells"] if c["label"] == label and c.get("valid")]
@@ -238,6 +238,12 @@ def analyze(matrix: dict) -> dict:
                         for k in kinds},
             "spread": spread(total),
             "triage": triage_verdict(known),
+            "effective": {
+                "main": fit(_series(cells, lambda c: tr.effective(c["main"]["billed"], c["main"]["cache_read"],
+                                                                  weight))),
+                "agent": fit(_series(known, lambda c: tr.effective(c["agent"]["billed"],
+                                                                   c["agent"]["cache_read"], weight))),
+            },
         }
     return out
 
@@ -252,10 +258,11 @@ def _line(f: dict | None) -> str:
     return f"intercept {_tok(f['intercept'])}, slope {_tok(f['slope'])} per fix"
 
 
-def render_markdown(matrix: dict) -> str:
-    """The report. Pure: the same matrix gives the same bytes (no clock, sorted, fixed formats)."""
+def render_markdown(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> str:
+    """The report. Pure: the same matrix and weight give the same bytes (no clock, sorted, fixed
+    formats)."""
     meta = matrix["meta"]
-    analysis = analyze(matrix)
+    analysis = analyze(matrix, weight)
     runs = len(matrix["cells"])
     lines = [f"# Tokens of {meta['command']} on {meta['example']} — {meta['date']}", "", "## Setup", ""]
     lines += [
@@ -267,7 +274,9 @@ def render_markdown(matrix: dict) -> str:
         lines.append(f"- Label `{label['label']}`: plugin {label['version'] or '?'} at `{label['commit'] or '?'}`.")
     lines += ["- Each run: a fresh copy of the example, its tasks finished from a reference solution, N "
               "defects planted and N fixes opened through the CLI; only the command under measurement "
-              "calls the model.", ""]
+              "calls the model.",
+              f"- Effective = billed + {weight:g} × cache read: {tr.WEIGHT_NOTE}. Every comparison below "
+              "is in effective tokens.", ""]
 
     lines += ["## Matrix", "",
               "Billed = input + cache writes + output. Main thread and subagents apart.", "",
@@ -312,6 +321,8 @@ def render_markdown(matrix: dict) -> str:
         lines.append(f"- **Subagent floor: {_line(a['agent'])}.**")
         for kind, f in a["by_type"].items():
             lines.append(f"  - `{kind}`: {_line(f)}.")
+        lines.append(f"- Effective (w = {weight:g}) — main thread: {_line(a['effective']['main'])}; "
+                     f"subagents: {_line(a['effective']['agent'])}.")
         lines.append("")
 
     lines += ["## Reading", ""]
@@ -348,11 +359,11 @@ def render_markdown(matrix: dict) -> str:
     return "\n".join(lines)
 
 
-def write_report(json_path: Path) -> Path:
+def write_report(json_path: Path, weight: float = tr.CACHE_WEIGHT) -> Path:
     matrix = json.loads(json_path.read_text(encoding="utf-8"))
     md_path = json_path.with_suffix(".md")
     with open(md_path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(render_markdown(matrix))
+        fh.write(render_markdown(matrix, weight))
     return md_path
 
 
@@ -372,10 +383,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--yes", action="store_true", help="run it: spends tokens")
     p.add_argument("--keep", action="store_true", help="keep the temporary repositories")
     p.add_argument("--report", help="only (re)write the markdown report of this matrix JSON")
+    p.add_argument("--cache-weight", type=float, default=tr.CACHE_WEIGHT,
+                   help=f"weight of a cache read in effective tokens ({tr.WEIGHT_NOTE})")
     args = p.parse_args(argv)
 
     if args.report:
-        print(f"report: {write_report(Path(args.report))}")
+        print(f"report: {write_report(Path(args.report), args.cache_weight)}")
         return 0
 
     plugins = [Path(x).resolve() for x in (args.plugin or [str(ROOT)])]
@@ -411,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n=== {cell['label']} N={cell['n']} rep {cell['rep']}", flush=True)
         matrix["cells"].append(run_cell(args, cell, by_label[cell["label"]]))
         write_matrix(json_path, matrix)  # after every cell: a crash keeps what was paid for
-    print(f"\nmatrix: {json_path}\nreport: {write_report(json_path)}")
+    print(f"\nmatrix: {json_path}\nreport: {write_report(json_path, args.cache_weight)}")
     return 0
 
 

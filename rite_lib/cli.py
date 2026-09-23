@@ -416,7 +416,8 @@ def cmd_tokens(args) -> int:
     if str(tools) not in sys.path:
         sys.path.insert(0, str(tools))
     import token_report
-    argv = ["--dir", args.dir, "--top", str(args.top), "--tolerance", str(args.tolerance)]
+    argv = ["--dir", args.dir, "--top", str(args.top), "--tolerance", str(args.tolerance),
+            "--cache-weight", str(args.cache_weight)]
     argv += ["--glob", args.glob] if args.glob else []
     argv += [x for c in args.command or [] for x in ("--command", c)]
     argv += ["--check", args.check] if args.check else []
@@ -615,6 +616,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--top", type=int, default=0, help="also list the N largest tool results")
     s.add_argument("--check", help="baseline JSON to compare against")
     s.add_argument("--tolerance", type=float, default=15.0, help="percent a metric may grow")
+    s.add_argument("--cache-weight", type=float, default=0.1,
+                   help="weight of a cache read in effective tokens (a ratio of rates, not a price)")
     s.set_defaults(fn=cmd_tokens, needs_project=False)
 
     s = sub.add_parser("guard", parents=[common], help="is this path read-only or generated?")

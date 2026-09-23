@@ -74,6 +74,20 @@ class TokenReportTest(unittest.TestCase):
         self.assertEqual(execute["billed"], 5 * 115)
         self.assertEqual(execute["cache_read"], 5 * 1000)
 
+    def test_four_counts_and_effective_at_the_printed_weight(self):
+        execute = self.measure()["commands"]["/rite:execute"]
+        self.assertEqual({k: execute[k] for k in ("input", "cache_write", "cache_read", "output")},
+                         {"input": 50, "cache_write": 500, "cache_read": 5000, "output": 25})
+        self.assertEqual(execute["effective"], 5 * 115 + 0.1 * 5000)
+        heavy = tr.summarize(tr.collect(self.dir, None), weight=1.0)
+        self.assertEqual(heavy["cache_weight"], 1.0)
+        self.assertEqual(heavy["commands"]["/rite:execute"]["effective"], 5 * 115 + 5000)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(tr.main(["--dir", str(self.dir), "--cache-weight", "0.25"]), 0)
+        self.assertIn("billed + 0.25 × cache read", out.getvalue())
+        self.assertIn("not a price", out.getvalue())
+
     def test_classification(self):
         tools = self.measure()["commands"]["/rite:execute"]["tools"]
         self.assertEqual(tools, {"rite:fragment": 1, "rite:cli": 1, "git": 1, "gate": 1,
@@ -267,7 +281,7 @@ class AgentAttributionTest(unittest.TestCase):
 
     def test_tokens_never_money(self):
         self.fix_all_session()
-        self.assertEqual(set(self.measure()), {"invocations", "commands"})
+        self.assertEqual(set(self.measure()), {"invocations", "cache_weight", "commands"})
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(tr.main(["--dir", str(self.dir)]), 0)

@@ -6,6 +6,7 @@
 - Fixes per run (N): 1, 2, 4; 1 repetition(s) each; 1 run(s) in all.
 - Label `as-is`: plugin 0.4.0 at `6143762-dirty`.
 - Each run: a fresh copy of the example, its tasks finished from a reference solution, N defects planted and N fixes opened through the CLI; only the command under measurement calls the model.
+- Effective = billed + 0.1 × cache read: w is the rate of a cache read relative to an input token, not a price. Every comparison below is in effective tokens.
 
 ## Matrix
 
@@ -31,6 +32,7 @@ Least squares over every valid repetition, billed tokens against N. The intercep
 - Main thread: n/a (fewer than two values of N).
 - **Subagent floor: n/a (fewer than two values of N).**
   - `rite:rite-reviewer`: n/a (fewer than two values of N).
+- Effective (w = 0.1) — main thread: n/a (fewer than two values of N); subagents: n/a (fewer than two values of N).
 
 ## Reading
 

@@ -13,7 +13,11 @@ started it), or inline as ``isSidechain`` entries. Both are attributed to the in
 the call and reported apart, as ``agent``. A call whose agent left no trace makes the command's agent
 side ``"unknown"`` — a declared gap, never a silent zero.
 
-Everything is counted in tokens, never in money. Only metrics are kept: sizes, tool names and
+Everything is counted in tokens, never in money. The four kinds are printed apart — input, cache
+writes, cache reads, output — with ``billed`` (everything but cache reads) and turns. Where two
+numbers are compared, the unit is ``effective = billed + w × cache_read``: a cache read is billed at a
+fraction ``w`` (``--cache-weight``, default 0.1) of an input token. ``w`` is a ratio of rates, not a
+price, and it is printed next to every effective number. Only metrics are kept: sizes, tool names and
 targets, never the text of a transcript.
 
     python tools/token_report.py --dir ~/.claude/projects --glob "*node-minimal*" --top 10
@@ -50,6 +54,9 @@ FRAGMENT_RE = re.compile(r"(plugins[\\/].*[\\/])?(shared|parts|commands|agents)[
 CATEGORIES = ("rite:fragment", "rite:cli", "git", "read:project", "read:shell", "gate", "edit",
               "subagent", "other")
 AGENT_TOOLS = ("Task", "Agent")
+CACHE_WEIGHT = 0.1  # a cache read against an input token: a ratio of rates, not a price
+WEIGHT_NOTE = "w is the rate of a cache read relative to an input token, not a price"
+COUNTS = ("input", "cache_write", "cache_read", "output")
 SHELL_TOOLS = ("Bash", "PowerShell")
 
 
@@ -105,6 +112,14 @@ class Usage:
     @property
     def billed(self) -> int:
         return self.input + self.cache_write + self.output
+
+    def effective(self, weight: float = CACHE_WEIGHT) -> float:
+        return effective(self.billed, self.cache_read, weight)
+
+
+def effective(billed: float, cache_read: float, weight: float = CACHE_WEIGHT) -> float:
+    """The one number to compare: billed tokens, plus cache reads at their weight."""
+    return billed + weight * cache_read
 
 
 class AgentRun(Usage):
@@ -342,7 +357,16 @@ def median(values: list[float]) -> int:
     return int(statistics.median(values)) if values else 0
 
 
-def _agent_side(group: list[Invocation]) -> dict | str:
+def _counts(usages: list[Usage], weight: float) -> dict:
+    """Medians of the four counts, billed, turns and effective, over a group."""
+    out = {key: median([getattr(u, key) for u in usages]) for key in COUNTS}
+    out["billed"] = median([u.billed for u in usages])
+    out["turns"] = median([u.turns for u in usages])
+    out["effective"] = median([u.effective(weight) for u in usages])
+    return out
+
+
+def _agent_side(group: list[Invocation], weight: float = CACHE_WEIGHT) -> dict | str:
     """Medians of what the invocations' subagents cost, in total and per agent type."""
     if any(inv.agent_unknown for inv in group):
         return "unknown"
@@ -359,12 +383,7 @@ def _agent_side(group: list[Invocation]) -> dict | str:
         out = {}
         if counts is not None:
             out["n"] = median(counts)
-        out.update({
-            "billed": median([t.billed for t in totals]),
-            "cache_read": median([t.cache_read for t in totals]),
-            "output": median([t.output for t in totals]),
-            "turns": median([t.turns for t in totals]),
-        })
+        out.update(_counts(totals, weight))
         return out
 
     side = block([sums(inv.agents) for inv in group])
@@ -379,7 +398,7 @@ def _agent_side(group: list[Invocation]) -> dict | str:
     return side
 
 
-def summarize(invocations: list[Invocation]) -> dict:
+def summarize(invocations: list[Invocation], weight: float = CACHE_WEIGHT) -> dict:
     """Medians per command. The top-level numbers are the main thread; ``agent`` is its subagents."""
     by_command: dict[str, list[Invocation]] = {}
     for inv in invocations:
@@ -388,17 +407,14 @@ def summarize(invocations: list[Invocation]) -> dict:
     for name, group in sorted(by_command.items()):
         commands[name] = {
             "n": len(group),
-            "billed": median([i.billed for i in group]),
-            "cache_read": median([i.cache_read for i in group]),
-            "output": median([i.output for i in group]),
-            "turns": median([i.turns for i in group]),
+            **_counts(group, weight),
             "ceremony": median([i.ceremony for i in group]),
             "tools": {c: median([i.tools.get(c, 0) for i in group])
                       for c in CATEGORIES if any(i.tools.get(c) for i in group)},
             "agents": median([len(i.agents) for i in group]),
-            "agent": _agent_side(group),
+            "agent": _agent_side(group, weight),
         }
-    return {"invocations": len(invocations), "commands": commands}
+    return {"invocations": len(invocations), "cache_weight": weight, "commands": commands}
 
 
 def largest_results(invocations: list[Invocation], top: int) -> list[dict]:
@@ -409,15 +425,18 @@ def largest_results(invocations: list[Invocation], top: int) -> list[dict]:
 
 
 def render(data: dict, top: list[dict]) -> str:
-    lines = [f"{data['invocations']} invocation(s)", ""]
-    head = (f"{'command':28} {'n':>3} {'billed':>9} {'cache read':>11} {'turns':>6} {'ceremony':>9}"
-            f" {'agents':>7} {'agent billed':>13}")
+    w = data.get("cache_weight", CACHE_WEIGHT)
+    lines = [f"{data['invocations']} invocation(s); medians per invocation; "
+             f"effective = billed + {w:g} × cache read ({WEIGHT_NOTE})", ""]
+    head = (f"{'command':28} {'n':>3} {'input':>7} {'cache write':>11} {'cache read':>11} {'output':>7}"
+            f" {'billed':>9} {'effective':>10} {'turns':>6} {'ceremony':>9} {'agents':>7} {'agent billed':>13}")
     lines += [head, "-" * len(head)]
     for name, c in data["commands"].items():
         agent = c.get("agent", {})
         agent_billed = agent if isinstance(agent, str) else f"{agent.get('billed', 0):,}"
-        row = (f"{name[:28]:28} {c['n']:>3} {c['billed']:>9,} {c['cache_read']:>11,} "
-               f"{c['turns']:>6} {c['ceremony']:>9} {c.get('agents', 0):>7} {agent_billed:>13}")
+        row = (f"{name[:28]:28} {c['n']:>3} {c['input']:>7,} {c['cache_write']:>11,} {c['cache_read']:>11,} "
+               f"{c['output']:>7,} {c['billed']:>9,} {c['effective']:>10,} {c['turns']:>6} {c['ceremony']:>9} "
+               f"{c.get('agents', 0):>7} {agent_billed:>13}")
         lines.append(row)
         tools = ", ".join(f"{k} {v}" for k, v in c["tools"].items())
         if tools:
@@ -425,7 +444,8 @@ def render(data: dict, top: list[dict]) -> str:
         if isinstance(agent, dict):
             for kind, a in agent.get("by_type", {}).items():
                 lines.append(f"{'':28}     agent {kind}: n {a['n']}, billed {a['billed']:,}, "
-                             f"cache read {a['cache_read']:,}, turns {a['turns']}")
+                             f"cache read {a['cache_read']:,}, effective {a['effective']:,}, "
+                             f"turns {a['turns']}")
     if top:
         lines += ["", f"largest tool results ({len(top)}):"]
         lines += [f"  {r['bytes']:>8,} B  {r['tool']:<12} {r['target']}" for r in top]
@@ -480,6 +500,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--write-baseline", help="write the measurement as a baseline file")
     p.add_argument("--example", default="", help="example name stored in a written baseline")
     p.add_argument("--version", default="", help="version stored in a written baseline")
+    p.add_argument("--cache-weight", type=float, default=CACHE_WEIGHT,
+                   help=f"weight of a cache read in effective tokens (default {CACHE_WEIGHT}; {WEIGHT_NOTE})")
     args = p.parse_args(argv)
 
     invocations = collect(Path(args.dir).expanduser(), args.glob)
@@ -489,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
     if not invocations:
         print(f"token_report: no invocation found under {args.dir}", file=sys.stderr)
         return 2
-    data = summarize(invocations)
+    data = summarize(invocations, args.cache_weight)
     top = largest_results(invocations, args.top)
 
     if args.write_baseline:

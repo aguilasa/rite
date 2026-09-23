@@ -6,6 +6,7 @@
 - Fixes per run (N): 1, 2, 4; 2 repetition(s) each; 6 run(s) in all.
 - Label `as-is`: plugin 0.4.0 at `6143762`.
 - Each run: a fresh copy of the example, its tasks finished from a reference solution, N defects planted and N fixes opened through the CLI; only the command under measurement calls the model.
+- Effective = billed + 0.1 × cache read: w is the rate of a cache read relative to an input token, not a price. Every comparison below is in effective tokens.
 
 ## Matrix
 
@@ -42,6 +43,7 @@ Least squares over every valid repetition, billed tokens against N. The intercep
 - **Subagent floor: intercept 7,330, slope 7,122 per fix.**
   - `rite:rite-reproducer`: intercept 2,306, slope 2,367 per fix.
   - `rite:rite-worker`: intercept 5,024, slope 4,756 per fix.
+- Effective (w = 0.1) — main thread: intercept 50,028, slope 28,969 per fix; subagents: intercept 7,795, slope 11,793 per fix.
 
 ## Reading
 
