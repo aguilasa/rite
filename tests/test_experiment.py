@@ -72,5 +72,50 @@ class ExperimentTest(unittest.TestCase):
         self.assertIn("3 run(s)", out.getvalue())
 
 
+COST = Path(__file__).resolve().parent / "cost"
+
+
+class ReportTest(unittest.TestCase):
+    """The report is deterministic: a fixed matrix gives fixed bytes."""
+
+    def matrix(self) -> dict:
+        return json.loads((COST / "matrix.json").read_text(encoding="utf-8"))
+
+    def test_markdown_is_byte_for_byte(self):
+        expected = (COST / "report.md").read_bytes()
+        self.assertEqual(experiment.render_markdown(self.matrix()).encode("utf-8"), expected)
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / "2026-09-23-x.json"
+            copy.write_bytes((COST / "matrix.json").read_bytes())
+            first = experiment.write_report(copy).read_bytes()
+            second = experiment.write_report(copy).read_bytes()
+        self.assertEqual(first, expected)
+        self.assertEqual(first, second)
+
+    def test_fit_separates_ceremony_from_the_cost_per_fix(self):
+        line = experiment.analyze(self.matrix())["as-is"]
+        self.assertAlmostEqual(line["main"]["intercept"], 40500)
+        self.assertAlmostEqual(line["agent"]["slope"], 26150)
+        self.assertAlmostEqual(line["by_type"]["rite:rite-reproducer"]["slope"], 6900)
+        self.assertEqual(line["invalid"], 1)
+        self.assertIsNone(experiment.fit([(1, 10.0), (1, 12.0)]))  # one N: no line
+
+    def test_triage_verdicts(self):
+        cells = [c for c in self.matrix()["cells"] if c.get("valid")]
+        self.assertEqual(experiment.triage_verdict(cells, None)["verdict"], "none")
+        self.assertEqual(experiment.triage_verdict(cells, PRICES)["verdict"], "apply")
+        # an output that would be read back for ever makes the reproducer the cheaper side
+        heavy = json.loads(json.dumps(cells))
+        for cell in heavy:
+            cell["agent"]["by_type"]["rite:rite-reproducer"]["shell_bytes"] = 4_000_000 * cell["n"]
+        self.assertEqual(experiment.triage_verdict(heavy, PRICES)["verdict"], "do not apply")
+        # a difference within the dispersion decides nothing
+        noisy = json.loads(json.dumps(cells))
+        for cell in noisy:
+            if cell["rep"] == 2:
+                cell["agent"]["by_type"]["rite:rite-reproducer"]["usd"] *= 50
+        self.assertEqual(experiment.triage_verdict(noisy, PRICES)["verdict"], "inconclusive")
+
+
 if __name__ == "__main__":
     unittest.main()

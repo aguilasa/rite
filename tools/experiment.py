@@ -11,6 +11,12 @@ measurement, with the plugin tree the label names. The transcripts of that sessi
     python tools/experiment.py --example node-minimal --plugin . --label as-is --defects 1,2,4 \\
         --repeat 2 --model sonnet --dry-run
     python tools/experiment.py ... --yes                  # spends tokens: run --dry-run first
+    python tools/experiment.py --report docs/cost/<date>-<name>.json    # rewrite the markdown only
+
+A run writes ``docs/cost/<date>-<name>.json`` (the raw matrix, after every cell) and its sibling
+``.md``: setup, matrix, fitted line (intercept = fixed ceremony, slope = cost per fix, the slope of
+the agent side = the subagent floor), reading, triage decision, caveats. The markdown is rendered from
+the JSON alone, so the same matrix always gives the same bytes.
 
 ``--plugin``/``--label`` repeat to compare plugin trees. ``--command review`` measures the control:
 one defect, one review, one reviewer agent. Nothing here changes a prompt or the flow of the rite:
@@ -182,6 +188,281 @@ def write_matrix(path: Path, matrix: dict) -> None:
         fh.write(json.dumps(matrix, indent=2, sort_keys=True) + "\n")
 
 
+# --- the report -------------------------------------------------------------------
+REPRODUCER = "rite:rite-reproducer"
+BYTES_PER_TOKEN = 4  # rough, and said so in the report
+
+
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _series(cells: list[dict], value) -> list[tuple[int, float]]:
+    points = []
+    for cell in cells:
+        v = value(cell)
+        if v is not None:
+            points.append((cell["n"], float(v)))
+    return points
+
+
+def fit(points: list[tuple[int, float]]) -> dict | None:
+    """Least squares over every repetition: intercept = fixed ceremony, slope = cost per fix."""
+    if len({x for x, _ in points}) < 2:
+        return None
+    import statistics
+    slope, intercept = statistics.linear_regression([x for x, _ in points], [y for _, y in points])
+    return {"intercept": intercept, "slope": slope}
+
+
+def spread(points: list[tuple[int, float]]) -> dict[int, float]:
+    """Per N, max − min across repetitions."""
+    by_n: dict[int, list[float]] = {}
+    for x, y in points:
+        by_n.setdefault(x, []).append(y)
+    return {n: max(ys) - min(ys) for n, ys in sorted(by_n.items())}
+
+
+def _agent(cell: dict) -> dict | None:
+    return cell["agent"] if isinstance(cell.get("agent"), dict) else None
+
+
+def _type(cell: dict, kind: str) -> dict | None:
+    agent = _agent(cell)
+    return agent["by_type"].get(kind) if agent else None
+
+
+def inline_estimate(cell: dict, prices: dict) -> float | None:
+    """What keeping the reproduction output in the main context would have cost, per fix: its tokens
+    written once, then read back on every main turn that followed the triage."""
+    row = _type(cell, REPRODUCER)
+    if not row or not row["n"]:
+        return None
+    tokens = row["shell_bytes"] / BYTES_PER_TOKEN
+    turns_after = row["main_turns_after"] / row["n"]
+    usd = (tokens * prices["cache_write"] + tokens * turns_after * prices["cache_read"]) / 1_000_000
+    return usd / cell["n"]
+
+
+def triage_verdict(cells: list[dict], prices: dict | None) -> dict:
+    """The question the floor answers: does a reproducer per fix cost more than keeping its output
+    in the main context? Compared per N, against the dispersion between repetitions."""
+    if not prices:
+        return {"verdict": "none", "why": "no [cost] table: tokens alone cannot price a fresh context "
+                                          "against a growing one"}
+    rows = []
+    for n in sorted({c["n"] for c in cells}):
+        group = [c for c in cells if c["n"] == n]
+        agent = [(_type(c, REPRODUCER) or {}).get("usd") for c in group]
+        inline = [inline_estimate(c, prices) for c in group]
+        if any(v is None for v in agent + inline):
+            continue
+        per_fix = [v / n for v in agent]
+        diff = _mean(per_fix) - _mean(inline)
+        noise = max(max(per_fix) - min(per_fix), max(inline) - min(inline))
+        rows.append({"n": n, "agent_per_fix": _mean(per_fix), "inline_per_fix": _mean(inline),
+                     "diff": diff, "noise": noise})
+    if not rows:
+        return {"verdict": "none", "why": "no cell measured a reproducer"}
+    if all(abs(r["diff"]) <= r["noise"] for r in rows):
+        return {"verdict": "inconclusive", "rows": rows,
+                "why": "every difference is within the dispersion between repetitions"}
+    cheaper_inline = [r["n"] for r in rows if r["diff"] > r["noise"]]
+    cheaper_agent = [r["n"] for r in rows if -r["diff"] > r["noise"]]
+    if cheaper_inline and not cheaper_agent:
+        return {"verdict": "apply", "rows": rows, "inline_triage_max": max(cheaper_inline),
+                "why": "the reproducer costs more than its output would inline, beyond the dispersion, "
+                       "at every N measured — no crossover inside the range, so the limit is the largest "
+                       "N measured, not a measured crossover"}
+    if cheaper_agent and not cheaper_inline:
+        return {"verdict": "do not apply", "rows": rows,
+                "why": "keeping the output inline costs more than the reproducer, beyond the dispersion"}
+    if cheaper_inline and max(cheaper_inline) < min(cheaper_agent):
+        return {"verdict": "apply", "rows": rows, "inline_triage_max": max(cheaper_inline),
+                "why": "inline is cheaper up to this N, the reproducer beyond it"}
+    return {"verdict": "inconclusive", "rows": rows, "why": "the sign changes with N without a crossover"}
+
+
+def analyze(matrix: dict) -> dict:
+    prices = matrix["meta"].get("prices")
+    out = {}
+    for label in [l["label"] for l in matrix["meta"]["labels"]]:
+        cells = [c for c in matrix["cells"] if c["label"] == label and c.get("valid")]
+        known = [c for c in cells if _agent(c)]
+        total = _series(known, lambda c: c["main"]["billed"] + c["agent"]["billed"])
+        kinds = sorted({k for c in known for k in c["agent"]["by_type"]})
+        result = {
+            "cells": len(cells), "invalid": sum(1 for c in matrix["cells"]
+                                                if c["label"] == label and not c.get("valid")),
+            "unknown": len(cells) - len(known),
+            "total": fit(total), "main": fit(_series(cells, lambda c: c["main"]["billed"])),
+            "agent": fit(_series(known, lambda c: c["agent"]["billed"])),
+            "by_type": {k: fit(_series(known, lambda c, k=k: (_type(c, k) or {}).get("billed", 0)))
+                        for k in kinds},
+            "spread": spread(total),
+        }
+        if prices:
+            result["usd"] = {
+                "total": fit(_series(known, lambda c: c["main"]["usd"] + c["agent"]["usd"])),
+                "agent": fit(_series(known, lambda c: c["agent"]["usd"])),
+                "by_type": {k: fit(_series(known, lambda c, k=k: (_type(c, k) or {}).get("usd", 0)))
+                            for k in kinds},
+            }
+        result["triage"] = triage_verdict(known, prices)
+        out[label] = result
+    return out
+
+
+def _tok(value: float) -> str:
+    return f"{round(value):,}"
+
+
+def _usd(value: float) -> str:
+    return f"${value:.4f}"
+
+
+def _line(f: dict | None, money: bool = False) -> str:
+    if not f:
+        return "n/a (fewer than two values of N)"
+    fmt = _usd if money else _tok
+    return f"intercept {fmt(f['intercept'])}, slope {fmt(f['slope'])} per fix"
+
+
+def render_markdown(matrix: dict) -> str:
+    """The report. Pure: the same matrix gives the same bytes (no clock, sorted, fixed formats)."""
+    meta, prices = matrix["meta"], matrix["meta"].get("prices")
+    analysis = analyze(matrix)
+    runs = len(matrix["cells"])
+    lines = [f"# Cost of {meta['command']} on {meta['example']} — {meta['date']}", "", "## Setup", ""]
+    lines += [
+        f"- Example: `{meta['example']}`, command `{meta['command']}`, model `{meta['model']}`.",
+        f"- Fixes per run (N): {', '.join(str(n) for n in meta['defects'])}; "
+        f"{meta['repeat']} repetition(s) each; {runs} run(s) in all.",
+    ]
+    for label in meta["labels"]:
+        lines.append(f"- Label `{label['label']}`: plugin {label['version'] or '?'} at `{label['commit'] or '?'}`.")
+    if prices:
+        lines.append(f"- Prices (USD per million tokens, from `{meta.get('prices_file') or '?'}`, "
+                     f"used on {meta['date']}): " + ", ".join(f"{k} {prices[k]}" for k in tr.PRICE_KEYS) + ".")
+    else:
+        lines.append("- No `[cost]` table: tokens only, no dollars.")
+    lines += ["- Each run: a fresh copy of the example, its tasks finished from a reference solution, N "
+              "defects planted and N fixes opened through the CLI; only the command under measurement "
+              "calls the model.", ""]
+
+    lines += ["## Matrix", "",
+              "Billed = input + cache writes + output. Main thread and subagents apart.", ""]
+    head = "| label | N | rep | main billed | main cache read | main turns | ceremony | agents | agent billed | agent cache read |"
+    rule = "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    if prices:
+        head += " USD main | USD agent |"
+        rule += " ---: | ---: |"
+    lines += [head, rule]
+    for cell in matrix["cells"]:
+        if not cell.get("valid"):
+            lines.append(f"| {cell['label']} | {cell['n']} | {cell['rep']} | invalid: {cell.get('reason', '?')} |"
+                         + " |" * (8 if prices else 6))
+            continue
+        main, agent = cell["main"], _agent(cell)
+        row = (f"| {cell['label']} | {cell['n']} | {cell['rep']} | {_tok(main['billed'])} | "
+               f"{_tok(main['cache_read'])} | {main['turns']} | {main['ceremony']} | {cell['agents']} | "
+               + (f"{_tok(agent['billed'])} | {_tok(agent['cache_read'])} |" if agent else "unknown | unknown |"))
+        if prices:
+            row += f" {_usd(main['usd'])} | " + (f"{_usd(agent['usd'])} |" if agent else "? |")
+        lines.append(row)
+    lines.append("")
+    kinds = sorted({k for c in matrix["cells"] if _agent(c) for k in c["agent"]["by_type"]})
+    if kinds:
+        lines += ["Per agent type (billed / turns / shell output bytes):", ""]
+        lines += ["| label | N | rep | " + " | ".join(kinds) + " |",
+                  "| --- | ---: | ---: |" + " ---: |" * len(kinds)]
+        for cell in matrix["cells"]:
+            if not _agent(cell):
+                continue
+            parts = []
+            for kind in kinds:
+                row = _type(cell, kind)
+                parts.append(f"{row['n']}× {_tok(row['billed'])} / {row['turns']} / {_tok(row['shell_bytes'])}"
+                             if row else "—")
+            lines.append(f"| {cell['label']} | {cell['n']} | {cell['rep']} | " + " | ".join(parts) + " |")
+        lines.append("")
+
+    lines += ["## Fitted line", "",
+              "Least squares over every valid repetition, billed tokens against N. The intercept is the "
+              "fixed ceremony of an invocation; the slope is what one more fix costs. **The subagent floor "
+              "is the slope of the agent side**: what the rite spends in fresh contexts per fix.", ""]
+    for label, a in analysis.items():
+        lines.append(f"### `{label}`")
+        lines.append("")
+        lines.append(f"- Total: {_line(a['total'])}.")
+        lines.append(f"- Main thread: {_line(a['main'])}.")
+        lines.append(f"- **Subagent floor: {_line(a['agent'])}.**")
+        for kind, f in a["by_type"].items():
+            lines.append(f"  - `{kind}`: {_line(f)}.")
+        if prices:
+            lines.append(f"- In dollars — total: {_line(a['usd']['total'], True)}; "
+                         f"**agent: {_line(a['usd']['agent'], True)}**.")
+            for kind, f in a["usd"]["by_type"].items():
+                lines.append(f"  - `{kind}`: {_line(f, True)}.")
+        lines.append("")
+
+    lines += ["## Reading", ""]
+    for label, a in analysis.items():
+        floor, money = a["agent"], (a.get("usd") or {}).get("agent")
+        if not floor:
+            lines.append(f"- `{label}`: no floor — fewer than two values of N measured the agent side.")
+            continue
+        sentence = f"- `{label}`: each fix adds {_tok(floor['slope'])} billed tokens in subagents"
+        if money:
+            sentence += f" ({_usd(money['slope'])})"
+        per_type = ", ".join(f"`{k}` {_tok(f['slope'])}" for k, f in a["by_type"].items() if f)
+        sentence += (f" — {per_type}. An agent added to the rite costs at least its own per-call share "
+                     f"of this on every invocation that starts it, before it does any work.")
+        lines.append(sentence)
+    lines.append("")
+
+    lines += ["## Triage decision", "",
+              f"Does a `{REPRODUCER}` per fix cost more than keeping its output in the main context? The "
+              f"inline cost is an estimate: the reproducer's shell output (bytes / {BYTES_PER_TOKEN} as "
+              "tokens) written once, then read from cache on every main-thread turn that followed it.", ""]
+    for label, a in analysis.items():
+        t = a["triage"]
+        lines.append(f"- `{label}`: **{t['verdict']}** — {t['why']}."
+                     + (f" `[limits].inline_triage_max` = {t['inline_triage_max']}." if "inline_triage_max" in t else ""))
+        for r in t.get("rows", []):
+            lines.append(f"  - N={r['n']}: reproducer {_usd(r['agent_per_fix'])} per fix, inline "
+                         f"{_usd(r['inline_per_fix'])} per fix, difference {_usd(r['diff'])}, "
+                         f"dispersion {_usd(r['noise'])}.")
+    lines.append("")
+
+    lines += ["## Caveats", ""]
+    lines.append(f"- {meta['repeat']} repetition(s) per N: the line is a trend, not a law. "
+                 + ("One repetition measures no dispersion at all." if meta["repeat"] < 2 else
+                    "Two points per N bound the noise only loosely."))
+    for label, a in analysis.items():
+        sp = ", ".join(f"N={n}: {_tok(v)}" for n, v in a["spread"].items())
+        lines.append(f"- `{label}`: spread of total billed between repetitions — {sp or 'n/a'}. "
+                     f"Invalid runs: {a['invalid']}; runs with an unknown agent side: {a['unknown']}.")
+    lines += [
+        "- Not controlled: the model's own variance; fixes written by the seeding harness rather than by "
+        "a review (same evidence and files, plainer prose); prompt-cache state across runs; the price "
+        "table's date.",
+        f"- The inline estimate assumes {BYTES_PER_TOKEN} bytes per token, that the output would be "
+        "held until the end of the invocation, and that running the evidence commands inline takes no "
+        "more main-thread turns than starting the reproducers does (both fit in one message).",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_report(json_path: Path) -> Path:
+    matrix = json.loads(json_path.read_text(encoding="utf-8"))
+    md_path = json_path.with_suffix(".md")
+    with open(md_path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(render_markdown(matrix))
+    return md_path
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--example", default="node-minimal")
@@ -198,7 +479,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dry-run", action="store_true", help="print the matrix and its estimated cost")
     p.add_argument("--yes", action="store_true", help="run it: spends tokens")
     p.add_argument("--keep", action="store_true", help="keep the temporary repositories")
+    p.add_argument("--report", help="only (re)write the markdown report of this matrix JSON")
     args = p.parse_args(argv)
+
+    if args.report:
+        print(f"report: {write_report(Path(args.report))}")
+        return 0
 
     plugins = [Path(x).resolve() for x in (args.plugin or [str(ROOT)])]
     labels = args.label or (["as-is"] if len(plugins) == 1 else [])
@@ -238,7 +524,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n=== {cell['label']} N={cell['n']} rep {cell['rep']}", flush=True)
         matrix["cells"].append(run_cell(args, cell, by_label[cell["label"]], prices))
         write_matrix(json_path, matrix)  # after every cell: a crash keeps what was paid for
-    print(f"\nmatrix: {json_path}")
+    print(f"\nmatrix: {json_path}\nreport: {write_report(json_path)}")
     return 0
 
 

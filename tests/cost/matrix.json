@@ -1,0 +1,361 @@
+{
+  "cells": [
+    {
+      "agent": {
+        "billed": 25800,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 6800,
+            "cache_read": 24000,
+            "cache_write": 6120,
+            "input": 0,
+            "main_turns_after": 15,
+            "n": 1,
+            "output": 680,
+            "shell_bytes": 120,
+            "turns": 3,
+            "usd": 0.04035
+          },
+          "rite:rite-worker": {
+            "billed": 19000,
+            "cache_read": 85000,
+            "cache_write": 17100,
+            "input": 0,
+            "main_turns_after": 4,
+            "n": 1,
+            "output": 1900,
+            "shell_bytes": 2000,
+            "turns": 7,
+            "usd": 0.118125
+          }
+        },
+        "cache_read": 109000,
+        "cache_write": 23220,
+        "input": 0,
+        "output": 2580,
+        "turns": 10,
+        "usd": 0.158475
+      },
+      "agents": 2,
+      "label": "as-is",
+      "main": {
+        "billed": 45000,
+        "cache_read": 1050000,
+        "cache_write": 40500,
+        "ceremony": 14,
+        "input": 0,
+        "output": 4500,
+        "turns": 21,
+        "usd": 0.534375
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 26500,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 7000,
+            "cache_read": 24000,
+            "cache_write": 6300,
+            "input": 0,
+            "main_turns_after": 15,
+            "n": 1,
+            "output": 700,
+            "shell_bytes": 120,
+            "turns": 3,
+            "usd": 0.041325
+          },
+          "rite:rite-worker": {
+            "billed": 19500,
+            "cache_read": 85000,
+            "cache_write": 17550,
+            "input": 0,
+            "main_turns_after": 4,
+            "n": 1,
+            "output": 1950,
+            "shell_bytes": 2000,
+            "turns": 7,
+            "usd": 0.120563
+          }
+        },
+        "cache_read": 109000,
+        "cache_write": 23850,
+        "input": 0,
+        "output": 2650,
+        "turns": 10,
+        "usd": 0.161888
+      },
+      "agents": 2,
+      "label": "as-is",
+      "main": {
+        "billed": 46000,
+        "cache_read": 1050000,
+        "cache_write": 41400,
+        "ceremony": 14,
+        "input": 0,
+        "output": 4600,
+        "turns": 21,
+        "usd": 0.53925
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 51600,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 13600,
+            "cache_read": 48000,
+            "cache_write": 12240,
+            "input": 0,
+            "main_turns_after": 36,
+            "n": 2,
+            "output": 1360,
+            "shell_bytes": 240,
+            "turns": 6,
+            "usd": 0.0807
+          },
+          "rite:rite-worker": {
+            "billed": 38000,
+            "cache_read": 170000,
+            "cache_write": 34200,
+            "input": 0,
+            "main_turns_after": 8,
+            "n": 2,
+            "output": 3800,
+            "shell_bytes": 4000,
+            "turns": 14,
+            "usd": 0.23625
+          }
+        },
+        "cache_read": 218000,
+        "cache_write": 46440,
+        "input": 0,
+        "output": 5160,
+        "turns": 20,
+        "usd": 0.31695
+      },
+      "agents": 4,
+      "label": "as-is",
+      "main": {
+        "billed": 50000,
+        "cache_read": 1200000,
+        "cache_write": 45000,
+        "ceremony": 14,
+        "input": 0,
+        "output": 5000,
+        "turns": 24,
+        "usd": 0.60375
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 53000,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 14000,
+            "cache_read": 48000,
+            "cache_write": 12600,
+            "input": 0,
+            "main_turns_after": 36,
+            "n": 2,
+            "output": 1400,
+            "shell_bytes": 240,
+            "turns": 6,
+            "usd": 0.08265
+          },
+          "rite:rite-worker": {
+            "billed": 39000,
+            "cache_read": 170000,
+            "cache_write": 35100,
+            "input": 0,
+            "main_turns_after": 8,
+            "n": 2,
+            "output": 3900,
+            "shell_bytes": 4000,
+            "turns": 14,
+            "usd": 0.241125
+          }
+        },
+        "cache_read": 218000,
+        "cache_write": 47700,
+        "input": 0,
+        "output": 5300,
+        "turns": 20,
+        "usd": 0.323775
+      },
+      "agents": 4,
+      "label": "as-is",
+      "main": {
+        "billed": 51000,
+        "cache_read": 1200000,
+        "cache_write": 45900,
+        "ceremony": 14,
+        "input": 0,
+        "output": 5100,
+        "turns": 24,
+        "usd": 0.608625
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 103200,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 27200,
+            "cache_read": 96000,
+            "cache_write": 24480,
+            "input": 0,
+            "main_turns_after": 96,
+            "n": 4,
+            "output": 2720,
+            "shell_bytes": 480,
+            "turns": 12,
+            "usd": 0.1614
+          },
+          "rite:rite-worker": {
+            "billed": 76000,
+            "cache_read": 340000,
+            "cache_write": 68400,
+            "input": 0,
+            "main_turns_after": 16,
+            "n": 4,
+            "output": 7600,
+            "shell_bytes": 8000,
+            "turns": 28,
+            "usd": 0.4725
+          }
+        },
+        "cache_read": 436000,
+        "cache_write": 92880,
+        "input": 0,
+        "output": 10320,
+        "turns": 40,
+        "usd": 0.6339
+      },
+      "agents": 8,
+      "label": "as-is",
+      "main": {
+        "billed": 60000,
+        "cache_read": 1500000,
+        "cache_write": 54000,
+        "ceremony": 14,
+        "input": 0,
+        "output": 6000,
+        "turns": 30,
+        "usd": 0.7425
+      },
+      "n": 4,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 4,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 106000,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 28000,
+            "cache_read": 96000,
+            "cache_write": 25200,
+            "input": 0,
+            "main_turns_after": 96,
+            "n": 4,
+            "output": 2800,
+            "shell_bytes": 480,
+            "turns": 12,
+            "usd": 0.1653
+          },
+          "rite:rite-worker": {
+            "billed": 78000,
+            "cache_read": 340000,
+            "cache_write": 70200,
+            "input": 0,
+            "main_turns_after": 16,
+            "n": 4,
+            "output": 7800,
+            "shell_bytes": 8000,
+            "turns": 28,
+            "usd": 0.48225
+          }
+        },
+        "cache_read": 436000,
+        "cache_write": 95400,
+        "input": 0,
+        "output": 10600,
+        "turns": 40,
+        "usd": 0.64755
+      },
+      "agents": 8,
+      "label": "as-is",
+      "main": {
+        "billed": 61000,
+        "cache_read": 1500000,
+        "cache_write": 54900,
+        "ceremony": 14,
+        "input": 0,
+        "output": 6100,
+        "turns": 30,
+        "usd": 0.747375
+      },
+      "n": 4,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 4,
+      "valid": true
+    },
+    {
+      "label": "as-is",
+      "n": 4,
+      "reason": "3 open fixes before the run, 4 planted",
+      "rep": 3,
+      "valid": false
+    }
+  ],
+  "meta": {
+    "command": "/rite:fix-all",
+    "date": "2026-09-23",
+    "defects": [
+      1,
+      2,
+      4
+    ],
+    "example": "node-minimal",
+    "labels": [
+      {
+        "commit": "abc1234",
+        "label": "as-is",
+        "version": "0.4.0"
+      }
+    ],
+    "model": "sonnet",
+    "prices": {
+      "cache_read": 0.3,
+      "cache_write": 3.75,
+      "input": 3.0,
+      "output": 15.0
+    },
+    "prices_file": "docs/cost/prices.toml",
+    "repeat": 2
+  }
+}
