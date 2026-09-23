@@ -10,6 +10,28 @@ All notable changes to this project are documented here. Versions follow [SemVer
   is a document outside git, as in a workspace. `done_commit` records the sentinel `none`, which `check`
   accepts; before, the item either borrowed an unrelated HEAD or had its frontmatter edited by hand and
   left `check` red.
+- **`rite cost`** (`tools/token_report.py`) counts the subagents. Their turns sit next to the session,
+  in `subagents/agent-<id>.jsonl`, and the report used to drop them, so delegating commands looked
+  cheaper than they are. Each command now reports `agents` and `agent` (billed, cache reads, turns,
+  per agent type) apart from the main thread. It adds USD when a `[cost]` table is declared. An agent
+  call with no trace is `"unknown"`, never 0. `--check` fails on one agent more than the baseline.
+  Only metrics are kept ([docs/COST.md](docs/COST.md)).
+- **`tools/experiment.py`** measures what one more fix costs a `/rite:fix-all`. Each run starts from a
+  fresh copy of an example with its tasks finished from a reference solution and N fixes opened
+  through the CLI, so only the command under measurement calls the model. It fits a line (intercept =
+  fixed ceremony, slope = cost per fix) and writes a deterministic report to `docs/cost/`.
+
+### Measured
+
+- **The subagent floor**: 7,122 billed tokens, $0.036, per fix in `/rite:fix-all`, split into a
+  `rite-reproducer` at 2,367 tokens ($0.010) and a `rite-worker` at 4,756 ($0.026). The main thread
+  adds 9,912 per fix on a fixed ceremony of 19,373. Run on `node-minimal` with Sonnet 5, N = 1, 2, 4,
+  two repetitions each ([docs/cost/2026-09-23-fixall-as-is.md](docs/cost/2026-09-23-fixall-as-is.md)).
+  An agent call costs about half a main-thread turn to one, so **delegate work that would cost the
+  main thread more than about one turn**.
+- **Inline triage for `/rite:fix-all`: inconclusive.** Holding the reproduction output inline is
+  nearly free, but a reproducer costs only 0.49–0.90 main-thread turns per fix. Inline triage wins
+  only if it adds fewer turns than that, which only a run with inline triage can count.
 
 ## [0.4.0] — 2026-09-22
 

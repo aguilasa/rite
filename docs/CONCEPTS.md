@@ -115,3 +115,36 @@ projects, say. Rite detects it (the root is not a git repository) and runs in wo
 A batch relaxes one rule — more than one item per invocation — and nothing else. Items share a wave
 only when they share no file, no serialized resource and no dependency. Workers (subagents) edit; the
 main thread commits, one item at a time. Default size 2; never "all" for tasks.
+
+## Delegation cost
+
+A subagent is a fresh context: it pays for reading its payload again, but not for the main thread's
+history. Measured on `node-minimal` with Sonnet 5 (`tools/experiment.py`, report in
+[cost/2026-09-23-fixall-as-is.md](cost/2026-09-23-fixall-as-is.md)), one more fix in `/rite:fix-all`
+costs:
+
+| | Billed tokens | USD |
+| --- | ---: | ---: |
+| main thread | 9,912 | — |
+| **subagents (the floor)** | **7,122** | **$0.036** |
+| `rite-reproducer` | 2,367 | $0.010 |
+| `rite-worker` | 4,756 | $0.026 |
+| all | 17,034 | $0.114 |
+
+One main-thread turn in the same runs costs $0.018–0.024, and it gets dearer as the context grows.
+A `/rite:review` (the control) spends 12,686 tokens, $0.055, in its reviewer.
+
+**The rule it supports: delegate work that would cost the main thread more than about one turn.** An
+agent call costs roughly half a main-thread turn to one, so work that fits in less than half a turn
+is cheaper inline, and anything bigger is cheaper delegated. What is small and cheap to hold, like a
+reproduction output of a few hundred bytes, costs little in either place. What decides is the turns.
+
+Applied to the `/rite:fix-all` triage, a reproducer per fix costs as much as 0.49–0.90 main-thread
+turns. Inline triage is cheaper only if running the evidence adds fewer turns than that per fix,
+which needs a run with inline triage to count. Until that run exists the verdict is
+**inconclusive**. Do not replace the reproducers on intuition, and do not "optimise" them away without
+that number.
+
+`rite cost` (`tools/token_report.py`) reports the agent side apart, per agent type. With the agent
+fields in a baseline, `--check` fails on one agent more than the baseline, whatever the tolerance, so
+a new agent in the rite shows up in the gate.
