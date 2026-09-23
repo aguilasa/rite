@@ -8,7 +8,7 @@ progress tables) is done by a deterministic CLI, never by hand.
 Rite is agnostic of language, build tool and folder layout: each repository declares its own structure
 and naming in `rite.toml`.
 
-> Status: **0.4.0 released.** CLI, core rite, batches, lifecycle, migration, per-cycle tickets, local
+> Status: **0.5.0 released.** CLI, core rite, batches, lifecycle, migration, per-cycle tickets, local
 > cycles and workspaces. See [CHANGELOG.md](CHANGELOG.md) and the [Roadmap](#roadmap).
 
 ## Install

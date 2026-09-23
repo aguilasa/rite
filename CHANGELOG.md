@@ -2,7 +2,12 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] — 2026-09-23
+
+Measuring what delegation costs. Until now the token report counted only the main thread, so every
+command that hands work to a subagent looked cheaper than it is. It now counts the subagents, and a
+seeded experiment turns their cost into a number: what one more fix costs a `/rite:fix-all`, with the
+main thread and each agent type reported apart.
 
 ### Added
 
