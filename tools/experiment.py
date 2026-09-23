@@ -87,10 +87,10 @@ def reference(example: str, command: str, estimate_from: str | None) -> dict:
     if estimate_from:
         data = tr.summarize([i for i in tr.collect(Path.home() / ".claude" / "projects", estimate_from)
                              if i.command == name])
-        row, source = data["commands"].get(name), f"transcripts matching {estimate_from}"
+        row, source = data["groups"].get(name), f"transcripts matching {estimate_from}"
     else:
         path = ROOT / "tests" / "baselines" / f"{example}.json"
-        row = json.loads(path.read_text(encoding="utf-8"))["commands"].get(name) if path.is_file() else None
+        row = tr.baseline_groups(json.loads(path.read_text(encoding="utf-8"))).get(name) if path.is_file() else None
         source = str(path.relative_to(ROOT)).replace("\\", "/")
     if not row:
         raise SystemExit(f"no {name} in {source}: pass --estimate-from <glob of past runs>")

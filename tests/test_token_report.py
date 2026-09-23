@@ -68,20 +68,20 @@ class TokenReportTest(unittest.TestCase):
 
     def test_groups_by_command_and_counts_turns_once_per_message(self):
         data = self.measure()
-        self.assertEqual(sorted(data["commands"]), ["/rite:execute", "/rite:review"])
-        execute = data["commands"]["/rite:execute"]
+        self.assertEqual(sorted(data["groups"]), ["/rite:execute", "/rite:review"])
+        execute = data["groups"]["/rite:execute"]
         self.assertEqual(execute["turns"], 5)  # m1 split in two entries counts once
         self.assertEqual(execute["billed"], 5 * 115)
         self.assertEqual(execute["cache_read"], 5 * 1000)
 
     def test_four_counts_and_effective_at_the_printed_weight(self):
-        execute = self.measure()["commands"]["/rite:execute"]
+        execute = self.measure()["groups"]["/rite:execute"]
         self.assertEqual({k: execute[k] for k in ("input", "cache_write", "cache_read", "output")},
                          {"input": 50, "cache_write": 500, "cache_read": 5000, "output": 25})
         self.assertEqual(execute["effective"], 5 * 115 + 0.1 * 5000)
         heavy = tr.summarize(tr.collect(self.dir, None), weight=1.0)
         self.assertEqual(heavy["cache_weight"], 1.0)
-        self.assertEqual(heavy["commands"]["/rite:execute"]["effective"], 5 * 115 + 5000)
+        self.assertEqual(heavy["groups"]["/rite:execute"]["effective"], 5 * 115 + 5000)
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(tr.main(["--dir", str(self.dir), "--cache-weight", "0.25"]), 0)
@@ -89,12 +89,12 @@ class TokenReportTest(unittest.TestCase):
         self.assertIn("not a price", out.getvalue())
 
     def test_classification(self):
-        tools = self.measure()["commands"]["/rite:execute"]["tools"]
+        tools = self.measure()["groups"]["/rite:execute"]["tools"]
         self.assertEqual(tools, {"rite:fragment": 1, "rite:cli": 1, "git": 1, "gate": 1,
                                  "edit": 1, "subagent": 1})
         # ceremony is what the rite spends around the work: its own prose plus its CLI
-        self.assertEqual(self.measure()["commands"]["/rite:execute"]["ceremony"], 2)
-        self.assertEqual(self.measure()["commands"]["/rite:review"]["tools"], {"read:shell": 1})
+        self.assertEqual(self.measure()["groups"]["/rite:execute"]["ceremony"], 2)
+        self.assertEqual(self.measure()["groups"]["/rite:review"]["tools"], {"read:shell": 1})
 
     def test_largest_results_name_their_tool_and_target(self):
         top = tr.largest_results(tr.collect(self.dir, None), 2)
@@ -105,8 +105,8 @@ class TokenReportTest(unittest.TestCase):
     def test_check_flags_a_regression_only_beyond_the_tolerance(self):
         data = self.measure()
         baseline = self.dir / "baseline.json"
-        turns = data["commands"]["/rite:execute"]["turns"]
-        billed = data["commands"]["/rite:execute"]["billed"]
+        turns = data["groups"]["/rite:execute"]["turns"]
+        billed = data["groups"]["/rite:execute"]["billed"]
         baseline.write_text(json.dumps({"commands": {"/rite:execute": {
             "billed": billed, "turns": turns}}}), encoding="utf-8")
         self.assertEqual(tr.check(data, baseline, 15.0)[0], 0)
@@ -198,7 +198,7 @@ class AgentAttributionTest(unittest.TestCase):
 
     def test_subagent_files_are_attributed_to_their_call(self):
         self.fix_all_session()
-        c = self.measure()["commands"]["/rite:fix-all"]
+        c = self.measure()["groups"]["/rite:fix-all"]
         self.assertEqual(c["billed"], 3 * 115)  # the main thread only, as before
         self.assertEqual(c["agents"], 2)
         self.assertEqual(c["agent"]["billed"], 3 * 221)
@@ -220,7 +220,7 @@ class AgentAttributionTest(unittest.TestCase):
             result("call-r", "PASS"),
             assistant("m2", usage=USAGE),
         ])
-        c = self.measure()["commands"]["/rite:review"]
+        c = self.measure()["groups"]["/rite:review"]
         self.assertEqual(c["billed"], 2 * 115)  # sidechain turns are not the main thread's
         self.assertEqual(c["agent"]["billed"], 2 * 221)
         self.assertEqual(list(c["agent"]["by_type"]), ["rite:rite-reviewer"])
@@ -231,20 +231,20 @@ class AgentAttributionTest(unittest.TestCase):
             agent_call("m1", "call-x", "rite:rite-reviewer"),
             result("call-x", "PASS"),
         ])
-        c = self.measure()["commands"]["/rite:review"]
+        c = self.measure()["groups"]["/rite:review"]
         self.assertEqual(c["agents"], 1)
         self.assertEqual(c["agent"], "unknown")
         self.assertIn("unknown", tr.render(self.measure(), []))
 
     def test_no_agent_means_a_measured_zero(self):
         write_jsonl(self.dir / "s4.jsonl", TRANSCRIPT[:2])
-        c = self.measure()["commands"]["/rite:execute"]
+        c = self.measure()["groups"]["/rite:execute"]
         self.assertEqual((c["agents"], c["agent"]["billed"]), (0, 0))
 
     def test_check_compares_agents_only_when_both_sides_have_them(self):
         self.fix_all_session()
         data = self.measure()
-        c = data["commands"]["/rite:fix-all"]
+        c = data["groups"]["/rite:fix-all"]
         baseline = self.dir / "baseline.json"
         # an old baseline, without agent fields, still passes
         baseline.write_text(json.dumps({"commands": {"/rite:fix-all": {
@@ -281,11 +281,114 @@ class AgentAttributionTest(unittest.TestCase):
 
     def test_tokens_never_money(self):
         self.fix_all_session()
-        self.assertEqual(set(self.measure()), {"invocations", "cache_weight", "commands"})
+        self.assertEqual(set(self.measure()), {"invocations", "by", "statistic", "cache_weight", "groups", "totals"})
         out = io.StringIO()
         with redirect_stdout(out):
             self.assertEqual(tr.main(["--dir", str(self.dir)]), 0)
         self.assertNotIn("$", out.getvalue())
+
+
+def at(entry: dict, when: str, session: str, cwd: str, **fields) -> dict:
+    return {**entry, "timestamp": when, "sessionId": session, "cwd": cwd, **fields}
+
+
+HUMAN = {"origin": {"kind": "human"}}
+
+
+class GeneralReportTest(unittest.TestCase):
+    """All of Claude Code's usage, not only the rite: plain prompts, other plugins, any axis."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="rite-usage-")
+        self.dir = Path(self._tmp.name)
+        write_jsonl(self.dir / "proj-a" / "s1.jsonl", [
+            at(user("hello"), "2026-09-20T10:00:00Z", "s1", "/work/a", **HUMAN),
+            at(assistant("n1", usage=USAGE), "2026-09-20T10:00:05Z", "s1", "/work/a"),
+            # the harness speaking is not a prompt: the invocation goes on
+            at(user("<task-notification>done</task-notification>"), "2026-09-20T10:01:00Z", "s1", "/work/a",
+               origin={"kind": "task-notification"}),
+            at(assistant("n2", usage=USAGE), "2026-09-20T10:01:05Z", "s1", "/work/a"),
+            at(user("<command-name>/other:thing</command-name>"), "2026-09-20T11:00:00Z", "s1", "/work/a"),
+            at(assistant("n3", usage=USAGE), "2026-09-20T11:00:05Z", "s1", "/work/a"),
+        ])
+        write_jsonl(self.dir / "proj-b" / "s2.jsonl", [
+            at(user("<command-name>/rite:fix-all</command-name>"), "2026-09-21T09:00:00Z", "s2", "/work/b"),
+            at(user("the command's own prose"), "2026-09-21T09:00:00Z", "s2", "/work/b", isMeta=True),
+            at(agent_call("m1", "call-a", "rite:rite-reproducer"), "2026-09-21T09:00:05Z", "s2", "/work/b"),
+            at(agent_result("call-a", "aaa"), "2026-09-21T09:01:00Z", "s2", "/work/b"),
+            at(assistant("m2", usage=USAGE), "2026-09-21T09:01:05Z", "s2", "/work/b"),
+            # 23:30 at UTC-3 is already the next day in UTC
+            at(user("thanks"), "2026-09-21T23:30:00-03:00", "s2", "/work/b", **HUMAN),
+            at(assistant("m3", usage=USAGE), "2026-09-21T23:30:05-03:00", "s2", "/work/b"),
+        ])
+        subagents = self.dir / "proj-b" / "s2" / "subagents"
+        write_jsonl(subagents / "agent-aaa.jsonl", [
+            sidechain(assistant("a1", usage=AGENT_USAGE), agentId="aaa")])
+        (subagents / "agent-aaa.meta.json").write_text(json.dumps(
+            {"agentType": "rite:rite-reproducer", "toolUseId": "call-a"}), encoding="utf-8")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def measure(self, by: str) -> dict:
+        return tr.summarize(tr.collect(self.dir, None), by=by)
+
+    def run_cli(self, *args: str) -> tuple[int, str]:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = tr.main(["--dir", str(self.dir), *args])
+        return code, out.getvalue()
+
+    def test_prompts_and_other_plugins_are_rows(self):
+        data = self.measure("command")
+        self.assertEqual(sorted(data["groups"]), ["(no command)", "/other:thing", "/rite:fix-all"])
+        self.assertEqual(data["groups"]["(no command)"]["n"], 2)
+        self.assertEqual(data["groups"]["(no command)"]["turns"], 1)  # median of 2 and 1
+        # the isMeta expansion does not cut the command; the later prompt does
+        self.assertEqual(data["groups"]["/rite:fix-all"]["turns"], 2)
+        self.assertEqual(data["statistic"], "median")
+
+    def test_every_axis(self):
+        self.assertEqual(list(self.measure("session")["groups"]), ["s1", "s2"])
+        self.assertEqual(self.measure("session")["groups"]["s1"]["turns"], 3)  # a total, not a median
+        self.assertEqual(list(self.measure("day")["groups"]), ["2026-09-20", "2026-09-21", "2026-09-22"])
+        self.assertEqual(sorted(self.measure("project")["groups"]), ["/work/a", "/work/b"])
+        agents = self.measure("agent")["groups"]
+        self.assertEqual(list(agents), ["(main thread)", "rite:rite-reproducer"])
+        self.assertEqual((agents["(main thread)"]["turns"], agents["rite:rite-reproducer"]["billed"]),
+                         (6, 221))
+
+    def test_totals_say_where_the_tokens_went(self):
+        totals = self.measure("command")["totals"]
+        self.assertEqual((totals["invocations"], totals["main"]["turns"], totals["agent"]["turns"]), (4, 6, 1))
+        main_effective, agent_effective = 6 * 115 + 0.1 * 6000, 221 + 0.1 * 3000
+        self.assertEqual(totals["effective"], int(main_effective + agent_effective))
+        self.assertAlmostEqual(totals["agent_share"], agent_effective / (main_effective + agent_effective),
+                               places=3)
+        code, out = self.run_cli()
+        self.assertEqual(code, 0)
+        self.assertIn("Totals", out)
+
+    def test_window_cuts_by_utc_day(self):
+        code, out = self.run_cli("--since", "2026-09-21", "--until", "2026-09-21", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual((data["invocations"], list(data["groups"])), (1, ["/rite:fix-all"]))
+        self.assertEqual(data["window"]["since"], "2026-09-21")
+        self.assertEqual(self.run_cli("--since", "2027-01-01")[0], 2)
+
+    def test_markdown_is_deterministic(self):
+        first, second = self.dir / "a.md", self.dir / "b.md"
+        self.assertEqual(self.run_cli("--by", "day", "--top", "2", "--markdown", str(first))[0], 0)
+        self.assertEqual(self.run_cli("--by", "day", "--top", "2", "--markdown", str(second))[0], 0)
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+        text = first.read_text(encoding="utf-8")
+        self.assertIn("| day |", text)
+        self.assertIn("## Totals", text)
+        self.assertNotIn("REPRODUCED", text)  # sizes and targets, never the text of a result
+
+    def test_a_baseline_is_per_command(self):
+        self.assertEqual(self.run_cli("--by", "day", "--check", str(self.dir / "none.json"))[0], 2)
 
 
 class BaselineFilesTest(unittest.TestCase):
@@ -295,8 +398,8 @@ class BaselineFilesTest(unittest.TestCase):
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(data["example"], name)
             self.assertTrue(data["version"] and data["measured_on"])
-            self.assertIn("/rite:execute", data["commands"])
-            for command in data["commands"].values():
+            self.assertIn("/rite:execute", tr.baseline_groups(data))
+            for command in tr.baseline_groups(data).values():
                 self.assertTrue({"billed", "turns", "ceremony", "n"} <= set(command))
 
 

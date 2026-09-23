@@ -1,15 +1,42 @@
 # Where the tokens go
 
 `rite tokens` (the same code as `tools/token_report.py`) reads the transcripts Claude Code writes under
-`~/.claude/projects` and reports, per command, the median of each invocation: billed tokens, cache
-reads, output, turns, ceremony (turns spent on the rite's own prose and CLI), the tools used — and,
-apart, what its subagents used. Counts are tokens, never money. It is a tool **about** the rite: no
-command calls it, and it needs no `rite.toml`.
+`~/.claude/projects` and reports where the tokens went — all of Claude Code's usage, not only the
+rite's. Counts are tokens, never money. It is a diagnostic, not a rite: no command calls it, and it
+needs no `rite.toml`.
 
 ```sh
-rite tokens --glob "*slugkit*" --top 10
-rite tokens --glob "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
+rite tokens                                             # per command, medians per invocation
+rite tokens --by day --since 2026-09-01 --markdown usage.md
+rite tokens --project "*slugkit*" --top 10
+rite tokens --project "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
 ```
+
+## Invocations and rows
+
+A transcript is cut into invocations: a slash command — any plugin's or skill's, under its own name —
+or a plain prompt, which is the row `(no command)`. Everything the model does after one belongs to it
+until the next. Text the harness injects (a command's own prose, a task notification) does not cut it.
+
+| Flag | What it does |
+| --- | --- |
+| `--by command\|session\|day\|project\|agent` | what a row is (default `command`) |
+| `--since D` / `--until D` | only invocations whose first entry falls in the window (UTC days, inclusive) |
+| `--project GLOB` | only transcripts whose path matches (`--glob` is the same flag) |
+| `--command C` | only these commands (repeatable) |
+| `--top N` | the N largest tool results: size, tool, target — never the text |
+| `--markdown FILE` | also write the report as deterministic markdown |
+| `--json`, `--check B`, `--tolerance P` | machine output; compare with a baseline (per command only) |
+| `--cache-weight W` | the weight of a cache read in `effective` (default `0.1`) |
+
+By command a row holds **medians** per invocation: one long invocation must not decide the number a
+baseline is compared to. By session, day or project a row is a period, so it holds **totals**. By
+agent there is one row for the main thread and one per agent type, totals too. Each row: `n`,
+`turns`, the four counts, `billed`, `effective`, `ceremony` (tool calls on the rite's own prose and
+CLI), `agents`, and the subagents' billed tokens and cache reads, with one line per agent type.
+
+The **Totals** block sums the window: main thread and subagents apart, all of it in effective tokens,
+the share that went to subagents, and how many tool calls were ceremony.
 
 ## The unit
 

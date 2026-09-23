@@ -533,7 +533,24 @@ class TokensTest(unittest.TestCase):
             with contextlib.redirect_stdout(direct):
                 self.assertEqual(token_report.main(["--dir", str(transcripts), "--json"]), 0)
         self.assertEqual(json.loads(out), json.loads(direct.getvalue()))
-        self.assertEqual(json.loads(out)["commands"]["/rite:review"]["billed"], 50)
+        self.assertEqual(json.loads(out)["groups"]["/rite:review"]["billed"], 50)
+
+    def test_axes_and_filters_reach_the_tool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            transcripts = Path(tmp) / "projects"
+            for name in ("keep", "skip"):
+                write(transcripts / name / "s.jsonl", "\n".join(json.dumps(e) for e in [
+                    {"type": "user", "timestamp": "2026-09-20T10:00:00Z", "sessionId": name,
+                     "message": {"content": "a plain prompt"}},
+                    {"type": "assistant", "message": {"id": "m1", "content": [], "usage": {"output_tokens": 7}}},
+                ]))
+            report = Path(tmp) / "usage.md"
+            code, out, _ = rite(Path(tmp), "tokens", "--dir", str(transcripts), "--project", "*keep*",
+                                "--by", "day", "--since", "2026-09-20", "--markdown", str(report), "--json")
+            self.assertEqual(code, 0)
+            data = json.loads(out)
+            self.assertEqual((data["by"], data["invocations"], list(data["groups"])), ("day", 1, ["2026-09-20"]))
+            self.assertIn("# Token report", report.read_text(encoding="utf-8"))
 
     def test_nothing_measured(self):
         with tempfile.TemporaryDirectory() as tmp:

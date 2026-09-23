@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""The tokens one invocation of a command uses, measured from Claude Code transcripts.
+"""Where the tokens of Claude Code go, measured from its transcripts.
 
-Reads the JSONL transcripts Claude Code writes under ``~/.claude/projects`` and groups them by
-invoked command (`/rite:execute`, …): every assistant message after a command belongs to it until
-the next command. For each command it reports medians — billed tokens, cache reads, output, turns —
-and the tool calls that produced them, classified (fragment reads, CLI calls, git, gates, edits,
-subagents). Why medians: one long invocation must not decide the number a baseline is compared to.
+Reads the JSONL transcripts Claude Code writes under ``~/.claude/projects`` and cuts them into
+invocations: a slash command (any plugin's, any skill's: `/rite:execute`, `/other:thing`) or a plain
+prompt, which is reported as ``(no command)``. Every assistant message after one belongs to it until
+the next. Rows group invocations by command (medians per invocation: one long invocation must not
+decide the number a baseline is compared to), or by session, day, project or agent type (totals: a
+period is not a sample). A **Totals** block sums the whole window and says how much of it went to
+subagents and to ceremony. Tool calls are classified (fragment reads, CLI calls, git, gates, edits,
+subagents).
 
 A subagent's turns are billed too, but they are not in the main thread: Claude Code writes them to
 ``<session>/subagents/agent-<id>.jsonl`` (with a ``.meta.json`` naming the ``Agent`` call that
@@ -20,8 +23,9 @@ fraction ``w`` (``--cache-weight``, default 0.1) of an input token. ``w`` is a r
 price, and it is printed next to every effective number. Only metrics are kept: sizes, tool names and
 targets, never the text of a transcript.
 
-    python tools/token_report.py --dir ~/.claude/projects --glob "*node-minimal*" --top 10
-    python tools/token_report.py --glob "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
+    python tools/token_report.py --dir ~/.claude/projects --project "*node-minimal*" --top 10
+    python tools/token_report.py --by day --since 2026-09-01 --markdown usage.md
+    python tools/token_report.py --project "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
 
 Exit codes: 0 ok · 1 a checked command regressed beyond the tolerance · 2 nothing measured.
 """
@@ -35,6 +39,10 @@ import sys
 from pathlib import Path
 
 COMMAND_RE = re.compile(r"<command-name>([^<]+)</command-name>")
+NO_COMMAND = "(no command)"
+# user entries that are the harness talking, not a person asking
+NOT_A_PROMPT = ("<task-notification>", "<local-command-")
+AXES = ("command", "session", "day", "project", "agent")
 
 # Bash commands that are the project's own gates rather than reading or bookkeeping.
 GATE_RE = re.compile(r"\b(unittest|pytest|npm (run |)test|node --test|ctest|cmake|make|tox|"
@@ -144,10 +152,12 @@ class AgentRun(Usage):
 
 
 class Invocation(Usage):
-    def __init__(self, command: str, session: str):
+    def __init__(self, command: str, session: str, day: str = "", project: str = ""):
         super().__init__()
         self.command = command
         self.session = session
+        self.day = day          # UTC date of its first entry
+        self.project = project  # working folder, else the transcript's folder
         self.tools: dict[str, int] = {}
         self.results: list[tuple[int, str, str]] = []  # (bytes, tool, target)
         self.agents: list[AgentRun] = []
@@ -181,6 +191,36 @@ def _entries(path: Path):
             yield json.loads(line)
         except json.JSONDecodeError:
             continue
+
+
+def _day(timestamp) -> str:
+    """The UTC date of an ISO timestamp; empty when there is none."""
+    import datetime as dt
+    try:
+        moment = dt.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if moment.tzinfo is not None:
+        moment = moment.astimezone(dt.timezone.utc)
+    return moment.date().isoformat()
+
+
+def _typed_text(content) -> str:
+    """What a person typed: the text of a user entry, without tool results."""
+    if isinstance(content, list):
+        return "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+    return _text(content)
+
+
+def _is_prompt(entry: dict, content, text: str) -> bool:
+    """A person's prompt — not a tool result, not text the harness injected."""
+    if entry.get("isMeta") or not text.strip() or text.lstrip().startswith(NOT_A_PROMPT):
+        return False
+    if isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result"
+                                         for b in content):
+        return False
+    origin = entry.get("origin")
+    return not (isinstance(origin, dict) and origin.get("kind") not in (None, "human"))
 
 
 def _message_id(entry: dict) -> str:
@@ -226,6 +266,13 @@ def read_file(path: Path, sidechains: Sidechains | None = None) -> list[Invocati
     owner: dict[str, AgentRun] = {}              # entry uuid -> the run its chain hangs from
     open_runs: list[AgentRun] = []               # calls whose result has not come back yet
     shell_calls: set[str] = set()
+
+    def start(name: str, entry: dict) -> Invocation:
+        inv = Invocation(name, str(entry.get("sessionId") or path.stem), _day(entry.get("timestamp")),
+                         str(entry.get("cwd") or path.parent.name))
+        out.append(inv)
+        return inv
+
     for entry in _entries(path):
         kind = entry.get("type")
         message = entry.get("message") or {}
@@ -235,13 +282,12 @@ def read_file(path: Path, sidechains: Sidechains | None = None) -> list[Invocati
             continue
         if kind == "user":
             content = message.get("content")
-            hit = COMMAND_RE.search(_text(content)) if not isinstance(content, list) else None
-            if isinstance(content, list):
-                hit = COMMAND_RE.search("".join(b.get("text", "") for b in content
-                                                if isinstance(b, dict) and b.get("type") == "text"))
+            text = _typed_text(content)
+            hit = COMMAND_RE.search(text)
             if hit:
-                current = Invocation(hit.group(1).strip(), str(entry.get("sessionId") or path.stem))
-                out.append(current)
+                current = start(hit.group(1).strip(), entry)
+            elif _is_prompt(entry, content, text):
+                current = start(NO_COMMAND, entry)
             elif isinstance(content, list) and current is not None:
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "tool_result":
@@ -256,7 +302,9 @@ def read_file(path: Path, sidechains: Sidechains | None = None) -> list[Invocati
                             meta = entry.get("toolUseResult")
                             if isinstance(meta, dict) and meta.get("agentId"):
                                 run.agent_id = str(meta["agentId"])
-        elif kind == "assistant" and current is not None:
+        elif kind == "assistant":
+            if current is None:  # a transcript that starts mid-conversation
+                current = start(NO_COMMAND, entry)
             usage = message.get("usage") or {}
             message_id = _message_id(entry)
             if usage and message_id not in seen_messages:
@@ -366,8 +414,22 @@ def _counts(usages: list[Usage], weight: float) -> dict:
     return out
 
 
+def _sums(usage: Usage, weight: float) -> dict:
+    """The same numbers as ``_counts``, for one usage: a total, not a median."""
+    out = {key: getattr(usage, key) for key in COUNTS}
+    out.update(billed=usage.billed, turns=usage.turns, effective=int(usage.effective(weight)))
+    return out
+
+
+def _total(usages) -> Usage:
+    total = Usage()
+    for usage in usages:
+        total.merge(usage)
+    return total
+
+
 def _agent_side(group: list[Invocation], weight: float = CACHE_WEIGHT) -> dict | str:
-    """Medians of what the invocations' subagents cost, in total and per agent type."""
+    """Medians of what the invocations' subagents used, in total and per agent type."""
     if any(inv.agent_unknown for inv in group):
         return "unknown"
 
@@ -398,23 +460,98 @@ def _agent_side(group: list[Invocation], weight: float = CACHE_WEIGHT) -> dict |
     return side
 
 
-def summarize(invocations: list[Invocation], weight: float = CACHE_WEIGHT) -> dict:
-    """Medians per command. The top-level numbers are the main thread; ``agent`` is its subagents."""
-    by_command: dict[str, list[Invocation]] = {}
-    for inv in invocations:
-        by_command.setdefault(inv.command, []).append(inv)
-    commands = {}
-    for name, group in sorted(by_command.items()):
-        commands[name] = {
-            "n": len(group),
-            **_counts(group, weight),
-            "ceremony": median([i.ceremony for i in group]),
-            "tools": {c: median([i.tools.get(c, 0) for i in group])
-                      for c in CATEGORIES if any(i.tools.get(c) for i in group)},
-            "agents": median([len(i.agents) for i in group]),
-            "agent": _agent_side(group, weight),
-        }
-    return {"invocations": len(invocations), "cache_weight": weight, "commands": commands}
+def _agent_totals(runs: list[AgentRun], weight: float) -> dict:
+    """What a period's subagents used, summed. Calls that left no trace are counted, not guessed."""
+    measured = [run for run in runs if run.measured]
+    side = {**_sums(_total(measured), weight), "unmeasured": len(runs) - len(measured), "by_type": {}}
+    for kind in sorted({run.agent_type for run in runs}):
+        of_kind = [run for run in measured if run.agent_type == kind]
+        side["by_type"][kind] = {"n": sum(1 for run in runs if run.agent_type == kind),
+                                 **_sums(_total(of_kind), weight)}
+    return side
+
+
+def _tools(group: list[Invocation], agg) -> dict:
+    return {c: agg([i.tools.get(c, 0) for i in group]) for c in CATEGORIES if any(i.tools.get(c) for i in group)}
+
+
+def _median_row(group: list[Invocation], weight: float) -> dict:
+    return {
+        "n": len(group),
+        **_counts(group, weight),
+        "ceremony": median([i.ceremony for i in group]),
+        "tools": _tools(group, median),
+        "agents": median([len(i.agents) for i in group]),
+        "agent": _agent_side(group, weight),
+    }
+
+
+def _total_row(group: list[Invocation], weight: float) -> dict:
+    runs = [run for inv in group for run in inv.agents]
+    return {
+        "n": len(group),
+        **_sums(_total(group), weight),
+        "ceremony": sum(i.ceremony for i in group),
+        "tools": _tools(group, sum),
+        "agents": len(runs),
+        "agent": _agent_totals(runs, weight),
+    }
+
+
+def _key(inv: Invocation, by: str) -> str:
+    return {"command": inv.command, "session": inv.session, "day": inv.day,
+            "project": inv.project}[by] or "?"
+
+
+def _grand_totals(invocations: list[Invocation], weight: float) -> dict:
+    """The period's answer to "where did my tokens go": main thread, subagents, and the share of
+    each that went to ceremony or to fresh contexts."""
+    main = _total(invocations)
+    runs = [run for inv in invocations for run in inv.agents]
+    agent = _agent_totals(runs, weight)
+    calls = sum(sum(i.tools.values()) for i in invocations)
+    ceremony = sum(i.ceremony for i in invocations)
+    everything = main.effective(weight) + agent["effective"]
+    return {
+        "invocations": len(invocations),
+        "main": _sums(main, weight),
+        "agent": {key: agent[key] for key in (*COUNTS, "billed", "turns", "effective", "unmeasured")},
+        "effective": int(everything),
+        "tool_calls": calls,
+        "ceremony_calls": ceremony,
+        "ceremony_share": round(ceremony / calls, 3) if calls else 0.0,
+        "agent_share": round(agent["effective"] / everything, 3) if everything else 0.0,
+    }
+
+
+def summarize(invocations: list[Invocation], weight: float = CACHE_WEIGHT, by: str = "command") -> dict:
+    """One row per group. By command a row holds medians per invocation — one long invocation must not
+    decide the number a baseline is compared to; by session, day or project a row is a period, so it
+    holds totals. By agent, one row for the main thread and one per agent type, totals too. The
+    top-level numbers of a row are the main thread; ``agent`` is its subagents."""
+    if by == "agent":
+        main = _total(invocations)
+        runs = [run for inv in invocations for run in inv.agents]
+        agent = _agent_totals(runs, weight)
+        groups = {"(main thread)": {"n": len(invocations), **_sums(main, weight)}}
+        for kind, row in agent["by_type"].items():
+            groups[kind] = {**row, "unmeasured": sum(1 for run in runs
+                                                     if run.agent_type == kind and not run.measured)}
+        statistic = "total"
+    else:
+        grouped: dict[str, list[Invocation]] = {}
+        for inv in invocations:
+            grouped.setdefault(_key(inv, by), []).append(inv)
+        statistic = "median" if by == "command" else "total"
+        build = _median_row if statistic == "median" else _total_row
+        rows = {name: build(group, weight) for name, group in grouped.items()}
+        if by in ("command", "day"):
+            order = sorted(rows)
+        else:  # the biggest period first
+            order = sorted(rows, key=lambda name: (-rows[name]["effective"], name))
+        groups = {name: rows[name] for name in order}
+    return {"invocations": len(invocations), "by": by, "statistic": statistic, "cache_weight": weight,
+            "groups": groups, "totals": _grand_totals(invocations, weight)}
 
 
 def largest_results(invocations: list[Invocation], top: int) -> list[dict]:
@@ -424,32 +561,108 @@ def largest_results(invocations: list[Invocation], top: int) -> list[dict]:
     return [{"bytes": s, "tool": t, "target": g[:120], "command": c} for s, t, g, c in rows[:top]]
 
 
-def render(data: dict, top: list[dict]) -> str:
+COLUMNS = (("n", 4), ("turns", 6), ("input", 8), ("cache_write", 11), ("cache_read", 12), ("output", 8),
+           ("billed", 10), ("effective", 10), ("ceremony", 8), ("agents", 6))
+
+
+def _header(data: dict) -> str:
     w = data.get("cache_weight", CACHE_WEIGHT)
-    lines = [f"{data['invocations']} invocation(s); medians per invocation; "
-             f"effective = billed + {w:g} × cache read ({WEIGHT_NOTE})", ""]
-    head = (f"{'command':28} {'n':>3} {'input':>7} {'cache write':>11} {'cache read':>11} {'output':>7}"
-            f" {'billed':>9} {'effective':>10} {'turns':>6} {'ceremony':>9} {'agents':>7} {'agent billed':>13}")
+    per = "median per invocation" if data.get("statistic", "median") == "median" else "total per row"
+    window = data.get("window") or {}
+    scope = [f"{k} {v}" for k, v in window.items() if v]
+    return (f"{data['invocations']} invocation(s), by {data.get('by', 'command')}, {per}"
+            + (f" ({', '.join(scope)})" if scope else "")
+            + f"; effective = billed + {w:g} × cache read — {WEIGHT_NOTE}")
+
+
+def _cell(row: dict, key: str) -> str:
+    value = row.get(key, "")
+    return f"{value:,}" if isinstance(value, int) else str(value)
+
+
+def _agent_cells(row: dict) -> tuple[str, str]:
+    agent = row.get("agent")
+    if agent is None:
+        return "", ""
+    if isinstance(agent, str):
+        return agent, agent
+    return f"{agent['billed']:,}", f"{agent['cache_read']:,}"
+
+
+def _totals_lines(t: dict) -> list[str]:
+    main, agent = t["main"], t["agent"]
+    lines = [
+        f"main thread: {main['turns']:,} turns; input {main['input']:,}, cache write {main['cache_write']:,}, "
+        f"cache read {main['cache_read']:,}, output {main['output']:,}; billed {main['billed']:,}; "
+        f"effective {main['effective']:,}",
+        f"subagents: {agent['turns']:,} turns; input {agent['input']:,}, cache write {agent['cache_write']:,}, "
+        f"cache read {agent['cache_read']:,}, output {agent['output']:,}; billed {agent['billed']:,}; "
+        f"effective {agent['effective']:,}"
+        + (f"; {agent['unmeasured']} call(s) left no transcript" if agent["unmeasured"] else ""),
+        f"all: effective {t['effective']:,}; subagents {t['agent_share']:.1%} of it; ceremony "
+        f"{t['ceremony_calls']:,} of {t['tool_calls']:,} tool calls ({t['ceremony_share']:.1%})",
+    ]
+    return lines
+
+
+def render(data: dict, top: list[dict]) -> str:
+    by = data.get("by", "command")
+    lines = [_header(data), ""]
+    head = (f"{by:28}" + "".join(f" {name.replace('_', ' '):>{width}}" for name, width in COLUMNS)
+            + f" {'agent billed':>13} {'agent cache read':>17}")
     lines += [head, "-" * len(head)]
-    for name, c in data["commands"].items():
-        agent = c.get("agent", {})
-        agent_billed = agent if isinstance(agent, str) else f"{agent.get('billed', 0):,}"
-        row = (f"{name[:28]:28} {c['n']:>3} {c['input']:>7,} {c['cache_write']:>11,} {c['cache_read']:>11,} "
-               f"{c['output']:>7,} {c['billed']:>9,} {c['effective']:>10,} {c['turns']:>6} {c['ceremony']:>9} "
-               f"{c.get('agents', 0):>7} {agent_billed:>13}")
-        lines.append(row)
-        tools = ", ".join(f"{k} {v}" for k, v in c["tools"].items())
+    for name, row in data["groups"].items():
+        agent_billed, agent_read = _agent_cells(row)
+        lines.append(f"{name[:28]:28}" + "".join(f" {_cell(row, key):>{width}}" for key, width in COLUMNS)
+                     + f" {agent_billed:>13} {agent_read:>17}")
+        tools = ", ".join(f"{k} {v}" for k, v in row.get("tools", {}).items() if v)
         if tools:
-            lines.append(f"{'':28}     {tools}")
+            lines.append(f"{'':28}   {tools}")
+        agent = row.get("agent")
         if isinstance(agent, dict):
             for kind, a in agent.get("by_type", {}).items():
-                lines.append(f"{'':28}     agent {kind}: n {a['n']}, billed {a['billed']:,}, "
+                if not a["n"]:  # a median of none: most of the group never started this agent
+                    continue
+                lines.append(f"{'':28}   agent {kind}: n {a['n']}, billed {a['billed']:,}, "
                              f"cache read {a['cache_read']:,}, effective {a['effective']:,}, "
                              f"turns {a['turns']}")
+    if "totals" in data:
+        lines += ["", "Totals"] + [f"  {line}" for line in _totals_lines(data["totals"])]
     if top:
         lines += ["", f"largest tool results ({len(top)}):"]
         lines += [f"  {r['bytes']:>8,} B  {r['tool']:<12} {r['target']}" for r in top]
     return "\n".join(lines)
+
+
+def _md(text: str) -> str:
+    return str(text).replace("|", "\\|")
+
+
+def render_markdown(data: dict, top: list[dict]) -> str:
+    """The same report as markdown. Pure: the same data give the same bytes (no clock)."""
+    by = data.get("by", "command")
+    lines = ["# Token report", "", _header(data) + ".", ""]
+    names = [name for name, _ in COLUMNS]
+    lines.append(f"| {by} | " + " | ".join(n.replace("_", " ") for n in names)
+                 + " | agent billed | agent cache read |")
+    lines.append("| --- |" + " ---: |" * (len(names) + 2))
+    for name, row in data["groups"].items():
+        agent_billed, agent_read = _agent_cells(row)
+        lines.append(f"| {_md(name)} | " + " | ".join(_cell(row, key) for key in names)
+                     + f" | {agent_billed} | {agent_read} |")
+    by_type = [(name, kind, a) for name, row in data["groups"].items() if isinstance(row.get("agent"), dict)
+               for kind, a in row["agent"].get("by_type", {}).items() if a["n"]]
+    if by_type:
+        lines += ["", "Subagents by type:", "", f"| {by} | agent type | n | billed | cache read | effective | turns |",
+                  "| --- | --- | ---: | ---: | ---: | ---: | ---: |"]
+        lines += [f"| {_md(name)} | {_md(kind)} | {a['n']:,} | {a['billed']:,} | {a['cache_read']:,} | "
+                  f"{a['effective']:,} | {a['turns']:,} |" for name, kind, a in by_type]
+    if "totals" in data:
+        lines += ["", "## Totals", ""] + [f"- {line}." for line in _totals_lines(data["totals"])]
+    if top:
+        lines += ["", "## Largest tool results", "", "| bytes | tool | target |", "| ---: | --- | --- |"]
+        lines += [f"| {r['bytes']:,} | {_md(r['tool'])} | `{_md(r['target'])}` |" for r in top]
+    return "\n".join(lines) + "\n"
 
 
 def check(data: dict, baseline_path: Path, tolerance: float) -> tuple[int, list[str]]:
@@ -466,8 +679,8 @@ def check(data: dict, baseline_path: Path, tolerance: float) -> tuple[int, list[
             mark, failures = "WORSE", failures + 1
         messages.append(f"{mark} {name} {metric}: {got:,} vs {want:,} baseline (limit {int(limit):,})")
 
-    for name, want in baseline.get("commands", {}).items():
-        got = data["commands"].get(name)
+    for name, want in baseline_groups(baseline).items():
+        got = data["groups"].get(name)
         if not got:
             messages.append(f"MISS  {name}: not in this measurement")
             continue
@@ -487,31 +700,57 @@ def check(data: dict, baseline_path: Path, tolerance: float) -> tuple[int, list[
     return failures, messages
 
 
+def baseline_groups(baseline: dict) -> dict:
+    """The per-command rows of a baseline; files written before 0.6.0 call them ``commands``."""
+    return baseline.get("groups") or baseline.get("commands") or {}
+
+
+def _date(text: str) -> str:
+    import datetime as dt
+    try:
+        return dt.date.fromisoformat(text).isoformat()
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a date (YYYY-MM-DD): {text}") from None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--dir", default=str(Path.home() / ".claude" / "projects"),
                    help="folder of Claude Code transcripts (default: ~/.claude/projects)")
-    p.add_argument("--glob", help="only transcripts whose path matches this pattern")
+    p.add_argument("--project", "--glob", dest="project",
+                   help="only transcripts whose path matches this pattern")
+    p.add_argument("--by", choices=AXES, default="command", help="what a row is (default: command)")
+    p.add_argument("--since", type=_date, help="only invocations from this day on (UTC, YYYY-MM-DD)")
+    p.add_argument("--until", type=_date, help="only invocations up to this day (UTC, inclusive)")
     p.add_argument("--command", action="append", help="only these commands (repeatable)")
     p.add_argument("--top", type=int, default=0, help="also list the N largest tool results")
     p.add_argument("--json", action="store_true")
-    p.add_argument("--check", help="baseline JSON to compare against")
+    p.add_argument("--markdown", help="also write the report to this markdown file")
+    p.add_argument("--check", help="baseline JSON to compare against (needs --by command)")
     p.add_argument("--tolerance", type=float, default=15.0, help="percent a metric may grow")
-    p.add_argument("--write-baseline", help="write the measurement as a baseline file")
+    p.add_argument("--write-baseline", help="write the measurement as a baseline file (needs --by command)")
     p.add_argument("--example", default="", help="example name stored in a written baseline")
     p.add_argument("--version", default="", help="version stored in a written baseline")
     p.add_argument("--cache-weight", type=float, default=CACHE_WEIGHT,
                    help=f"weight of a cache read in effective tokens (default {CACHE_WEIGHT}; {WEIGHT_NOTE})")
     args = p.parse_args(argv)
+    if (args.check or args.write_baseline) and args.by != "command":
+        print("token_report: a baseline is per command: use --by command", file=sys.stderr)
+        return 2
 
-    invocations = collect(Path(args.dir).expanduser(), args.glob)
+    invocations = collect(Path(args.dir).expanduser(), args.project)
     if args.command:
         wanted = set(args.command)
         invocations = [i for i in invocations if i.command in wanted]
+    if args.since:
+        invocations = [i for i in invocations if i.day and i.day >= args.since]
+    if args.until:
+        invocations = [i for i in invocations if i.day and i.day <= args.until]
     if not invocations:
         print(f"token_report: no invocation found under {args.dir}", file=sys.stderr)
         return 2
-    data = summarize(invocations, args.cache_weight)
+    data = summarize(invocations, args.cache_weight, args.by)
+    data["window"] = {"project": args.project, "since": args.since, "until": args.until}
     top = largest_results(invocations, args.top)
 
     if args.write_baseline:
@@ -520,6 +759,10 @@ def main(argv: list[str] | None = None) -> int:
                "measured_on": dt.date.today().isoformat(), **data}
         Path(args.write_baseline).write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
         print(f"baseline written: {args.write_baseline}")
+
+    if args.markdown:
+        with open(args.markdown, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(render_markdown(data, top))
 
     if args.json:
         print(json.dumps({**data, "largest": top}, indent=2))
