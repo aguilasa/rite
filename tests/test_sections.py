@@ -50,7 +50,7 @@ class PtBrBacklogTest(unittest.TestCase):
         data = self.js("sections", "--cycle", "wte")
         keys = data["keys"]
         wanted = {"evidence": ["Evidência"], "verification": ["Verificação"], "files": ["Arquivos"],
-                  "scope": ["Arquivos a criar ou modificar"], "gates": ["Gates deste ciclo"],
+                  "scope": ["Arquivos a criar ou modificar"],
                   "serialized_resources": ["Recursos serializados"],
                   "confirmed_decisions": ["Contexto essencial — decisões já confirmadas"],
                   "phase_checks": ["Verificações específicas por fase"],
@@ -65,6 +65,11 @@ class PtBrBacklogTest(unittest.TestCase):
 
     def test_what_nothing_matches_reliably_comes_out_commented(self):
         data = self.js("sections", "--cycle", "wte")
+        gates = data["keys"]["gates"]
+        self.assertFalse(gates["confident"], "a table under the gates title is a candidate, never read")
+        self.assertEqual([c["title"] for c in gates["candidates"]], ["Gates deste ciclo"])
+        self.assertIn('# gates = "Gates"', data["block"])
+        self.assertIn("a table of 2 command line(s)", data["block"])
         generated = data["keys"]["generated_artifacts"]
         self.assertFalse(generated["confident"])
         self.assertEqual([c["title"] for c in generated["candidates"]], ["Estrutura"])
@@ -84,7 +89,8 @@ class PtBrBacklogTest(unittest.TestCase):
         self.assertEqual(before.split("[sections]")[0], after.split("[sections]")[0])
         self.assertTrue(after.endswith('[vocab]\ntask_types = []\n'))
         cfg = config.load(self.root)
-        self.assertEqual(cfg["sections"]["gates"], "Gates deste ciclo")
+        self.assertEqual(cfg["sections"]["evidence"], "Evidência")
+        self.assertEqual(cfg["sections"]["gates"], "Gates", "an unsure key is never written")
         again = self.js("sections", "--cycle", "wte", "--write")["write"]["written"]
         self.assertEqual(again, {}, "a second run has nothing left to add")
 
@@ -97,11 +103,15 @@ class PtBrBacklogTest(unittest.TestCase):
         self.assertEqual(fixes[0]["commands"][0]["command"], "python -c \"print('quebrado 1')\"")
         self.assertEqual(fixes[0]["recorded"], ["quebrado 1"])
 
-    def test_gates_read_the_table(self):
+    def test_gates_read_the_bullets_under_the_configured_title(self):
+        profile = self.root / "docs/prompts/perfil-wte.md"
+        text = profile.read_text(encoding="utf-8")
+        profile.write_text(text.replace("## Arquivos quentes", "- `python -c \"print('gate ok')\"`\n\n"
+                                        "## Arquivos quentes"), encoding="utf-8", newline="\n")
         self.configure()
+        self.assertEqual(config.load(self.root)["sections"]["gates"], "Gates deste ciclo")
         gates = self.js("gates", "--cycle", "wte")["gates"]
-        self.assertEqual([g["command"] for g in gates],
-                         ["python -c \"print('gate ok')\"", "python -c \"print('tabela ok')\""])
+        self.assertEqual([g["command"] for g in gates], ["python -c \"print('gate ok')\""])
 
     def test_batch_plan_predicts_the_bare_paths(self):
         self.configure()
@@ -116,13 +126,15 @@ class PtBrBacklogTest(unittest.TestCase):
         self.configure()
         names = [p["name"] for p in self.js("context", "WTE-TASK-01", "--cycle", "wte")["parts"]]
         self.assertIn("docs/prompts/perfil-wte.md § Contexto essencial — decisões já confirmadas", names)
-        self.assertIn("docs/prompts/perfil-wte.md § Gates deste ciclo", names)
         self.assertIn("docs/prompts/perfil-wte.md § Verificações específicas por fase (Fase 1)", names)
 
     def test_check_is_quiet_once_configured(self):
         self.configure()
         found = self.js("check", "--cycle", "wte")
-        self.assertFalse([f for f in found["findings"] if "no section titled" in f["message"]], found)
+        left = [f["message"] for f in found["findings"] if "no section titled" in f["message"]]
+        # the gates title stays for a person to set: its table was not read as gates
+        self.assertEqual(len(left), 1, left)
+        self.assertIn("'Gates'", left[0])
 
     def test_the_log_goes_under_the_title_the_item_already_has(self):
         self.configure()

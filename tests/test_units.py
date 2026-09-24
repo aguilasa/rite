@@ -145,14 +145,11 @@ class SectionParsersTest(unittest.TestCase):
             self.assertEqual(_section_paths(text, ["Arquivos"], root), ["src/x.py", "tools/layout.py"])
             self.assertEqual(_section_paths(text, ["Arquivos"]), ["src/x.py"])
 
-    def test_gates_table_takes_the_command_column(self):
-        from rite_lib.compose import _table_commands
-        rows = [["`selftest`", "nada", "`python tools/selftest.py`", "`ctest -R selftest`"],
-                ["`image`", "`IMAGE`", "`python tools/cli.py check`", "—"],
-                ["*(inside)*", "`IMAGE`", "`python tools/atlas.py --check-image`", "—"]]
-        self.assertEqual(_table_commands(rows), ["python tools/selftest.py", "python tools/cli.py check",
-                                                 "python tools/atlas.py --check-image"])
-        self.assertEqual(_table_commands([["`a`", "b"], ["`c`", "d"]]), [])
+    def test_gates_are_bullets_never_a_table(self):
+        from rite_lib.compose import gate_commands
+        body = ("- `make test` must pass\n\n| target | how |\n| --- | --- |\n"
+                "| `selftest` | `python tools/selftest.py` |\n")
+        self.assertEqual(gate_commands(body), ["make test"])
 
 
 class GlobTest(unittest.TestCase):

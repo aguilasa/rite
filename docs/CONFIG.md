@@ -109,7 +109,7 @@ execution_log = ["Log de Execução", "Log de Execução *(preenchido após exec
 | `verification` | `"Verification"` | fix; `reproduce`'s fallback: its `$ ` lines, else its bullets' code spans |
 | `files` | `"Files"` | item; `batch-plan` predicts the paths it lists (code spans, or bullets opening with a path that exists) |
 | `scope` | `"Scope"` | item; a second place `batch-plan` looks for paths |
-| `gates` | `"Gates"` | profile; `gates` runs its bullets' code spans, or a table's command column |
+| `gates` | `"Gates"` | profile; `gates` runs its bullets' code spans — never a table's, which was measured to be a catalogue of tools |
 | `serialized_resources` | `"Serialized resources"` | profile; `batch-plan` serializes the names it lists |
 | `confirmed_decisions` | `"Confirmed decisions"` | profile; part of `context` |
 | `generated_artifacts` | `"Generated artifacts"` | profile; part of `context` |

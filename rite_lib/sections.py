@@ -55,6 +55,7 @@ class Tally:
     files: int = 0                                           # files of the kind this key reads
     votes: dict[str, list[Vote]] = field(default_factory=dict)
     seen: dict[str, int] = field(default_factory=dict)       # title -> files where it occurs
+    hints: dict[str, Vote] = field(default_factory=dict)     # candidates that never get accepted
 
 
 def h2_sections(text: str) -> list[tuple[str, str]]:
@@ -95,6 +96,12 @@ def _path_bullets(body: str) -> int:
             entries.append(span.group(1).strip() if span else (cells[0] if cells else ""))
     hits = sum(1 for token in entries if batch._looks_like_path(token))
     return hits if entries and 2 * hits >= len(entries) else 0
+
+
+def _table_command_rows(body: str) -> int:
+    """Table rows holding a command line — shown as a candidate, never read as gates."""
+    return sum(1 for line in body.splitlines() if line.strip().startswith("|")
+               and any(" " in m.group(1) for m in compose.CODE_SPAN.finditer(line)))
 
 
 def _names_only(body: str) -> bool:
@@ -169,6 +176,14 @@ class Detector:
         if gates and _command_lines(gates[1]):
             self._vote("gates", gates[0], path, f"{_command_lines(gates[1])} command line(s)")
             gate_at = sections.index(gates)
+        else:
+            table = max(sections, key=lambda s: _table_command_rows(s[1]), default=None)
+            if table and _table_command_rows(table[1]):
+                gate_at = sections.index(table)  # where the gates sit, for the sections around them
+                self.tallies["gates"].hints.setdefault(table[0], Vote(
+                    table[0], display(self.p.root, path),
+                    f"a table of {_table_command_rows(table[1])} command line(s); gates are read from "
+                    "bullets only — list the ones every item must pass"))
         # resources sit after the gates in the template; a names-only section there wins
         named = [i for i, (_, b) in enumerate(sections) if i != gate_at and _names_only(b)]
         after = [i for i in named if gate_at is not None and i > gate_at]
@@ -204,6 +219,9 @@ class Detector:
             reliable = (key != "generated_artifacts" and title not in self.taken
                         and len(votes) >= need and share)
             (accepted if reliable else candidates).append(entry)
+        candidates += [{"title": v.title, "votes": 0, "occurs": tally.seen.get(v.title, 0),
+                        "example": v.file, "detail": v.detail}
+                       for v in tally.hints.values() if v.title not in tally.votes]
         self.taken.update(e["title"] for e in accepted)
         current = self.p.section_titles(key)
         explicit = key in _user_sections(self.p)
@@ -247,8 +265,8 @@ def render_block(project: Project, keys: dict) -> str:
                               for e in v["evidence"])
             lines += [f"# {key} — {v['how']}: {proof}", f"{key} = {toml_value(v['titles'])}"]
         else:
-            seen = ", ".join(f"{json.dumps(e['title'], ensure_ascii=False)} ({e['votes']})"
-                             for e in v["candidates"][:5]) or "none"
+            seen = ", ".join(f"{json.dumps(e['title'], ensure_ascii=False)} "
+                             f"({e['votes'] or e['detail']})" for e in v["candidates"][:5]) or "none"
             lines += [f"# {key} — {v['how']}: no reliable match; candidates: {seen}",
                       f"# {key} = {toml_value(v['current'])}"]
     return "\n".join(lines) + "\n"

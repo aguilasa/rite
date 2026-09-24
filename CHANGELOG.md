@@ -28,8 +28,9 @@ have its own proposed from its files, and a missing title is reported instead of
 - `rite check` warns about an open fix with neither an evidence nor a verification title, and about a
   live profile with no gates title.
 - `batch-plan` reads a files section listing bare paths (`- src/a.py (the parser)`) when the path
-  exists; `rite gates` reads a gates section written as a table, from the column holding command
-  lines.
+  exists. Gates stay bullets only: the one gates table measured was a catalogue of sixty tools, some
+  starting an emulator, and every item runs its gates before closing. `rite sections` shows such a
+  table as a commented candidate.
 - `migrate --from we2002` writes the pt-BR titles in the `rite.toml` it generates.
 - The plugin templates write the canonical titles, so a new fix in a pt-BR repository gets
   `## Evidência`.
