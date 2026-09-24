@@ -35,10 +35,19 @@ DEFAULTS: dict = {
         "profile_file": "{cycle}.md",
         "pitfalls_file": "{cycle}.pitfalls.md",
     },
+    # each value is a title or a list of them: the first is the one Rite writes, all are read
     "sections": {
         "execution_log": "Execution Log",
         "phase_checks": "Phase-specific checks",
         "phase_label": "Phase",
+        "evidence": "Evidence",
+        "verification": "Verification",
+        "files": "Files",
+        "scope": "Scope",
+        "gates": "Gates",
+        "serialized_resources": "Serialized resources",
+        "confirmed_decisions": "Confirmed decisions",
+        "generated_artifacts": "Generated artifacts",
     },
     "commit": {
         "style": "conventional",
@@ -155,6 +164,10 @@ def parse(root: Path, text: str) -> Config:
         values = value if isinstance(value, list) else [value]
         if not values or not all(isinstance(v, str) and v.strip() for v in values):
             errors.append(f"[naming].{key} must be a template string or a non-empty list of them")
+    for key, value in data["sections"].items():
+        values = value if isinstance(value, list) else [value]
+        if not values or not all(isinstance(v, str) and v.strip() for v in values):
+            errors.append(f"[sections].{key} must be a title or a non-empty list of them")
     fmt = data["commit"]["ticket_format"]
     if not isinstance(fmt, str) or "{ticket}" not in fmt:
         errors.append("[commit].ticket_format must be a string containing {ticket}")

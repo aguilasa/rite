@@ -27,9 +27,19 @@ profile_file  = "{cycle}.md"                # inside profiles_dir
 pitfalls_file = "{cycle}.pitfalls.md"
 
 [sections]
-execution_log = "Execution Log"
-phase_checks  = "Phase-specific checks"
-phase_label   = "Phase"                     # word looked for in phase_checks ("Phase 3")
+# Each title may be a list: the first entry is the one Rite writes, every entry is read.
+# e.g. evidence = ["Evidence", "Evidência"]. `rite.py sections` proposes this block from the files.
+execution_log        = "Execution Log"
+phase_checks         = "Phase-specific checks"
+phase_label          = "Phase"              # word looked for in phase_checks ("Phase 3")
+evidence             = "Evidence"           # fix: fenced `$ ` commands that show the symptom
+verification         = "Verification"       # fix: commands that turn green after the repair
+files                = "Files"              # item: paths a batch predicts it touches
+scope                = "Scope"              # item: same, a second place to look
+gates                = "Gates"              # profile: commands every item must pass
+serialized_resources = "Serialized resources"  # profile: resources two workers cannot share
+confirmed_decisions  = "Confirmed decisions"   # profile: part of `rite context`
+generated_artifacts  = "Generated artifacts"   # profile: part of `rite context`
 
 [commit]
 style            = "conventional"           # conventional | free

@@ -1,8 +1,9 @@
 import unittest
+from pathlib import Path
 
 import fixtures  # noqa: F401  (puts the plugin root on sys.path)
 
-from rite_lib import frontmatter, markdown
+from rite_lib import config, frontmatter, markdown
 from rite_lib.guard import glob_regex
 from rite_lib.naming import Naming, slugify
 from rite_lib.config import DEFAULTS
@@ -107,6 +108,19 @@ class MarkdownTest(unittest.TestCase):
         self.assertTrue(out2.endswith("## Log\n\n- first\n"))
         out3 = markdown.append_to_section("# A\n\n## Log\n", "Log", "- first")
         self.assertEqual(out3, "# A\n\n## Log\n\n- first\n")
+
+
+class SectionsConfigTest(unittest.TestCase):
+    def test_title_or_list(self):
+        cfg = config.parse(Path("."), '[sections]\nevidence = ["Evidence", "Evidência"]\nfiles = "Arquivos"\n')
+        self.assertEqual(cfg["sections"]["evidence"], ["Evidence", "Evidência"])
+        self.assertEqual(cfg["sections"]["files"], "Arquivos")
+        self.assertEqual(cfg["sections"]["gates"], "Gates")
+
+    def test_empty_title_is_an_error(self):
+        for bad in ('evidence = []', 'gates = ""', 'scope = ["Scope", 3]'):
+            with self.assertRaisesRegex(config.ConfigError, r"\[sections\]\.\w+ must be a title"):
+                config.parse(Path("."), "[sections]\n" + bad + "\n")
 
 
 class GlobTest(unittest.TestCase):
