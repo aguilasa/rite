@@ -2,7 +2,14 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] — 2026-09-24
+
+The triage cannot close a fix by mistake. `mark-stale` is its one destructive outcome, and until now
+nothing said which results never lead there: a missing heading, no command, a shell that could not
+run the command. Now only an output measured under `why: ok` that contradicts the recorded Evidence
+marks a fix stale; everything else goes to the residue. The inline limit is the number the
+2026-09-24 run measured, 7 KB, and the lifecycle e2e checks that the triage stays inline and sends
+only the residue to an agent.
 
 ### Added
 
@@ -10,6 +17,8 @@ All notable changes to this project are documented here. Versions follow [SemVer
   must triage the example's small evidence with no `rite-reproducer`, and a new step plants the
   manifest's `residue_defect`, whose evidence prints past `[limits].inline_triage_max_output_kb`, and
   expects exactly one. A unit test checks, without a model, that the planted fix is over the limit.
+- `rite reproduce` tests for a quoted path with a space and a leading `VAR=x`: a missing path or
+  command is exit 127 with `shell_error` set.
 
 ### Changed
 
