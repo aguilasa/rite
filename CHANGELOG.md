@@ -2,6 +2,51 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [0.6.0] — 2026-09-24
+
+Tokens, not money, and the triage decided. The report stops pricing and counts: four kinds of token
+apart, one cache-weighted number to compare, and every use of Claude Code, not only the rite's. With
+the triage judged per batch instead of per fix, the measurement of 0.5.0 already answers it:
+`/rite:fix-all` now triages inline and starts a reproducer only for what inline cannot decide.
+
+### Changed
+
+- **`rite cost` is now `rite tokens`**, and it counts, never prices. The `[cost]` table is gone (a
+  `[cost]` section is now an unknown section); `docs/cost/` is `docs/tokens/`, `docs/COST.md` is
+  [docs/TOKENS.md](docs/TOKENS.md). The measured matrices lost only their dollar fields; every token
+  count is unchanged.
+- **The unit.** Input, cache writes, cache reads and output are printed apart, with `billed` and
+  turns. Comparisons use `effective = billed + w × cache_read`, `w = --cache-weight` (default 0.1),
+  printed beside every effective number: a ratio of rates, not a price.
+- **`/rite:fix-all` triages inline.** `rite reproduce --all` runs the whole batch's evidence in one
+  call and the main thread writes each verdict. A `rite-reproducer` starts only for the residue: no
+  command, output over `[limits].inline_triage_max_output_kb`, `CANNOT RUN`, or an output that does
+  not decide. `/rite:fix` reproduces with `rite reproduce <FIX>`. The three verdict tokens live in
+  `parts/evidence.md`, shared by inline triage and the agent.
+- The triage verdict of `tools/experiment.py` is judged per batch, in effective tokens: one
+  main-thread turn serves the whole batch. It reports the turn-over N and the output one fix may hold
+  inline, never a cap on the number of fixes.
+
+### Added
+
+- **`rite tokens` covers all of Claude Code.** A plain prompt is the row `(no command)`; other
+  plugins' commands and skills keep their names. `--by command|session|day|project|agent`,
+  `--since/--until` (UTC days), `--project` (`--glob` kept), `--markdown FILE` (deterministic),
+  and a **Totals** block with the subagent and ceremony shares.
+- **`rite reproduce <FIX>|--all [--tail N] [--scratch]`**: runs the `$ ` commands of a fix's fenced
+  Evidence (else its Verification) and reports commands, exit codes, output, the recorded Evidence,
+  `runnable` and `over_limit`. It measures and never judges.
+- `[limits].inline_triage_max_output_kb = 6`.
+
+### Measured
+
+- **Inline triage wins from N = 2 up**, recomputed in effective tokens from the 0.5.0 matrix
+  ([docs/tokens/2026-09-23-fixall-as-is.md](docs/tokens/2026-09-23-fixall-as-is.md)): reproducers
+  against one main-thread turn per batch, 6,183 vs 7,570 at N = 1 (within the dispersion), 8,215 vs
+  7,535 at N = 2, 16,416 vs 9,266 at N = 4. The gap grows with the batch, so there is no fix-count
+  limit. Past about 7 KB of output per fix (6.8 KB at N = 4, 7.1 KB at N = 2), holding it inline costs
+  more than that fix's reproducer: hence 6 KB. Not yet confirmed by a run with inline triage.
+
 ## [0.5.0] — 2026-09-23
 
 Measuring what delegation costs. Until now the token report counted only the main thread, so every
