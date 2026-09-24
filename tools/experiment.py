@@ -317,6 +317,27 @@ def analyze(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> dict:
     return out
 
 
+def compare_labels(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> list[dict]:
+    """Per N, each label's median of the whole invocation — main thread plus subagents, in effective
+    tokens — with its dispersion and main-thread turns. What a change of the rite actually saved."""
+    labels = [l["label"] for l in matrix["meta"]["labels"]]
+    rows = []
+    for n in sorted({c["n"] for c in matrix["cells"]}):
+        row = {"n": n, "labels": {}}
+        for label in labels:
+            cells = [c for c in matrix["cells"] if c["label"] == label and c["n"] == n and c.get("valid")
+                     and _agent(c) is not None]
+            if not cells:
+                continue
+            totals = [tr.effective(c["main"]["billed"] + c["agent"]["billed"],
+                                   c["main"]["cache_read"] + c["agent"]["cache_read"], weight) for c in cells]
+            row["labels"][label] = {"effective": _median(totals), "noise": _range(totals),
+                                    "turns": _median([c["main"]["turns"] for c in cells]),
+                                    "agents": _median([c["agents"] for c in cells])}
+        rows.append(row)
+    return rows
+
+
 def _tok(value: float) -> str:
     return f"{round(value):,}"
 
@@ -435,6 +456,30 @@ def render_markdown(matrix: dict, weight: float = tr.CACHE_WEIGHT) -> str:
                      + (f" Turn-over: N = {t['turn_over']}." if "turn_over" in t else "")
                      + (f" `[limits].inline_triage_max_output_kb` = {t['inline_triage_max_output_kb']}."
                         if "inline_triage_max_output_kb" in t else ""))
+        lines.append("")
+
+    labels = [l["label"] for l in meta["labels"]]
+    if len(labels) > 1:
+        base = labels[0]
+        lines += ["## Labels compared", "",
+                  f"The whole invocation — main thread plus subagents — in effective tokens (w = {weight:g}), "
+                  f"median per N, against `{base}`. The change counts only beyond the dispersion.", "",
+                  "| N | " + " | ".join(f"`{l}`" for l in labels) + " | "
+                  + " | ".join(f"`{l}` vs `{base}`" for l in labels[1:]) + " |",
+                  "| ---: |" + " ---: |" * (2 * len(labels) - 1)]
+        for row in compare_labels(matrix, weight):
+            got = row["labels"]
+            cells = [f"{_tok(got[l]['effective'])} ± {_tok(got[l]['noise'])} ({got[l]['turns']:g} turns, "
+                     f"{got[l]['agents']:g} agents)" if l in got else "—" for l in labels]
+            deltas = []
+            for l in labels[1:]:
+                if l in got and base in got:
+                    change = got[l]["effective"] - got[base]["effective"]
+                    beyond = abs(change) > max(got[l]["noise"], got[base]["noise"])
+                    deltas.append(f"{change / got[base]['effective']:+.0%}" + ("" if beyond else " (within noise)"))
+                else:
+                    deltas.append("—")
+            lines.append(f"| {row['n']} | " + " | ".join(cells) + " | " + " | ".join(deltas) + " |")
         lines.append("")
 
     lines += ["## Caveats", ""]

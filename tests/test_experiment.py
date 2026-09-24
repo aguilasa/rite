@@ -121,6 +121,24 @@ class ReportTest(unittest.TestCase):
         self.assertGreater(full["inline"]["effective"] - light["inline"]["effective"],
                            full["agent"]["effective"] - light["agent"]["effective"])
 
+    def test_labels_are_compared_on_the_whole_invocation(self):
+        matrix = self.matrix()
+        other = json.loads(json.dumps([c for c in matrix["cells"] if c.get("valid")]))
+        for cell in other:
+            cell["label"] = "lean"
+            for side in (cell["main"], cell["agent"]):
+                side["billed"], side["cache_read"] = side["billed"] // 2, side["cache_read"] // 2
+        matrix["cells"] += other
+        matrix["meta"]["labels"].append({"label": "lean", "version": "", "commit": ""})
+        rows = experiment.compare_labels(matrix)
+        for row in rows:
+            got = row["labels"]
+            self.assertAlmostEqual(got["lean"]["effective"] / got["as-is"]["effective"], 0.5, delta=0.01)
+        text = experiment.render_markdown(matrix)
+        self.assertIn("## Labels compared", text)
+        self.assertIn("-50%", text)
+        self.assertNotIn("## Labels compared", experiment.render_markdown(self.matrix()))
+
     def test_triage_of_the_measured_fix_all(self):
         """The matrix of 2026-09-23 gives the table CONCEPTS.md quotes: inline from N = 2 up."""
         path = Path(__file__).resolve().parent.parent / "docs" / "tokens" / "2026-09-23-fixall-as-is.json"

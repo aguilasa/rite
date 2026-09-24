@@ -1,0 +1,538 @@
+{
+  "cells": [
+    {
+      "agent": {
+        "billed": 15711,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 7664,
+            "cache_read": 6335,
+            "cache_write": 7312,
+            "input": 4,
+            "main_turns_after": 9,
+            "n": 1,
+            "output": 348,
+            "shell_bytes": 11,
+            "turns": 2
+          },
+          "rite:rite-worker": {
+            "billed": 8047,
+            "cache_read": 41729,
+            "cache_write": 6993,
+            "input": 10,
+            "main_turns_after": 5,
+            "n": 1,
+            "output": 1044,
+            "shell_bytes": 1910,
+            "turns": 5
+          }
+        },
+        "cache_read": 48064,
+        "cache_write": 14305,
+        "input": 14,
+        "output": 1392,
+        "turns": 7
+      },
+      "agents": 2,
+      "label": "as-is",
+      "main": {
+        "billed": 31771,
+        "cache_read": 603819,
+        "cache_write": 27815,
+        "ceremony": 0,
+        "input": 26,
+        "output": 3930,
+        "turns": 13
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 11421,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 3087,
+            "cache_read": 10787,
+            "cache_write": 2726,
+            "input": 4,
+            "main_turns_after": 8,
+            "n": 1,
+            "output": 357,
+            "shell_bytes": 11,
+            "turns": 2
+          },
+          "rite:rite-worker": {
+            "billed": 8334,
+            "cache_read": 46548,
+            "cache_write": 7630,
+            "input": 10,
+            "main_turns_after": 4,
+            "n": 1,
+            "output": 694,
+            "shell_bytes": 365,
+            "turns": 5
+          }
+        },
+        "cache_read": 57335,
+        "cache_write": 10356,
+        "input": 14,
+        "output": 1051,
+        "turns": 7
+      },
+      "agents": 2,
+      "label": "as-is",
+      "main": {
+        "billed": 32444,
+        "cache_read": 508397,
+        "cache_write": 28745,
+        "ceremony": 0,
+        "input": 22,
+        "output": 3677,
+        "turns": 11
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 15734,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 6245,
+            "cache_read": 21694,
+            "cache_write": 5556,
+            "input": 8,
+            "main_turns_after": 26,
+            "n": 2,
+            "output": 681,
+            "shell_bytes": 12,
+            "turns": 4
+          },
+          "rite:rite-worker": {
+            "billed": 9489,
+            "cache_read": 52320,
+            "cache_write": 7948,
+            "input": 14,
+            "main_turns_after": 14,
+            "n": 2,
+            "output": 1527,
+            "shell_bytes": 1547,
+            "turns": 7
+          }
+        },
+        "cache_read": 74014,
+        "cache_write": 13504,
+        "input": 22,
+        "output": 2208,
+        "turns": 11
+      },
+      "agents": 4,
+      "label": "as-is",
+      "main": {
+        "billed": 39664,
+        "cache_read": 856956,
+        "cache_write": 34220,
+        "ceremony": 1,
+        "input": 34,
+        "output": 5410,
+        "turns": 17
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 20593,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 6298,
+            "cache_read": 21807,
+            "cache_write": 5642,
+            "input": 8,
+            "main_turns_after": 22,
+            "n": 2,
+            "output": 648,
+            "shell_bytes": 12,
+            "turns": 4
+          },
+          "rite:rite-worker": {
+            "billed": 14295,
+            "cache_read": 99286,
+            "cache_write": 12516,
+            "input": 22,
+            "main_turns_after": 12,
+            "n": 2,
+            "output": 1757,
+            "shell_bytes": 1941,
+            "turns": 11
+          }
+        },
+        "cache_read": 121093,
+        "cache_write": 18158,
+        "input": 30,
+        "output": 2405,
+        "turns": 15
+      },
+      "agents": 4,
+      "label": "as-is",
+      "main": {
+        "billed": 39524,
+        "cache_read": 744983,
+        "cache_write": 34021,
+        "ceremony": 1,
+        "input": 30,
+        "output": 5473,
+        "turns": 15
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 41433,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 12215,
+            "cache_read": 43272,
+            "cache_write": 10974,
+            "input": 16,
+            "main_turns_after": 56,
+            "n": 4,
+            "output": 1225,
+            "shell_bytes": 121,
+            "turns": 8
+          },
+          "rite:rite-worker": {
+            "billed": 29218,
+            "cache_read": 167442,
+            "cache_write": 25516,
+            "input": 38,
+            "main_turns_after": 40,
+            "n": 4,
+            "output": 3664,
+            "shell_bytes": 3342,
+            "turns": 19
+          }
+        },
+        "cache_read": 210714,
+        "cache_write": 36490,
+        "input": 54,
+        "output": 4889,
+        "turns": 27
+      },
+      "agents": 8,
+      "label": "as-is",
+      "main": {
+        "billed": 58047,
+        "cache_read": 1073993,
+        "cache_write": 49397,
+        "ceremony": 0,
+        "input": 36,
+        "output": 8614,
+        "turns": 18
+      },
+      "n": 4,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 4,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 40835,
+        "by_type": {
+          "rite:rite-reproducer": {
+            "billed": 12264,
+            "cache_read": 43201,
+            "cache_write": 11194,
+            "input": 16,
+            "main_turns_after": 48,
+            "n": 4,
+            "output": 1054,
+            "shell_bytes": 193,
+            "turns": 8
+          },
+          "rite:rite-worker": {
+            "billed": 28571,
+            "cache_read": 195543,
+            "cache_write": 24708,
+            "input": 44,
+            "main_turns_after": 36,
+            "n": 4,
+            "output": 3819,
+            "shell_bytes": 1490,
+            "turns": 22
+          }
+        },
+        "cache_read": 238744,
+        "cache_write": 35902,
+        "input": 60,
+        "output": 4873,
+        "turns": 30
+      },
+      "agents": 8,
+      "label": "as-is",
+      "main": {
+        "billed": 50229,
+        "cache_read": 887239,
+        "cache_write": 42481,
+        "ceremony": 0,
+        "input": 32,
+        "output": 7716,
+        "turns": 16
+      },
+      "n": 4,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 4,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 0,
+        "by_type": {},
+        "cache_read": 0,
+        "cache_write": 0,
+        "input": 0,
+        "output": 0,
+        "turns": 0
+      },
+      "agents": 0,
+      "label": "inline",
+      "main": {
+        "billed": 28416,
+        "cache_read": 401271,
+        "cache_write": 25210,
+        "ceremony": 5,
+        "input": 18,
+        "output": 3188,
+        "turns": 9
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 0,
+        "by_type": {},
+        "cache_read": 0,
+        "cache_write": 0,
+        "input": 0,
+        "output": 0,
+        "turns": 0
+      },
+      "agents": 0,
+      "label": "inline",
+      "main": {
+        "billed": 27160,
+        "cache_read": 494300,
+        "cache_write": 24376,
+        "ceremony": 5,
+        "input": 22,
+        "output": 2762,
+        "turns": 11
+      },
+      "n": 1,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 1,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 14617,
+        "by_type": {
+          "rite:rite-worker": {
+            "billed": 14617,
+            "cache_read": 75454,
+            "cache_write": 13248,
+            "input": 18,
+            "main_turns_after": 18,
+            "n": 2,
+            "output": 1351,
+            "shell_bytes": 1198,
+            "turns": 9
+          }
+        },
+        "cache_read": 75454,
+        "cache_write": 13248,
+        "input": 18,
+        "output": 1351,
+        "turns": 9
+      },
+      "agents": 2,
+      "label": "inline",
+      "main": {
+        "billed": 36727,
+        "cache_read": 646382,
+        "cache_write": 32659,
+        "ceremony": 8,
+        "input": 26,
+        "output": 4042,
+        "turns": 13
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 9815,
+        "by_type": {
+          "rite:rite-worker": {
+            "billed": 9815,
+            "cache_read": 61182,
+            "cache_write": 7814,
+            "input": 16,
+            "main_turns_after": 18,
+            "n": 2,
+            "output": 1985,
+            "shell_bytes": 707,
+            "turns": 8
+          }
+        },
+        "cache_read": 61182,
+        "cache_write": 7814,
+        "input": 16,
+        "output": 1985,
+        "turns": 8
+      },
+      "agents": 2,
+      "label": "inline",
+      "main": {
+        "billed": 41736,
+        "cache_read": 707291,
+        "cache_write": 35925,
+        "ceremony": 6,
+        "input": 28,
+        "output": 5783,
+        "turns": 14
+      },
+      "n": 2,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 2,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 19634,
+        "by_type": {
+          "rite:rite-worker": {
+            "billed": 19634,
+            "cache_read": 96495,
+            "cache_write": 17188,
+            "input": 26,
+            "main_turns_after": 28,
+            "n": 4,
+            "output": 2420,
+            "shell_bytes": 4636,
+            "turns": 13
+          }
+        },
+        "cache_read": 96495,
+        "cache_write": 17188,
+        "input": 26,
+        "output": 2420,
+        "turns": 13
+      },
+      "agents": 4,
+      "label": "inline",
+      "main": {
+        "billed": 44724,
+        "cache_read": 558753,
+        "cache_write": 39691,
+        "ceremony": 4,
+        "input": 22,
+        "output": 5011,
+        "turns": 11
+      },
+      "n": 4,
+      "open_fixes_after": 0,
+      "rep": 1,
+      "symptoms_fixed": 4,
+      "valid": true
+    },
+    {
+      "agent": {
+        "billed": 28468,
+        "by_type": {
+          "rite:rite-worker": {
+            "billed": 28468,
+            "cache_read": 134775,
+            "cache_write": 24892,
+            "input": 32,
+            "main_turns_after": 32,
+            "n": 4,
+            "output": 3544,
+            "shell_bytes": 6402,
+            "turns": 16
+          }
+        },
+        "cache_read": 134775,
+        "cache_write": 24892,
+        "input": 32,
+        "output": 3544,
+        "turns": 16
+      },
+      "agents": 4,
+      "label": "inline",
+      "main": {
+        "billed": 43634,
+        "cache_read": 623874,
+        "cache_write": 38586,
+        "ceremony": 3,
+        "input": 24,
+        "output": 5024,
+        "turns": 12
+      },
+      "n": 4,
+      "open_fixes_after": 0,
+      "rep": 2,
+      "symptoms_fixed": 4,
+      "valid": true
+    }
+  ],
+  "meta": {
+    "command": "/rite:fix-all",
+    "date": "2026-09-24",
+    "defects": [
+      1,
+      2,
+      4
+    ],
+    "example": "node-minimal",
+    "labels": [
+      {
+        "commit": "79f56d7",
+        "label": "as-is",
+        "version": "0.5.0"
+      },
+      {
+        "commit": "f42859c",
+        "label": "inline",
+        "version": "0.6.0"
+      }
+    ],
+    "model": "sonnet",
+    "repeat": 2
+  }
+}
