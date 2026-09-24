@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import frontmatter, gitutil
 from .config import Config, SEVERITIES
-from .naming import Naming
+from .naming import Naming, as_list
 
 
 class RiteError(Exception):
@@ -139,6 +139,15 @@ class Project:
         # a workspace: rite.toml in a plain folder whose sub-folders are git repositories
         self.workspace = not gitutil.is_repo(self.root)
         self._git_ok: dict[Path, bool] = {}
+
+    # --- section titles ----------------------------------------------------
+    def section_titles(self, key: str) -> list[str]:
+        """Every title `[sections].<key>` accepts, the one Rite writes first."""
+        return as_list(self.cfg["sections"][key])
+
+    def section_title(self, key: str) -> str:
+        """The title Rite writes for `[sections].<key>`."""
+        return self.section_titles(key)[0]
 
     # --- repositories ------------------------------------------------------
     def repos(self) -> list[str]:

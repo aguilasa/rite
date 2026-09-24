@@ -20,7 +20,7 @@ review_commit: null
 
 <!-- One paragraph: what exists after this task that did not exist before. -->
 
-## Scope
+## {{scope}}
 
 - In:
 - Out:

@@ -120,8 +120,23 @@ def section(text: str, title: str) -> str | None:
     return "\n".join(lines[start:]) if start is not None else None
 
 
-def append_to_section(text: str, title: str, addition: str, level: int = 2) -> str:
-    """Append ``addition`` at the end of section ``title``; create the section if missing."""
+def first_section(text: str, titles) -> tuple[str, str] | None:
+    """(title, body) of the first of ``titles`` that has a section in ``text``, tried in order."""
+    for title in ([titles] if isinstance(titles, str) else titles):
+        body = section(text, title)
+        if body is not None:
+            return title, body
+    return None
+
+
+def append_to_section(text: str, title, addition: str, level: int = 2) -> str:
+    """Append ``addition`` at the end of section ``title``; create the section if missing.
+
+    ``title`` may be a list: the first one present is appended to, and a missing section is created
+    with the first of the list."""
+    if not isinstance(title, str):
+        found = first_section(text, title)
+        title = found[0] if found else title[0]
     lines = text.splitlines()
     fence = None
     start = sec_level = None

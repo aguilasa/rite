@@ -42,7 +42,7 @@ def cycle_stats(project: Project, cycle: Cycle) -> dict:
             origin = index.get(str(origin.fields.get("origin")))
         if origin is not None:
             by_phase.setdefault(str(origin.fields.get("phase")), {"tasks": 0, "fixes": 0})["fixes"] += 1
-    log_title = project.cfg["sections"]["execution_log"]
+    log_titles = project.section_titles("execution_log")
     return {
         "cycle": cycle.name,
         "path": display(project.root, cycle.path),
@@ -59,7 +59,8 @@ def cycle_stats(project: Project, cycle: Cycle) -> dict:
         },
         "fix_files": [display(project.root, f.path) for f in fixes],
         "items_without_log": [i.id for i in cycle.items
-                              if i.status in ("done", "stale") and not (markdown.section(i.body, log_title) or "").strip()],
+                              if i.status in ("done", "stale")
+                              and not (markdown.first_section(i.body, log_titles) or ("", ""))[1].strip()],
     }
 
 

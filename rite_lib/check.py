@@ -18,14 +18,20 @@ REQUIRED = {
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def covered_phases(body: str, label: str) -> set[str]:
+def label_pattern(labels) -> str:
+    """A regex alternation of the phase labels (`[sections].phase_label`, a title or a list)."""
+    labels = [labels] if isinstance(labels, str) else labels
+    return "(?:" + "|".join(re.escape(label) for label in labels) + ")"
+
+
+def covered_phases(body: str, labels) -> set[str]:
     """Phases a profile's phase-checks section has entries for.
 
     Accepts single phases ("Phase 3") and ranges ("Phase 4-5", "Phase 6–7"): one entry often covers
     phases that share their checks.
     """
     covered: set[str] = set()
-    rx = re.compile(rf"(?i)\b{re.escape(label)}s?\s+(\w+)(?:\s*[-–]\s*(\d+))?\b")
+    rx = re.compile(rf"(?i)\b{label_pattern(labels)}s?\s+(\w+)(?:\s*[-–]\s*(\d+))?\b")
     for m in rx.finditer(body):
         first, last = m.group(1), m.group(2)
         if last and first.isdigit() and int(first) <= int(last):
@@ -293,16 +299,16 @@ class Checker:
                      "move measured pitfalls to the pitfalls file (/rite:retro compacts)")
         text = prof.read_text(encoding="utf-8", errors="replace")
         self.check_links(prof)
-        heading = self.p.cfg["sections"]["phase_checks"]
-        body = markdown.section(text, heading)
-        if body is not None:
-            body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)  # template hints are not entries
+        found = markdown.first_section(text, self.p.section_titles("phase_checks"))
+        heading = found[0] if found else self.p.section_title("phase_checks")
+        # template hints are not entries
+        body = re.sub(r"<!--.*?-->", "", found[1], flags=re.DOTALL) if found else None
         phases = sorted({str(t.fields.get("phase")) for t in cycle.tasks if t.fields.get("phase") is not None})
         if body is None:
             if phases:
                 self.err(prof, f"missing section '{heading}' (tasks use phases {', '.join(phases)})")
             return
-        covered = covered_phases(body, self.p.cfg["sections"]["phase_label"])
+        covered = covered_phases(body, self.p.section_titles("phase_label"))
         for ph in phases:
             if ph not in covered:
                 self.err(prof, f"'{heading}' has no entry for phase {ph}")

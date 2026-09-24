@@ -19,7 +19,7 @@ Origin: [{{origin}}]({{origin_link}})
 
 <!-- What is wrong, stated as an observable fact. -->
 
-## Evidence
+## {{evidence}}
 
 <!-- The exact command and its output that shows the problem. Whoever fixes this reproduces it first. -->
 
@@ -33,11 +33,11 @@ $
 
 <!-- Where the change goes. If the defect is in generated output, the fix goes in the generator. -->
 
-## Files
+## {{files}}
 
 -
 
-## Verification
+## {{verification}}
 
 <!-- Command(s) that turn red before the fix and green after it. -->
 

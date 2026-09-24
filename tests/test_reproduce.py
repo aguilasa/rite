@@ -54,7 +54,8 @@ class EvidenceCommandsTest(unittest.TestCase):
 
     def test_dollar_lines_of_the_fenced_evidence(self):
         found = compose.evidence_commands(fix_body("```text\n$ node bin/x.mjs a\nBAD\n$ echo 2\n2\n```"))
-        self.assertEqual(found, {"source": "Evidence", "commands": ["node bin/x.mjs a", "echo 2"],
+        self.assertEqual(found, {"source": "Evidence", "heading": "Evidence",
+                                 "commands": ["node bin/x.mjs a", "echo 2"],
                                  "recorded": ["BAD", "2"]})
 
     def test_a_dollar_outside_a_fence_is_prose(self):

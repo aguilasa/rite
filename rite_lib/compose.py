@@ -13,7 +13,9 @@ import subprocess
 from pathlib import Path
 
 from . import check as checkmod, gitutil, markdown, ops, selection, views
+from .config import DEFAULTS
 from .model import Cycle, Item, Project, RiteError, display, resolve_link
+from .naming import as_list
 
 CODE_SPAN = re.compile(r"`([^`]+)`")
 
@@ -224,22 +226,23 @@ def context(project: Project, *, item_id: str, cycle_name: str | None = None) ->
     if cycle.profile_path.is_file():
         profile = cycle.profile_path.read_text(encoding="utf-8", errors="replace")
         rel = display(project.root, cycle.profile_path)
-        for title in ("Confirmed decisions", "Gates", "Generated artifacts"):
-            body = markdown.section(profile, title)
-            if body and body.strip():
-                parts.append({"name": f"{rel} § {title}", "text": body.strip()})
+        for key in ("confirmed_decisions", "gates", "generated_artifacts"):
+            found = markdown.first_section(profile, project.section_titles(key))
+            if found and found[1].strip():
+                parts.append({"name": f"{rel} § {found[0]}", "text": found[1].strip()})
         phase = item.fields.get("phase")
-        checks = markdown.section(profile, project.cfg["sections"]["phase_checks"])
+        checks = markdown.first_section(profile, project.section_titles("phase_checks"))
         if checks and phase is not None:
-            label = project.cfg["sections"]["phase_label"]
-            wanted = [b for b in re.split(r"(?m)^(?=#{3,6}\s|\s*[-*]\s+\*\*)", checks)
-                      if re.search(rf"(?i)\b{re.escape(label)}s?\s+{re.escape(str(phase))}\b", b)]
+            label = project.section_title("phase_label")
+            labels = checkmod.label_pattern(project.section_titles("phase_label"))
+            wanted = [b for b in re.split(r"(?m)^(?=#{3,6}\s|\s*[-*]\s+\*\*)", checks[1])
+                      if re.search(rf"(?i)\b{labels}s?\s+{re.escape(str(phase))}\b", b)]
             if wanted:
-                parts.append({"name": f"{rel} § {project.cfg['sections']['phase_checks']} "
-                                      f"({label} {phase})", "text": "\n".join(w.strip() for w in wanted)})
+                parts.append({"name": f"{rel} § {checks[0]} ({label} {phase})",
+                              "text": "\n".join(w.strip() for w in wanted)})
     terms = [*(str(f) for f in (item.fields.get("files") or [])),
              str(item.fields.get("type") or ""), item.repo or "",
-             f"{project.cfg['sections']['phase_label']} {item.fields.get('phase')}"]
+             *(f"{label} {item.fields.get('phase')}" for label in project.section_titles("phase_label"))]
     if cycle.pitfalls_path.is_file():
         entries = _pitfall_entries(cycle.pitfalls_path.read_text(encoding="utf-8", errors="replace"), terms)
         if entries:
@@ -281,9 +284,10 @@ def profile_gates(project: Project, cycle: Cycle) -> list[str]:
     """Commands the profile's Gates section lists, one per code span."""
     if not cycle.profile_path.is_file():
         return []
-    body = markdown.section(cycle.profile_path.read_text(encoding="utf-8", errors="replace"), "Gates")
+    found = markdown.first_section(cycle.profile_path.read_text(encoding="utf-8", errors="replace"),
+                                   project.section_titles("gates"))
     out = []
-    for line in (body or "").splitlines():
+    for line in (found[1] if found else "").splitlines():
         if line.strip().startswith(("-", "*")):
             span = CODE_SPAN.search(line)
             if span:
@@ -343,21 +347,30 @@ def _shell_lines(body: str) -> tuple[list[str], list[str]]:
     return commands, recorded
 
 
-def evidence_commands(text: str) -> dict:
+def evidence_commands(text: str, evidence: list[str] | None = None,
+                      verification: list[str] | None = None) -> dict:
     """Where a fix says how to see its symptom: `$ ` lines of the fenced Evidence, else of the
-    Verification, else code spans of the Verification's bullets. None of those: not runnable."""
-    evidence = markdown.section(text, "Evidence") or ""
-    commands, recorded = _shell_lines(evidence)
+    Verification, else code spans of the Verification's bullets. None of those: not runnable.
+
+    ``evidence`` and ``verification`` are the titles `[sections]` accepts (the defaults when None).
+    `source` names the kind of section whatever the language; `heading` is the title found."""
+    evidence = evidence or as_list(DEFAULTS["sections"]["evidence"])
+    verification = verification or as_list(DEFAULTS["sections"]["verification"])
+    found_evidence = markdown.first_section(text, evidence)
+    found_verification = markdown.first_section(text, verification)
+    commands, recorded = _shell_lines(found_evidence[1] if found_evidence else "")
     if commands:
-        return {"source": "Evidence", "commands": commands, "recorded": recorded}
-    verification = markdown.section(text, "Verification") or ""
-    commands, _ = _shell_lines(verification)
+        return {"source": "Evidence", "heading": found_evidence[0], "commands": commands,
+                "recorded": recorded}
+    body = found_verification[1] if found_verification else ""
+    commands, _ = _shell_lines(body)
     if not commands:
-        commands = [span.group(1).strip() for line in verification.splitlines()
+        commands = [span.group(1).strip() for line in body.splitlines()
                     if line.strip().startswith(("-", "*")) for span in [CODE_SPAN.search(line)] if span]
     if commands:
-        return {"source": "Verification", "commands": commands, "recorded": recorded}
-    return {"source": None, "commands": [], "recorded": recorded}
+        return {"source": "Verification", "heading": found_verification[0], "commands": commands,
+                "recorded": recorded}
+    return {"source": None, "heading": None, "commands": [], "recorded": recorded}
 
 
 def _export(repo: Path, into: Path) -> None:
@@ -439,7 +452,8 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     results = []
     try:
         for fix in fixes:
-            found = evidence_commands(fix.path.read_text(encoding="utf-8", errors="replace"))
+            found = evidence_commands(fix.path.read_text(encoding="utf-8", errors="replace"),
+                                      project.section_titles("evidence"), project.section_titles("verification"))
             repo = _repo_dir(project, fix)
             where = repo
             if scratch and found["commands"]:

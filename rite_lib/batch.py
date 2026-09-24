@@ -35,24 +35,26 @@ def _as_list(value) -> list[str]:
     return [str(v) for v in value] if isinstance(value, list) else [str(value)]
 
 
-def _section_paths(text: str, title: str) -> list[str]:
-    body = markdown.section(text, title)
-    if not body:
+def _section_paths(text: str, titles: list[str]) -> list[str]:
+    found_section = markdown.first_section(text, titles)
+    if not found_section or not found_section[1]:
         return []
     found = []
-    for m in _CODE_SPAN.finditer(body):
+    for m in _CODE_SPAN.finditer(found_section[1]):
         token = m.group(1).strip()
         if "/" in token or "." in token.rsplit("/", 1)[-1]:
             found.append(token.lstrip("./"))
     return found
 
 
-def predicted_files(item: Item) -> tuple[list[str], bool]:
-    """Declared `files:` frontmatter wins; else paths in backticks under Files/Scope. (paths, declared?)"""
+def predicted_files(project: Project, item: Item) -> tuple[list[str], bool]:
+    """Declared `files:` frontmatter wins; else paths in backticks under the `[sections]` files and
+    scope titles. (paths, declared?)"""
     declared = _as_list(item.fields.get("files"))
     if declared:
         return declared, True
-    paths = _section_paths(item.body, "Files") + _section_paths(item.body, "Scope")
+    paths = (_section_paths(item.body, project.section_titles("files"))
+             + _section_paths(item.body, project.section_titles("scope")))
     return list(dict.fromkeys(paths)), False
 
 
@@ -74,8 +76,9 @@ def globs_overlap(a: str, b: str) -> bool:
 def serialized_names(project: Project, cycle: Cycle) -> set[str]:
     names = {str(r["name"]) for r in project.cfg["resources"]["serialized"]}
     if cycle.profile_path.is_file():
-        body = markdown.section(cycle.profile_path.read_text(encoding="utf-8"), "Serialized resources") or ""
-        for line in body.splitlines():
+        found = markdown.first_section(cycle.profile_path.read_text(encoding="utf-8"),
+                                       project.section_titles("serialized_resources"))
+        for line in (found[1] if found else "").splitlines():
             m = re.match(r"\s*[-*]\s+`?([\w.-]+)`?", line)
             if m and m.group(1).lower() not in ("none", "n/a"):
                 names.add(m.group(1))
@@ -116,7 +119,7 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
     serial = serialized_names(project, cycle)
     planned = []
     for it in items:
-        files, declared = predicted_files(it)
+        files, declared = predicted_files(project, it)
         res = [r for r in _as_list(it.fields.get("resources"))]
         planned.append(Planned(it, files, res, declared))
     in_batch = {p.item.id: p for p in planned}

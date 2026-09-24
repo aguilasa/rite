@@ -109,6 +109,15 @@ class MarkdownTest(unittest.TestCase):
         out3 = markdown.append_to_section("# A\n\n## Log\n", "Log", "- first")
         self.assertEqual(out3, "# A\n\n## Log\n\n- first\n")
 
+    def test_first_section_and_append_to_a_list_of_titles(self):
+        text = "# A\n\n## Evidência\n\nx\n\n## Log de Execução\n\n- one\n"
+        self.assertEqual(markdown.first_section(text, ["Evidence", "Evidência"]), ("Evidência", "\nx\n"))
+        self.assertIsNone(markdown.first_section(text, ["Evidence"]))
+        out = markdown.append_to_section(text, ["Execution Log", "Log de Execução"], "- two")
+        self.assertTrue(out.endswith("## Log de Execução\n\n- one\n- two\n"))
+        out2 = markdown.append_to_section("# A\n", ["Execution Log", "Log de Execução"], "- first")
+        self.assertTrue(out2.endswith("## Execution Log\n\n- first\n"))
+
 
 class SectionsConfigTest(unittest.TestCase):
     def test_title_or_list(self):

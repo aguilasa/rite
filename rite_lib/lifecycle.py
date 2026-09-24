@@ -52,7 +52,8 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
         dest.parent.mkdir(parents=True, exist_ok=True)
         text = render(project, tpl, values)
         if tpl == "profile.md":
-            text = text.replace("## Phase-specific checks", "## " + project.cfg["sections"]["phase_checks"])
+            # a local template override may predate the {{phase_checks}} placeholder
+            text = text.replace("## Phase-specific checks", "## " + project.section_title("phase_checks"))
         if tpl == "progress.md":
             # set, not templated: a local template override may predate these keys
             text = frontmatter.set_fields(text, {"ticket": ticket or None, "local": bool(local)})

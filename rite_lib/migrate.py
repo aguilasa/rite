@@ -396,7 +396,7 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
         new = frontmatter.remove_fields(frontmatter.set_fields(text, up), LEGACY_KEYS)
         if approximated and PROVENANCE_MARK not in new:
             # the report is read once; the item is read every time the item is — record the doubt there
-            new = markdown.append_to_section(new, project.cfg["sections"]["execution_log"],
+            new = markdown.append_to_section(new, project.section_titles("execution_log"),
                                              PROVENANCE_LINE.format(date=_today()))
         if new != text:
             report.changed.append(display(project.root, item.path))

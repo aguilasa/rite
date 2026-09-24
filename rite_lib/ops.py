@@ -71,17 +71,17 @@ def template_path(project: Project, name: str) -> Path:
 
 def render(project: Project, name: str, values: dict) -> str:
     text = template_path(project, name).read_text(encoding="utf-8")
-    values = {**values, "execution_log": project.cfg["sections"]["execution_log"]}
+    values = {**{key: project.section_title(key) for key in project.cfg["sections"]}, **values}
     for key, value in values.items():
         text = text.replace("{{" + key + "}}", str(value))
     return text
 
 
-def _write_item(item: Item, updates: dict, log_line: str | None, log_title: str) -> None:
+def _write_item(item: Item, updates: dict, log_line: str | None, log_titles: list[str]) -> None:
     text = item.path.read_text(encoding="utf-8")
     text = frontmatter.set_fields(text, updates)
     if log_line:
-        text = append_to_section(text, log_title, log_line)
+        text = append_to_section(text, log_titles, log_line)
     item.path.write_text(text, encoding="utf-8", newline="\n")
     item.fields.update(updates)
 
@@ -250,7 +250,7 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     log = [f"- **Closed** — commit `{short}`{where} ({date}): {subj}",
            f"  - Files (`{git_c} show --name-status {short}`):"]
     log += [f"    - `{st} {p}`" for st, p in files] or ["    - *(none)*"]
-    _write_item(item, updates, "\n".join(log), project.cfg["sections"]["execution_log"])
+    _write_item(item, updates, "\n".join(log), project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": short, "work_subject": subj,
             **result}
@@ -267,7 +267,7 @@ def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: st
     if item.kind == "task":
         updates["reviewed_on"] = "pending"
     _write_item(item, updates, f"- **Closed** — no work commit ({date}): {reason.strip()}",
-                project.cfg["sections"]["execution_log"])
+                project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": NO_COMMIT, "work_subject": None,
             **result}
@@ -282,7 +282,7 @@ def mark(project: Project, cycle: Cycle, item: Item, status: str, *, reason: str
     today = dt.date.today().isoformat()
     log = f"- **{status}** ({today})" + (f": {reason}" if reason else "")
     _write_item(item, {"status": status}, log if (reason or status in ("blocked", "skipped")) else None,
-                project.cfg["sections"]["execution_log"])
+                project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, status, item.id, cycle=cycle), commit)
     return {"id": item.id, "status": status, **result}
 
@@ -303,7 +303,8 @@ def mark_reviewed(project: Project, cycle: Cycle, item: Item, *, fixes: list[str
     date = date or dt.date.today().isoformat()
     head = _head(project, item)
     log = f"- **Reviewed** ({date}) at `{head}`: " + (", ".join(fixes) if fixes else "no finding")
-    _write_item(item, {"reviewed_on": date, "review_commit": head}, log, project.cfg["sections"]["execution_log"])
+    _write_item(item, {"reviewed_on": date, "review_commit": head}, log,
+                project.section_titles("execution_log"))
     detail = f" ({len(fixes)} fix{'es' if len(fixes) != 1 else ''}: {', '.join(fixes)})" if fixes else " (no finding)"
     result = _finish(project, cycle, [item.path, *(f.path for f in fix_items)],
                      bookkeeping_message(project, "review", item.id, detail, cycle=cycle), commit)
@@ -320,7 +321,7 @@ def mark_stale(project: Project, cycle: Cycle, item: Item, *, reason: str, commi
     today = dt.date.today().isoformat()
     head = _head(project, item)
     _write_item(item, {"status": "stale", "done_on": today, "done_commit": head},
-                f"- **Stale** ({today}) at `{head}`: {reason}", project.cfg["sections"]["execution_log"])
+                f"- **Stale** ({today}) at `{head}`: {reason}", project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "stale", item.id, cycle=cycle), commit)
     return {"id": item.id, "status": "stale", **result}
 
@@ -349,7 +350,7 @@ def rebind(project: Project, cycle: Cycle, item: Item, *, sha: str, commit: bool
     today = dt.date.today().isoformat()
     _write_item(item, {"done_commit": short},
                 f"- **Rebound** ({today}): done_commit `{old}` -> `{short}`: {subj}",
-                project.cfg["sections"]["execution_log"])
+                project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "rebind", item.id, cycle=cycle),
                      commit)
     return {"id": item.id, "old_commit": old, "done_commit": short, "work_subject": subj, **result}
