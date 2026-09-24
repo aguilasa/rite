@@ -149,6 +149,33 @@ class ReproduceTest(unittest.TestCase):
         run = data["fixes"][0]["commands"][0]
         self.assertEqual((run["exit_code"], run["output"].strip()), (0, "1"))
 
+    def bash_runs(self, fix_id: str) -> tuple[dict, list[dict]]:
+        data = self.reproduce(fix_id)
+        if data["shell"] == "system" and sys.platform == "win32":
+            self.skipTest("no bash on this machine")
+        return data["fixes"][0], data["fixes"][0]["commands"]
+
+    def test_a_path_with_a_space(self):
+        # a shell error is `shell_error`, which the evidence rule reads as CANNOT RUN, never stale
+        spaced = self.root / "dir with space"
+        spaced.mkdir()
+        (spaced / "run.py").write_text("print('ran')\n", encoding="utf-8")
+        fix, (found, gone) = self.bash_runs(self.add_fix(
+            f"```text\n$ {PY} \"dir with space/run.py\"\nran\n$ \"dir with space/missing.sh\"\n```"))
+        self.assertEqual((fix["runnable"], fix["why"]), (True, "ok"))
+        self.assertEqual((found["exit_code"], found["output"].strip(), found["shell_error"]), (0, "ran", False))
+        self.assertEqual((gone["exit_code"], gone["shell_error"]), (127, True))
+
+    def test_an_assignment_before_the_command(self):
+        fix, (assigned, missing) = self.bash_runs(self.add_fix(
+            f"```text\n$ RITE_X=x {PY} -c \"import os; print(os.environ['RITE_X'])\"\nx\n"
+            "$ RITE_X=x rite-no-such-command-xyz\n```"))
+        self.assertEqual((fix["runnable"], fix["why"]), (True, "ok"))
+        self.assertEqual((assigned["exit_code"], assigned["output"].strip(), assigned["shell_error"]),
+                         (0, "x", False))
+        self.assertEqual((missing["exit_code"], missing["shell_error"]), (127, True))
+        self.assertIn("rite-no-such-command-xyz", missing["output"])
+
     def test_a_command_reads_no_stdin(self):
         # a heredoc (`python - <<'EOF'`) arrives one line at a time: `python -` must not wait forever
         fix_id = self.add_fix(f"```text\n$ {PY} -c \"import sys; print(len(sys.stdin.read()))\"\n```")
