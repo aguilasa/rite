@@ -107,8 +107,10 @@ and waves; with `--plan`, stop and commit those edits (`chore(rite): plan batch 
 2. For each report, `git status --porcelain` must show only that item's allowed files; a stray file is
    a failure of that item.
 3. `rite gates --cycle <cycle> --json` once, on the combined tree. Red → abort the wave: commit
-   nothing, leave the items `in-progress`, report the output with the per-item file lists. A broken
-   gate cannot be attributed after parallel edits.
+   nothing, leave the items `in-progress`, report the output with the per-item file lists. Still red
+   with the wave's edits stashed (`git stash -u`, gates, `git stash pop`) → the defect predates the
+   wave: open a `high` fix with the gate output as Evidence (`rite new-fix`, `rite commit-new`); the
+   next run repairs it first.
 4. **Serially, in item order**, for each DONE item: stage exactly its files, work commit with the
    references from `rite begin`, then `rite finish <ID> --json`. Workers edit, the main thread commits
    — no races on the index or the views.

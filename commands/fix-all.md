@@ -13,14 +13,14 @@ Arguments: `$ARGUMENTS`
 
 1. `rite begin fix --cycle <cycle> --json` for the cycle and its config. The batch is the fix IDs given,
    or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle> --json`); fixes opened
-   during the run are not added, since a batch whose end moves is never done.
-2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for the whole batch.
+   during the run are not added: a batch whose end moves is never done.
+2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for the batch.
    Compare each fix's output with its `recorded` Evidence and write its verdict:
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
-   - `REPRODUCED` → stays in the batch; paste the output into its Execution Log for the worker.
+   - `REPRODUCED` → stays in the batch; paste the output into its Execution Log.
    - **Residue** — `runnable: false`, `over_limit`, `CANNOT RUN`, or an output that does not decide:
-     only then one `rite:rite-reproducer` per residue fix, in a single message, each with the payload
-     of `rite context <FIX> --json`. Its verdict is handled as above; `CANNOT RUN` stays in the batch.
+     only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
+     `rite context <FIX> --json`. Handle its verdict as above; `CANNOT RUN` stays in the batch.
 3. **Plan** with `--kind fix` on the remaining IDs. With `--plan`, stop here.
 4. **Run the waves.** Each worker follows the single-fix rules of `/rite:fix`: reproduce again, confirm
    the root cause, repair the generator when the output is generated, never widen the scope.
@@ -31,8 +31,8 @@ Arguments: `$ARGUMENTS`
 
 ## Report
 
-Triage, one line per fix: verdict, inline or agent (a fix with no command is a defect of the review
-that opened it) · waves and conflict pairs · per item: result, work SHA, bookkeeping SHA · gates ·
+Triage, one line per fix: verdict, inline or agent (no command: a defect of the review that
+opened it) · waves and conflict pairs · per item: result, work SHA, bookkeeping SHA · gates ·
 new fixes opened · what to run next.
 
 ## The CLI
@@ -112,8 +112,10 @@ and waves; with `--plan`, stop and commit those edits (`chore(rite): plan batch 
 2. For each report, `git status --porcelain` must show only that item's allowed files; a stray file is
    a failure of that item.
 3. `rite gates --cycle <cycle> --json` once, on the combined tree. Red → abort the wave: commit
-   nothing, leave the items `in-progress`, report the output with the per-item file lists. A broken
-   gate cannot be attributed after parallel edits.
+   nothing, leave the items `in-progress`, report the output with the per-item file lists. Still red
+   with the wave's edits stashed (`git stash -u`, gates, `git stash pop`) → the defect predates the
+   wave: open a `high` fix with the gate output as Evidence (`rite new-fix`, `rite commit-new`); the
+   next run repairs it first.
 4. **Serially, in item order**, for each DONE item: stage exactly its files, work commit with the
    references from `rite begin`, then `rite finish <ID> --json`. Workers edit, the main thread commits
    — no races on the index or the views.

@@ -102,6 +102,14 @@ class LoopTest(FixtureCase):
         self.assertEqual(self.check_errors("--all"), [])
         self.assertEqual(self.js("next", "task", "--cycle", "alpha")["id"], "ALP-TASK-02")
 
+    def test_a_defect_older_than_the_wave_is_fixed_before_the_wave_resumes(self):
+        # a batch aborted on a red gate leaves its task in progress; the high fix it opened comes first
+        self.ok("mark", "ALP-TASK-01", "in-progress")
+        self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "Gate red before the wave",
+                "--severity", "high")
+        status = self.js("status", "--cycle", "alpha")["cycles"][0]
+        self.assertEqual(status["suggestion"]["command"], "fix")
+
     def test_review_without_finding_commits(self):
         self.fx.work_commit("src/a.py", "a\n", "feat: a")
         self.ok("close", "ALP-TASK-01")
