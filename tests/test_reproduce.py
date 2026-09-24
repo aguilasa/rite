@@ -127,6 +127,12 @@ class ReproduceTest(unittest.TestCase):
         run = data["fixes"][0]["commands"][0]
         self.assertEqual((run["exit_code"], run["output"].strip()), (0, "1"))
 
+    def test_a_command_reads_no_stdin(self):
+        # a heredoc (`python - <<'EOF'`) arrives one line at a time: `python -` must not wait forever
+        fix_id = self.add_fix(f"```text\n$ {PY} -c \"import sys; print(len(sys.stdin.read()))\"\n```")
+        run = self.reproduce(fix_id)["fixes"][0]["commands"][0]
+        self.assertEqual((run["exit_code"], run["output"].strip()), (0, "0"))
+
     def test_one_fix_and_a_missing_command(self):
         fix_id = self.add_fix("```text\n$ rite-no-such-command-xyz\n```")
         run = self.reproduce(fix_id)["fixes"][0]["commands"][0]

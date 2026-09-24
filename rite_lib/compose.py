@@ -447,7 +447,8 @@ def shell_name(shell: list[str] | None) -> str:
 
 def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = None) -> dict:
     run = ([*shell, command], False) if shell else (command, True)
-    proc = subprocess.run(run[0], shell=run[1], cwd=where, capture_output=True, text=True,
+    # stdin closed: a heredoc arrives one line at a time, and `python -` would wait on it forever
+    proc = subprocess.run(run[0], shell=run[1], cwd=where, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                           encoding="utf-8", errors="replace", env={**os.environ})
     output = (proc.stdout or "") + (proc.stderr or "")
     lines = output.splitlines()
