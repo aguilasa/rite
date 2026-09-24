@@ -109,6 +109,15 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual(data["limit_kb"], 6)
         self.assertEqual(self.reproduce("--all"), data)  # the same structure, call after call
 
+    def test_quotes_mean_what_they_mean_in_bash(self):
+        # evidence is copied from bash sessions; cmd.exe would print the quotes and split on spaces
+        fix_id = self.add_fix("```text\n$ echo 'a  b' | grep -c '^a  b$'\n1\n```")
+        data = self.reproduce(fix_id)
+        if data["shell"] == "system" and sys.platform == "win32":
+            self.skipTest("no bash on this machine")
+        run = data["fixes"][0]["commands"][0]
+        self.assertEqual((run["exit_code"], run["output"].strip()), (0, "1"))
+
     def test_one_fix_and_a_missing_command(self):
         fix_id = self.add_fix("```text\n$ rite-no-such-command-xyz\n```")
         run = self.reproduce(fix_id)["fixes"][0]["commands"][0]

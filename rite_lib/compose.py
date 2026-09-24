@@ -378,8 +378,27 @@ def _export(repo: Path, into: Path) -> None:
             tar.extractall(into)
 
 
-def _run_one(command: str, where: Path, tail: int) -> dict:
-    proc = subprocess.run(command, shell=True, cwd=where, capture_output=True, text=True,
+def evidence_shell() -> list[str] | None:
+    """The shell evidence is written for: bash, as Claude Code runs it — Git Bash on Windows. There,
+    `grep 'a  b' f` means what the fix file says; cmd.exe would pass the quotes as text. None:
+    no bash found, the platform's own shell runs the command."""
+    import shutil
+    if os.name != "nt":
+        return [found, "-c"] if (found := shutil.which("bash")) else None
+    candidates = [os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")]
+    git = shutil.which("git")
+    if git:  # <Git>/cmd/git.exe or <Git>/mingw64/bin/git.exe; never WSL's System32 bash
+        for root in Path(git).resolve().parents[:3]:
+            candidates += [root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return [str(candidate), "-c"]
+    return None
+
+
+def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = None) -> dict:
+    run = ([*shell, command], False) if shell else (command, True)
+    proc = subprocess.run(run[0], shell=run[1], cwd=where, capture_output=True, text=True,
                           encoding="utf-8", errors="replace", env={**os.environ})
     output = (proc.stdout or "") + (proc.stderr or "")
     lines = output.splitlines()
@@ -410,6 +429,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     else:
         raise RiteError("name a fix, or pass --all")
     limit_kb = project.cfg["limits"]["inline_triage_max_output_kb"]
+    shell = evidence_shell()
     copies: dict[Path, Path] = {}
     results = []
     try:
@@ -422,7 +442,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                     copies[repo] = Path(tempfile.mkdtemp(prefix="rite-reproduce-"))
                     _export(repo, copies[repo])
                 where = copies[repo]
-            runs = [_run_one(command, where, tail) for command in found["commands"]]
+            runs = [_run_one(command, where, tail, shell) for command in found["commands"]]
             held = sum(len(r["output"].encode("utf-8")) for r in runs)
             over = held > limit_kb * 1024
             if over:
@@ -437,7 +457,8 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     finally:
         for copy in copies.values():
             shutil.rmtree(copy, ignore_errors=True)
-    return {"cycle": cycle.name, "scratch": scratch, "limit_kb": limit_kb, "count": len(results),
+    return {"cycle": cycle.name, "scratch": scratch, "limit_kb": limit_kb,
+            "shell": Path(shell[0]).name if shell else "system", "count": len(results),
             "fixes": results}
 
 
