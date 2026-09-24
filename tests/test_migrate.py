@@ -134,6 +134,8 @@ class MigrateTest(unittest.TestCase):
         warnings = [f["message"] for f in json.loads(out)["findings"] if f["level"] == "warn"]
         # the generated [sections] names the pt-BR titles: Gates and Evidência are found
         self.assertEqual(warnings, ["id prefix PAR differs from cycle prefix LEG"])
+        fix = json.loads(rite(self.root, "reproduce", "CORR-LEG-002", "--json")[1])["fixes"][0]
+        self.assertEqual((fix["runnable"], fix["heading"]), (True, "Evidência"))
         status = json.loads(rite(self.root, "status", "--json")[1])["cycles"][0]
         self.assertEqual(status["review_queue"], ["LEG-TASK-02"])
         self.assertEqual(status["open_fixes"]["low"], 1)

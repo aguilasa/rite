@@ -98,8 +98,10 @@ def _path_bullets(body: str) -> int:
 
 
 def _names_only(body: str) -> bool:
+    """Every bullet opens with one short name (`display`, `- emulator — one at a time`), not a path."""
     bullets = [line for line in body.splitlines() if _BULLET.match(line)]
-    return bool(bullets) and all(_NAME_BULLET.match(line) for line in bullets)
+    return (bool(bullets) and all(_NAME_BULLET.match(line) for line in bullets)
+            and not _path_bullets(body))
 
 
 class Detector:
@@ -167,7 +169,10 @@ class Detector:
         if gates and _command_lines(gates[1]):
             self._vote("gates", gates[0], path, f"{_command_lines(gates[1])} command line(s)")
             gate_at = sections.index(gates)
-        names = next((t for t, b in sections if t != (gates or ("",))[0] and _names_only(b)), None)
+        # resources sit after the gates in the template; a names-only section there wins
+        named = [i for i, (_, b) in enumerate(sections) if i != gate_at and _names_only(b)]
+        after = [i for i in named if gate_at is not None and i > gate_at]
+        names = sections[(after or named)[0]][0] if named else None
         self._vote("serialized_resources", names, path, "short names")
         between = [t for t, _ in sections[1:gate_at]] if gate_at else []
         for title in between:  # a candidate only: nothing in its body says "generated"

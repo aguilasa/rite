@@ -223,6 +223,118 @@ class Fixture:
         write(r / "roms/original.bin", "binary\n")
         self._sync()
 
+    def _build_ptbr(self) -> None:
+        """A pt-BR backlog on a 0.6.0 rite.toml: its sections are titled in Portuguese, and
+        `[sections]` names only the three keys 0.6.0 had — Evidence, Gates, Files are not found."""
+        r = self.root
+        write(r / "rite.toml", """
+            [project]
+            docs_language = "pt-BR"
+            [paths]
+            cycles_root = "docs/tasks"
+            profiles_dir = "docs/prompts"
+            plans_dir = "docs"
+            [naming]
+            fix_id = "CORR-{prefix}-{n:03}"
+            progress_file = "progresso.md"
+            fixes_file = "correcoes-progresso.md"
+            profile_file = "perfil-{cycle}.md"
+            pitfalls_file = "perfil-{cycle}.armadilhas.md"
+
+            [sections]
+            # os títulos do repositório
+            execution_log = "Log de Execução"   # o log que o Rite escreve
+            phase_checks  = "Verificações específicas por fase"
+            phase_label   = "Fase"
+
+            [vocab]
+            task_types = []
+            """)
+        write(r / "docs/PLAN-WTE.md", "# Plano\n\n## 1. Contexto\n\n## 2. Extração\n")
+        write(r / "docs/prompts/perfil-wte.md", """
+            # Perfil — wte
+
+            ## Contexto essencial — decisões já confirmadas
+
+            - **v1 só lê.** Decisão de 2026-09-13.
+
+            ## Estrutura
+
+            A árvore de `src/` e o que cada módulo faz.
+
+            ## Gates deste ciclo
+
+            | alvo | precisa | como se roda | desde |
+            | --- | --- | --- | --- |
+            | `selftest` | nada | `python -c "print('gate ok')"` | WTE-TASK-01 |
+            | `tabela` | `IMAGEM` | `python -c "print('tabela ok')"` | WTE-TASK-02 |
+
+            ## Arquivos quentes deste ciclo
+
+            - `src/tabela.py`
+
+            ## Recursos serializados
+
+            - `emulador` — uma instância por vez
+
+            ## Verificações específicas por fase
+
+            ### Fase 1
+            - medir
+            """)
+        cyc = r / "docs/tasks/wte"
+        write(cyc / "progresso.md",
+              "---\ncycle: wte\nprefix: WTE\nplan: /docs/PLAN-WTE.md\n---\n\n# Progresso — wte\n")
+        write(cyc / "correcoes-progresso.md", "# Correções — wte\n")
+        for n, (slug, target) in enumerate((("extrair", "src/tabela.py"), ("validar", "src/outra.py")), start=1):
+            write(cyc / f"0{n}-{slug}.md",
+                  task(f"WTE-TASK-0{n}", slug.capitalize(), sot="/docs/PLAN-WTE.md#2-extração")
+                  + "## Arquivos a criar ou modificar\n\n| Arquivo | Ação |\n|---|---|\n"
+                  f"| `{target}` | modificar |\n\n## Log de Execução\n\n- **Criada** (2026-09-20)\n")
+        for n, target in ((1, "src/tabela.py"), (2, "src/outra.py")):
+            write(cyc / f"CORR-WTE-00{n}.md", f"""\
+---
+id: CORR-WTE-00{n}
+title: "Quebra {n}"
+origin: WTE-TASK-0{n}
+severity: medium
+status: pending
+depends_on: []
+done_on: null
+done_commit: null
+---
+
+# CORR-WTE-00{n} — Quebra {n}
+
+## Problema identificado
+
+A leitura de `{target}` quebra.
+
+## Evidência
+
+```text
+$ python -c "print('quebrado {n}')"
+quebrado {n}
+```
+
+## Correção
+
+Consertar `{target}`.
+
+## Arquivos
+
+- {target} (a leitura)
+
+## Verificação
+
+- `python -c "print({n})"` fica verde
+
+## Log de Execução *(preenchido após execução)*
+""")
+        write(r / "src/tabela.py", "print('tabela')\n")
+        write(r / "src/outra.py", "print('outra')\n")
+        self._sync()
+
     def _sync(self) -> None:
         code, out, err = rite(self.root, "sync", "--all")
         assert code == 0, err
