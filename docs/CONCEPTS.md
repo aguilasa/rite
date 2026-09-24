@@ -12,7 +12,7 @@ plan ──/rite:plan-to-tasks──► tasks (one file each) + progress.md + pr
                    ─► fixes + reviewed_on: <date>, one commit
                                    │
    /rite:fix ─► reproduce evidence ─► repair ─► sweep ─► close        (or: stale, symptom gone)
-   /rite:fix-all ─► parallel read-only triage, then waves
+   /rite:fix-all ─► inline triage, agents for the residue, then waves
                                    │
    /rite:close-cycle ─► archive ─► /rite:retro ─► pitfalls kept, rules promoted, rite issues reported
 ```
@@ -119,7 +119,9 @@ main thread commits, one item at a time. Default size 2; never "all" for tasks.
 ## Delegation cost
 
 A subagent is a fresh context: it pays for reading its payload again, but not for the main thread's
-history. Measured on `node-minimal` with Sonnet 5 (`tools/experiment.py`, report in
+history. Everything here is in tokens; where two sides are compared the unit is
+`effective = billed + 0.1 × cache read` — the weight is the rate of a cache read relative to an input
+token, not a price. Measured on `node-minimal` with Sonnet 5 (`tools/experiment.py`, report in
 [tokens/2026-09-23-fixall-as-is.md](tokens/2026-09-23-fixall-as-is.md)), one more fix in `/rite:fix-all`
 adds:
 
@@ -133,16 +135,26 @@ adds:
 
 A `/rite:review` (the control) spends 12,686 billed tokens in its reviewer.
 
-**The rule it supports: delegate work that would cost the main thread more than about one turn.** An
-agent call costs roughly half a main-thread turn to one, so work that fits in less than half a turn
-is cheaper inline, and anything bigger is cheaper delegated. What is small and cheap to hold, like a
-reproduction output of a few hundred bytes, costs little in either place. What decides is the turns.
+**The rule: delegate work that would cost the main thread more than a fresh context does.** A fresh
+context is paid per call; a main-thread turn is paid on a context that keeps growing, but one turn
+can serve many items.
 
-Applied to the `/rite:fix-all` triage, a reproducer per fix costs as much as 0.49–0.90 main-thread
-turns. Inline triage is cheaper only if running the evidence adds fewer turns than that per fix,
-which needs a run with inline triage to count. Until that run exists the verdict is
-**inconclusive**. Do not replace the reproducers on intuition, and do not "optimise" them away without
-that number.
+Applied to the `/rite:fix-all` triage — reproducers per batch against **one** main-thread turn that
+runs `rite reproduce --all` and holds its output (effective tokens, medians of two repetitions):
+
+| N | reproducers (agent) | inline (1 turn per batch) | effective agent | effective inline |
+| ---: | --- | --- | ---: | ---: |
+| 1 | 5,327 billed + 8,556 cache read | 3,154 billed + 44,162 cache read | 6,183 | 7,570 |
+| 2 | 6,058 + 21,572 | 2,459 + 50,764 | 8,215 | **7,535** |
+| 4 | 12,100 + 43,164 | 3,430 + 58,355 | 16,416 | **9,266** |
+
+**Inline wins from N = 2 up, and the gap grows with the batch**: one turn serves the whole batch while
+the agents multiply a fresh context per fix. At N = 1 the agent is ahead, but within the dispersion
+between repetitions, so the rule is stated from N = 2. What the main thread holds is the output: past
+about 7 KB per fix, holding it costs more than that fix's reproducer, hence
+`[limits].inline_triage_max_output_kb = 6`. So the triage is **inline by default, at any batch size;
+an agent only for the residue** — no command, output over the limit, `CANNOT RUN`, or an output that
+does not decide.
 
 `rite tokens` (`tools/token_report.py`) reports the agent side apart, per agent type. With the agent
 fields in a baseline, `--check` fails on one agent more than the baseline, whatever the tolerance, so

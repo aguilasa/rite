@@ -141,7 +141,7 @@ Concepts behind these choices: [local cycles](docs/CONCEPTS.md#local-cycles),
 | `/rite:execute-batch [cycle] [N]` | N tasks in conflict-free waves |
 | `/rite:review [cycle] [ID]` | independent review by the `rite-reviewer` agent; opens fixes |
 | `/rite:fix [cycle] [ID]` | reproduce evidence, repair, sweep |
-| `/rite:fix-all [cycle]` | parallel triage, then repairs in waves |
+| `/rite:fix-all [cycle]` | inline triage (agents only for the residue), then repairs in waves |
 | `/rite:close-cycle <cycle>` | check preconditions, archive with links rewritten |
 | `/rite:retro <cycle>` | root-cause groups; keep, promote, report, prune |
 

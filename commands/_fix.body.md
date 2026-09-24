@@ -16,7 +16,7 @@ One fix per invocation, then stop. Batches are `/rite:fix-all`.
    severe open one whose `depends_on` are satisfied.
 2. `rite context <FIX> --json`. A fix is self-contained by design: open its origin task or the source
    of truth only when its text is ambiguous, and say so in the report.
-3. **Reproduce** at the current HEAD.
+3. **Reproduce** at the current HEAD: `rite reproduce <FIX> --json`.
    - *Symptom gone* → change nothing: `rite mark-stale <FIX> --reason "<command> now prints <output>"`,
      report, stop. "Fixing" right code is how regressions get in.
    - *No runnable evidence* → write one that shows the problem into the Evidence section first. If the

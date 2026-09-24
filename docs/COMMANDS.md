@@ -12,7 +12,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `/rite:execute-batch [cycle] [N\|IDs] [--plan]` | N tasks (default 2, max 8) in waves built by `rite batch-plan`; `rite-worker` agents edit in parallel, the main thread commits serially. | per item: work + close |
 | `/rite:review [cycle] [task]` | Delegates to the `rite-reviewer` agent in a clean context; four universal questions + the profile's phase checks; opens fixes. | `chore(rite): review <ID> (…)` — also with no finding |
 | `/rite:fix [cycle] [fix]` | Reproduce evidence → root cause → repair (in the generator if output is generated) → verify → sweep. Stale if the symptom is gone. | work + sweep + close, or `stale` |
-| `/rite:fix-all [cycle] [IDs] [--plan]` | All fixes open now: parallel `rite-reproducer` triage, then waves of `rite-worker`. | per item |
+| `/rite:fix-all [cycle] [IDs] [--plan]` | All fixes open now: inline triage with `rite reproduce --all`, a `rite-reproducer` only for the fixes it cannot decide, then waves of `rite-worker`. | per item |
 
 ## Lifecycle
 
@@ -31,7 +31,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | --- | --- | --- |
 | `rite-reviewer` | Read, Grep, Glob, Bash — never edits | `/rite:review` |
 | `rite-worker` | edits; no git state, no bookkeeping | `/rite:execute-batch`, `/rite:fix-all` |
-| `rite-reproducer` | Read, Grep, Glob, Bash — never edits | `/rite:fix-all` triage |
+| `rite-reproducer` | Read, Grep, Glob, Bash — never edits | `/rite:fix-all` triage residue |
 
 ## CLI
 

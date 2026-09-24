@@ -1,6 +1,6 @@
 ---
 name: rite-reproducer
-description: Read-only. Runs the Evidence commands of one Rite fix at the current HEAD and reports whether the symptom still reproduces. Used by /rite:fix-all to triage many fixes in parallel.
+description: Read-only. Runs the Evidence commands of one Rite fix at the current HEAD and reports whether the symptom still reproduces. Used by /rite:fix-all only for the fixes inline triage cannot decide.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -26,6 +26,9 @@ You check **one** fix: does its problem still happen?
 3. Compare the output with the Evidence recorded in the file.
 
 ## Output (exactly this format)
+
+The verdict is one of the three tokens the rite's evidence rules define — the same ones inline triage
+writes, so the main thread handles yours without rereading anything.
 
 ```
 FIX: <ID>

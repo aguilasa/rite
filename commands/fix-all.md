@@ -1,5 +1,5 @@
 ---
-description: Work through all open Rite fixes of a cycle — parallel read-only triage, then repairs in conflict-free waves
+description: Work through all open Rite fixes of a cycle — inline triage, agents only for the residue, then repairs in conflict-free waves
 argument-hint: "[cycle] [fix-IDs] [--plan]"
 ---
 
@@ -14,11 +14,13 @@ Arguments: `$ARGUMENTS`
 1. `rite begin fix --cycle <cycle> --json` for the cycle and its config. The batch is the fix IDs given,
    or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle> --json`); fixes opened
    during the run are not added, since a batch whose end moves is never done.
-2. **Triage in parallel.** One `rite:rite-reproducer` agent per fix, in a single message, each with the
-   payload of `rite context <FIX> --json`. A fix holding a serialized resource is reproduced alone.
+2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for the whole batch.
+   Compare each fix's output with its `recorded` Evidence and write its verdict:
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
-   - `REPRODUCED` or `CANNOT RUN` → stays in the batch; paste the reproducer's output into its
-     Execution Log, so the worker starts from it.
+   - `REPRODUCED` → stays in the batch; paste the output into its Execution Log for the worker.
+   - **Residue** — `runnable: false`, `over_limit`, `CANNOT RUN`, or an output that does not decide:
+     only then one `rite:rite-reproducer` per residue fix, in a single message, each with the payload
+     of `rite context <FIX> --json`. Its verdict is handled as above; `CANNOT RUN` stays in the batch.
 3. **Plan** with `--kind fix` on the remaining IDs. With `--plan`, stop here.
 4. **Run the waves.** Each worker follows the single-fix rules of `/rite:fix`: reproduce again, confirm
    the root cause, repair the generator when the output is generated, never widen the scope.
@@ -29,7 +31,8 @@ Arguments: `$ARGUMENTS`
 
 ## Report
 
-Triage per fix · waves and conflict pairs · per item: result, work SHA, bookkeeping SHA · gates ·
+Triage, one line per fix: verdict, inline or agent (a fix with no command is a defect of the review
+that opened it) · waves and conflict pairs · per item: result, work SHA, bookkeeping SHA · gates ·
 new fixes opened · what to run next.
 
 ## The CLI
@@ -67,14 +70,16 @@ Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edi
 
 ## Evidence
 
-- **Measure, do not read.** A claim counts only when you ran its command in this invocation and saw
-  the output; logs are leads. Reviews that read instead of ran approved broken work.
-- **Every number has a tool** versioned in the repository; quote the command beside the number.
+- **Measure, do not read.** A claim counts only if you ran its command here and saw the output; logs
+  are leads.
+- **Every number has a tool**: quote its versioned command beside the number.
 - **Control before test**: before trusting a checker, show it can fail.
-- **Reproduce before fixing.** Symptom gone → the fix is *stale* (`rite mark-stale`), not fixed.
-- **Negative results are results**: record "X does not work, because Y (command, output)".
-- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means the item is not done: fix it,
-  or stop and report the output it returned.
+- **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
+  `REPRODUCED` → fix it · `NOT REPRODUCED` → *stale* (`rite mark-stale`), not fixed · `CANNOT RUN` →
+  an agent or a person, never a guess.
+- **Negative results are results**: "X fails, because Y (command, output)".
+- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means not done: fix it, or stop and
+  report its output.
 
 ## Committing
 

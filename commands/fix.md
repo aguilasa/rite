@@ -17,7 +17,7 @@ One fix per invocation, then stop. Batches are `/rite:fix-all`.
    severe open one whose `depends_on` are satisfied.
 2. `rite context <FIX> --json`. A fix is self-contained by design: open its origin task or the source
    of truth only when its text is ambiguous, and say so in the report.
-3. **Reproduce** at the current HEAD.
+3. **Reproduce** at the current HEAD: `rite reproduce <FIX> --json`.
    - *Symptom gone* → change nothing: `rite mark-stale <FIX> --reason "<command> now prints <output>"`,
      report, stop. "Fixing" right code is how regressions get in.
    - *No runnable evidence* → write one that shows the problem into the Evidence section first. If the
@@ -90,14 +90,16 @@ matching pitfalls entries. Read that instead of opening those files.
 
 ## Evidence
 
-- **Measure, do not read.** A claim counts only when you ran its command in this invocation and saw
-  the output; logs are leads. Reviews that read instead of ran approved broken work.
-- **Every number has a tool** versioned in the repository; quote the command beside the number.
+- **Measure, do not read.** A claim counts only if you ran its command here and saw the output; logs
+  are leads.
+- **Every number has a tool**: quote its versioned command beside the number.
 - **Control before test**: before trusting a checker, show it can fail.
-- **Reproduce before fixing.** Symptom gone → the fix is *stale* (`rite mark-stale`), not fixed.
-- **Negative results are results**: record "X does not work, because Y (command, output)".
-- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means the item is not done: fix it,
-  or stop and report the output it returned.
+- **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
+  `REPRODUCED` → fix it · `NOT REPRODUCED` → *stale* (`rite mark-stale`), not fixed · `CANNOT RUN` →
+  an agent or a person, never a guess.
+- **Negative results are results**: "X fails, because Y (command, output)".
+- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means not done: fix it, or stop and
+  report its output.
 
 ## Guarded paths
 

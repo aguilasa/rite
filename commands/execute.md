@@ -27,7 +27,7 @@ One task per invocation, then stop: small runs stay reviewable and resumable. Ba
 4. **Do the work**, then **verify every done criterion by running it**. Tick `- [x]` only after seeing
    the output; paste the command and the decisive line under Notes. With `files:` declared and
    `repo_kb` above `[limits].delegate_above_kb`, hand the implementation to one `rite:rite-worker`
-   (payload of `rite context`, allowed files, gates) and verify its report: a clean context is cheaper.
+   (payload of `rite context`, allowed files, gates) and verify its report.
 5. `rite gates --id <ID> --json`. Red → fix and rerun; if you cannot, go to *Blocked*.
 6. **Sweep**, then the **work commit**: code, docs, sweep edits and the task file's prose together.
 7. `rite finish <ID> --json` — close, check, next.
@@ -89,14 +89,16 @@ matching pitfalls entries. Read that instead of opening those files.
 
 ## Evidence
 
-- **Measure, do not read.** A claim counts only when you ran its command in this invocation and saw
-  the output; logs are leads. Reviews that read instead of ran approved broken work.
-- **Every number has a tool** versioned in the repository; quote the command beside the number.
+- **Measure, do not read.** A claim counts only if you ran its command here and saw the output; logs
+  are leads.
+- **Every number has a tool**: quote its versioned command beside the number.
 - **Control before test**: before trusting a checker, show it can fail.
-- **Reproduce before fixing.** Symptom gone → the fix is *stale* (`rite mark-stale`), not fixed.
-- **Negative results are results**: record "X does not work, because Y (command, output)".
-- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means the item is not done: fix it,
-  or stop and report the output it returned.
+- **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
+  `REPRODUCED` → fix it · `NOT REPRODUCED` → *stale* (`rite mark-stale`), not fixed · `CANNOT RUN` →
+  an agent or a person, never a guess.
+- **Negative results are results**: "X fails, because Y (command, output)".
+- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means not done: fix it, or stop and
+  report its output.
 
 ## Guarded paths
 
