@@ -41,7 +41,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | --- | --- |
 | `begin task\|fix\|review [--id ID]` | resolve the cycle, take the item, return paths, config digest and commit template |
 | `context ID` | the item, its anchored source-of-truth section, the profile rules that apply and matching pitfalls, capped |
-| `gates [--id ID]` | run the global and profile gates; tail of a passing one, whole output of a red one |
+| `gates [--id ID]` | run the global and profile gates in `[gates].shell` (bash by default — Git Bash on Windows); tail of a passing one, whole output of a red one |
 | `reproduce FIX\|--all [--tail N] [--scratch]` | run the `$ ` commands of each fix's fenced Evidence (else its Verification), one fix after the other; per fix: commands, exit codes, output (tail of a passing command), the recorded Evidence lines, `runnable` (false when there is no command) and `over_limit` (output above `[limits].inline_triage_max_output_kb`, cut to its tail). It measures and never judges: the caller writes the verdict. `--scratch` runs in an exported copy of HEAD, for evidence that writes files. It runs only commands written in the repository's own versioned fix files — the same trust `[gates].global` has |
 | `sweep --terms a,b [--id ID]` | mentions of what an item changed, across cycle, plans and top-level docs |
 | `finish ID [--sha S \| --no-repo --reason R]` | close the item, `check --quick`, and name the next one |

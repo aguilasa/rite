@@ -134,6 +134,7 @@ check = "python tools/gen.py --check"
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `global` | `[]` | Commands every item must pass before it closes. Cycle-specific gates go in the profile. |
+| `shell` | `"bash"` | The shell that runs gates and fix evidence (`rite gates`, `rite reproduce`): `bash` — Git Bash on Windows, as Claude Code runs commands, so a gate means there what it meant when it was written — or `system` (cmd.exe on Windows, `sh` elsewhere) for gates written for cmd.exe. Without a bash, `bash` falls back to the system shell; the JSON output names the shell used. |
 
 ## `[resources]`
 

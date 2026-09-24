@@ -487,6 +487,30 @@ class ComposeTest(FixtureCase):
         self.assertFalse(failing["passed"])
         self.assertIn("boom", failing["output"])  # a red gate keeps its whole output
 
+    def test_gates_run_in_bash_unless_the_project_says_system(self):
+        cfg = self.root / "rite.toml"
+        base = cfg.read_text(encoding="utf-8")
+        # POSIX quoting: true only when bash parses it
+        posix = r'''
+[gates]
+global = ["test \"$(echo 'a  b')\" = \"a  b\""]
+'''
+        cfg.write_text(base + posix, encoding="utf-8", newline="\n")
+        code, out, err = self.fx.rite("gates", "--cycle", "alpha", "--json")
+        data = json.loads(out)
+        if data["shell"] == "system":
+            self.skipTest("no bash on this machine")
+        self.assertEqual((code, data["passed"]), (0, True), err + out)
+        cfg.write_text(base + posix + 'shell = "system"\n', encoding="utf-8", newline="\n")
+        code, out, _ = self.fx.rite("gates", "--cycle", "alpha", "--json")
+        self.assertEqual(json.loads(out)["shell"], "system")
+        if sys.platform == "win32":  # the control: cmd.exe reads the same gate as text, and fails
+            self.assertEqual(code, 1)
+        cfg.write_text(base + '\n[gates]\nshell = "zsh"\n', encoding="utf-8", newline="\n")
+        code, _, err = self.fx.rite("status")
+        self.assertEqual(code, 1)
+        self.assertIn("shell", err)
+
     def test_sweep_finds_mentions_outside_the_item(self):
         write(self.root / "docs/rite/cycles/alpha/03-close-phase.md",
               (self.root / "docs/rite/cycles/alpha/03-close-phase.md").read_text(encoding="utf-8")

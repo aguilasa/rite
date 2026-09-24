@@ -64,8 +64,12 @@ def sh(cwd: Path, *cmd: str, check: bool = True, timeout: int | None = None) -> 
 
 
 def shell(cwd: Path, command: str) -> str:
-    """Run a manifest command string (it carries its own quoting) and return stdout+stderr."""
-    res = subprocess.run(command, cwd=cwd, shell=True, capture_output=True, text=True, encoding="utf-8",
+    """Run a manifest command string (it carries its own quoting) and return stdout+stderr — in bash,
+    the shell rite runs gates and evidence in, so the harness sees what the rite sees."""
+    from rite_lib.compose import find_bash
+    bash = find_bash()
+    run = ([*bash, command], False) if bash else (command, True)
+    res = subprocess.run(run[0], cwd=cwd, shell=run[1], capture_output=True, text=True, encoding="utf-8",
                          errors="replace", stdin=subprocess.DEVNULL)
     return (res.stdout + res.stderr).strip()
 

@@ -53,7 +53,7 @@ DEFAULTS: dict = {
         "read_only_reason": "",
         "generated": [],
     },
-    "gates": {"global": []},
+    "gates": {"global": [], "shell": "bash"},
     "resources": {"serialized": []},
     "vocab": {"task_types": ["feature", "tool", "research", "verification", "closing"]},
     "profile": {"max_kb": 12},
@@ -66,6 +66,7 @@ DEFAULTS: dict = {
 }
 
 ENUMS = {
+    ("gates", "shell"): {"bash", "system"},
     ("paths", "link_style"): {"root-absolute", "relative"},
     ("commit", "style"): {"conventional", "free"},
     ("commit", "bookkeeping"): {"separate-commit"},

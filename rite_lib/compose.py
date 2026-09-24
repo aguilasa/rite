@@ -298,19 +298,14 @@ def gates(project: Project, *, cycle_name: str | None, item_id: str | None, tail
         _, item = project.find_item(item_id, cycle)
     where = _repo_dir(project, item)
     commands = [*project.cfg["gates"]["global"], *profile_gates(project, cycle)]
+    shell = project_shell(project)
     results = []
     for command in commands:
-        proc = subprocess.run(command, shell=True, cwd=where, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", env={**os.environ})
-        output = (proc.stdout or "") + (proc.stderr or "")
-        lines = output.splitlines()
-        results.append({
-            "command": command, "exit_code": proc.returncode, "passed": proc.returncode == 0,
-            "output": output if proc.returncode else "\n".join(lines[-tail:]),
-            "truncated": proc.returncode == 0 and len(lines) > tail,
-        })
+        run = _run_one(command, where, tail, shell)
+        results.append({"command": command, "exit_code": run["exit_code"], "passed": run["exit_code"] == 0,
+                        "output": run["output"], "truncated": run["truncated"]})
     return {"cycle": cycle.name, "item": item.id if item else None,
-            "where": display(project.root, where), "gates": results,
+            "where": display(project.root, where), "shell": shell_name(shell), "gates": results,
             "passed": all(r["passed"] for r in results), "count": len(results)}
 
 
@@ -378,10 +373,10 @@ def _export(repo: Path, into: Path) -> None:
             tar.extractall(into)
 
 
-def evidence_shell() -> list[str] | None:
-    """The shell evidence is written for: bash, as Claude Code runs it — Git Bash on Windows. There,
-    `grep 'a  b' f` means what the fix file says; cmd.exe would pass the quotes as text. None:
-    no bash found, the platform's own shell runs the command."""
+def find_bash() -> list[str] | None:
+    """Bash, as Claude Code runs it — Git Bash on Windows. Gates and evidence are written and tried in
+    that shell, so `grep 'a  b' f` must mean there what it meant when it was written; cmd.exe would
+    pass the quotes as text. None: no bash found."""
     import shutil
     if os.name != "nt":
         return [found, "-c"] if (found := shutil.which("bash")) else None
@@ -394,6 +389,16 @@ def evidence_shell() -> list[str] | None:
         if candidate and Path(candidate).is_file():
             return [str(candidate), "-c"]
     return None
+
+
+def project_shell(project: Project) -> list[str] | None:
+    """The shell `[gates].shell` names: `bash` (default; the platform's own shell when there is none)
+    or `system` (cmd.exe on Windows, sh elsewhere), for gates written for cmd.exe."""
+    return None if project.cfg["gates"]["shell"] == "system" else find_bash()
+
+
+def shell_name(shell: list[str] | None) -> str:
+    return Path(shell[0]).stem if shell else "system"
 
 
 def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = None) -> dict:
@@ -429,7 +434,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     else:
         raise RiteError("name a fix, or pass --all")
     limit_kb = project.cfg["limits"]["inline_triage_max_output_kb"]
-    shell = evidence_shell()
+    shell = project_shell(project)
     copies: dict[Path, Path] = {}
     results = []
     try:
@@ -458,7 +463,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
         for copy in copies.values():
             shutil.rmtree(copy, ignore_errors=True)
     return {"cycle": cycle.name, "scratch": scratch, "limit_kb": limit_kb,
-            "shell": Path(shell[0]).name if shell else "system", "count": len(results),
+            "shell": shell_name(shell), "count": len(results),
             "fixes": results}
 
 

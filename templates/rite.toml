@@ -49,6 +49,7 @@ read_only_reason = ""
 
 [gates]
 global = []                                 # commands every item must pass before closing
+shell  = "bash"                             # bash (Git Bash on Windows) runs gates and evidence; "system" = cmd.exe/sh
 
 [resources]
 serialized = []                             # e.g. { name = "display", why = "GUI tests share one display" }

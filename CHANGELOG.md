@@ -17,6 +17,10 @@ Inline triage confirmed by a run, and three defects the new e2e runs found.
   before the wave resumes.
 - **`rite reproduce` runs evidence in bash**, as it was written — Git Bash on Windows, where
   `shell=True` meant cmd.exe and a quoted `grep` became a usage error.
+- **Gates run in bash too**, like evidence: Git Bash on Windows, where `rite gates` used cmd.exe and
+  a gate with POSIX quoting (`test "$(…)" = '…'`, `CI=1 npm test`) was red there and green in the
+  model's own shell. `[gates].shell = "system"` keeps cmd.exe for gates written for it; `gates` and
+  `reproduce` name the shell they used. The e2e harness checks symptoms in the same shell.
 - **`/rite:close-cycle --yes` archives.** "Never choose an option that moves files" under `--yes` was
   read as forbidding the move the command exists for; the invocation is the confirmation.
 
