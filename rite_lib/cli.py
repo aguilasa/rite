@@ -408,6 +408,22 @@ def cmd_relink(project: Project, args) -> int:
     return EXIT_OK
 
 
+def cmd_sections(project: Project, args) -> int:
+    from . import sections
+    cycles = project.all_cycles() if args.all else [project.resolve_cycle(args.cycle)]
+    data = sections.detect(project, cycles)
+    lines = [f"# proposed from {len(cycles)} cycle(s): {', '.join(data['cycles'])}", data["block"].rstrip()]
+    if args.write:
+        data["write"] = sections.write(project, data["keys"])
+        written = data["write"]["written"]
+        lines.append(f"wrote {', '.join(written)} to {data['write']['file']}" if written
+                     else "nothing to write: every detected title is already configured")
+    else:
+        lines.append("dry run: nothing written (pass --write to merge the matched keys into rite.toml)")
+    _emit(args, data, "\n".join(lines))
+    return EXIT_OK
+
+
 def cmd_migrate(args) -> int:
     from . import migrate
     if args.source != "we2002":
@@ -636,6 +652,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--include-archived", action="store_true", help="also archived cycles")
     s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
     s.set_defaults(fn=cmd_relink)
+
+    s = sub.add_parser("sections", parents=[common],
+                       help="propose [sections] from the titles items and profiles already use")
+    s.add_argument("--all", action="store_true", help="read every cycle, live and archived")
+    s.add_argument("--write", action="store_true", help="merge the keys that matched into rite.toml")
+    s.set_defaults(fn=cmd_sections)
 
     s = sub.add_parser("migrate", parents=[common], help="adopt a legacy backlog in place (run on a branch)")
     s.add_argument("--from", dest="source", required=True, help="legacy format: we2002")

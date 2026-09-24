@@ -41,19 +41,16 @@ def _looks_like_path(token: str) -> bool:
     return "/" in token or "." in token.rsplit("/", 1)[-1]
 
 
-def _section_paths(text: str, titles: list[str], root: Path | None = None) -> list[str]:
-    """Paths in backticks under the section; and, given the repository ``root``, a bullet that opens
-    with a bare path that exists there (`- src/a.py (the parser)`) — existence keeps prose out."""
-    found_section = markdown.first_section(text, titles)
-    if not found_section or not found_section[1]:
-        return []
+def paths_in(body: str, root: Path | None = None) -> list[str]:
+    """Paths in backticks; and, given the repository ``root``, a bullet that opens with a bare path
+    that exists there (`- src/a.py (the parser)`) — existence keeps prose out."""
     found = []
-    for m in _CODE_SPAN.finditer(found_section[1]):
+    for m in _CODE_SPAN.finditer(body):
         token = m.group(1).strip()
         if _looks_like_path(token):
             found.append(token.lstrip("./"))
     if root is not None:
-        for m in _BARE_BULLET.finditer(found_section[1]):
+        for m in _BARE_BULLET.finditer(body):
             token = m.group(1).rstrip(",;:").lstrip("./")
             try:
                 exists = _looks_like_path(token) and (root / token).exists()
@@ -62,6 +59,11 @@ def _section_paths(text: str, titles: list[str], root: Path | None = None) -> li
             if exists:
                 found.append(token)
     return found
+
+
+def _section_paths(text: str, titles: list[str], root: Path | None = None) -> list[str]:
+    found_section = markdown.first_section(text, titles)
+    return paths_in(found_section[1], root) if found_section else []
 
 
 def predicted_files(project: Project, item: Item) -> tuple[list[str], bool]:

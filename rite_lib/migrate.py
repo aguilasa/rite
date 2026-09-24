@@ -43,9 +43,16 @@ profile_file  = "perfil-{{cycle}}.md"
 pitfalls_file = "perfil-{{cycle}}.armadilhas.md"
 
 [sections]
-execution_log = "Log de Execução"
-phase_checks  = "Verificações específicas por fase"
-phase_label   = "Fase"
+# the first title is the one Rite writes; the others are read as well
+execution_log        = ["Log de Execução", "Log de Execução *(preenchido após execução)*"]
+phase_checks         = "Verificações específicas por fase"
+phase_label          = "Fase"
+evidence             = "Evidência"
+verification         = "Verificação"
+files                = ["Arquivos a criar ou modificar", "Arquivos"]
+gates                = "Gates deste ciclo"
+serialized_resources = "Recursos serializados"
+confirmed_decisions  = "Contexto essencial — decisões já confirmadas"
 
 [profile]
 # Raised to the largest legacy profile so the migration starts green; compact the profiles with

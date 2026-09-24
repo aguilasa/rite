@@ -33,7 +33,9 @@ history or its links. This command writes `rite.toml` and a short block in `CLAU
 4. **Write `rite.toml`** from `${CLAUDE_PLUGIN_ROOT}/templates/rite.toml`, keeping only the keys that
    differ from the defaults plus `[project].name`, with a first comment line pointing at the plugin's
    `docs/CONFIG.md`. Map an existing backlog's names in `[paths]`, `[naming]` and `[sections]` instead
-   of renaming files.
+   of renaming files. With a backlog, `rite sections --all` proposes `[sections]` from the titles its
+   items and profiles already use, with the evidence of each; `--write` merges what matched. A key it
+   leaves commented is a question for step 3, never a guess.
 5. **Validate**: `rite status --all --json` must not fail; with mapped cycles, run `rite check --all`
    and report its findings — do not repair legacy items here. Offer `rite sync --all` when only the
    generated tables are missing.

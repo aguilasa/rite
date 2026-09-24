@@ -293,15 +293,11 @@ def _table_commands(rows: list[list[str]]) -> list[str]:
     return []
 
 
-def profile_gates(project: Project, cycle: Cycle) -> list[str]:
-    """Commands the profile's Gates section lists: one per bullet's code span, and from a table, the
-    column that holds commands."""
-    if not cycle.profile_path.is_file():
-        return []
-    found = markdown.first_section(cycle.profile_path.read_text(encoding="utf-8", errors="replace"),
-                                   project.section_titles("gates"))
+def gate_commands(body: str) -> list[str]:
+    """Commands a Gates section lists: one per bullet's code span, and from a table, the column that
+    holds commands."""
     out, table = [], []
-    for line in [*(found[1] if found else "").splitlines(), ""]:
+    for line in [*body.splitlines(), ""]:
         if line.strip().startswith("|"):
             table.append(markdown.table_cells(line))
             continue
@@ -314,6 +310,15 @@ def profile_gates(project: Project, cycle: Cycle) -> list[str]:
             if span:
                 out.append(span.group(1).strip())
     return out
+
+
+def profile_gates(project: Project, cycle: Cycle) -> list[str]:
+    """Commands the profile's gates section lists."""
+    if not cycle.profile_path.is_file():
+        return []
+    found = markdown.first_section(cycle.profile_path.read_text(encoding="utf-8", errors="replace"),
+                                   project.section_titles("gates"))
+    return gate_commands(found[1]) if found else []
 
 
 def gates(project: Project, *, cycle_name: str | None, item_id: str | None, tail: int = 20) -> dict:
