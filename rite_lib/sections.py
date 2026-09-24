@@ -172,18 +172,18 @@ class Detector:
         if sections:
             self._vote("confirmed_decisions", sections[0][0], path, "first section")
         gates = max(sections, key=lambda s: _command_lines(s[1]), default=None)
-        gate_at = None
-        if gates and _command_lines(gates[1]):
-            self._vote("gates", gates[0], path, f"{_command_lines(gates[1])} command line(s)")
-            gate_at = sections.index(gates)
-        else:
-            table = max(sections, key=lambda s: _table_command_rows(s[1]), default=None)
-            if table and _table_command_rows(table[1]):
-                gate_at = sections.index(table)  # where the gates sit, for the sections around them
-                self.tallies["gates"].hints.setdefault(table[0], Vote(
-                    table[0], display(self.p.root, path),
-                    f"a table of {_table_command_rows(table[1])} command line(s); gates are read from "
-                    "bullets only — list the ones every item must pass"))
+        bullets = _command_lines(gates[1]) if gates else 0
+        if bullets:
+            self._vote("gates", gates[0], path, f"{bullets} command line(s)")
+        table = max(sections, key=lambda s: _table_command_rows(s[1]), default=None)
+        rows = _table_command_rows(table[1]) if table else 0
+        if rows:
+            self.tallies["gates"].hints.setdefault(table[0], Vote(
+                table[0], display(self.p.root, path),
+                f"a table of {rows} command line(s); gates are read from bullets only — list the "
+                "ones every item must pass"))
+        # where the gates sit, for the sections around them
+        gate_at = (sections.index(table) if rows > bullets else sections.index(gates) if bullets else None)
         # resources sit after the gates in the template; a names-only section there wins
         named = [i for i, (_, b) in enumerate(sections) if i != gate_at and _names_only(b)]
         after = [i for i in named if gate_at is not None and i > gate_at]
@@ -222,6 +222,7 @@ class Detector:
         candidates += [{"title": v.title, "votes": 0, "occurs": tally.seen.get(v.title, 0),
                         "example": v.file, "detail": v.detail}
                        for v in tally.hints.values() if v.title not in tally.votes]
+        candidates = [c for c in candidates if c["title"] not in self.taken]  # another key has it
         self.taken.update(e["title"] for e in accepted)
         current = self.p.section_titles(key)
         explicit = key in _user_sections(self.p)
