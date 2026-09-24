@@ -140,19 +140,20 @@ context is paid per call; a main-thread turn is paid on a context that keeps gro
 can serve many items.
 
 Applied to the `/rite:fix-all` triage — reproducers per batch against **one** main-thread turn that
-runs `rite reproduce --all` and holds its output (effective tokens, medians of two repetitions):
+runs `rite reproduce --all` and holds its output (effective tokens, medians of two repetitions,
+[tokens/2026-09-24-fixall-as-is-vs-inline.md](tokens/2026-09-24-fixall-as-is-vs-inline.md)):
 
 | N | reproducers (agent) | inline (1 turn per batch) | effective agent | effective inline |
 | ---: | --- | --- | ---: | ---: |
-| 1 | 5,327 billed + 8,556 cache read | 3,154 billed + 44,162 cache read | 6,183 | 7,570 |
-| 2 | 6,058 + 21,572 | 2,459 + 50,764 | 8,215 | **7,535** |
-| 4 | 12,100 + 43,164 | 3,430 + 58,355 | 16,416 | **9,266** |
+| 1 | 5,376 billed + 8,561 cache read | 2,699 billed + 46,356 cache read | 6,232 | 7,335 |
+| 2 | 6,272 + 21,750 | 2,487 + 50,073 | 8,447 | **7,494** |
+| 4 | 12,240 + 43,236 | 3,221 + 58,061 | 16,563 | **9,027** |
 
 **Inline wins from N = 2 up, and the gap grows with the batch**: one turn serves the whole batch while
 the agents multiply a fresh context per fix. At N = 1 the agent is ahead, but within the dispersion
 between repetitions, so the rule is stated from N = 2. What the main thread holds is the output: past
-about 7 KB per fix, holding it costs more than that fix's reproducer, hence
-`[limits].inline_triage_max_output_kb = 6`. So the triage is **inline by default, at any batch size;
+7 KB per fix (7.5 KB at N = 2, 7.0 KB at N = 4), holding it costs more than that fix's reproducer,
+hence `[limits].inline_triage_max_output_kb = 7`. So the triage is **inline by default, at any batch size;
 an agent only for the residue** — no command (`why` other than `ok`), output over the limit, a
 `shell_error`, `CANNOT RUN`, or an output that does not decide. None of those is ever *stale*: only an
 output measured under `why: ok` that contradicts the recorded Evidence closes a fix unrepaired.

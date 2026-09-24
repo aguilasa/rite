@@ -13,6 +13,11 @@ All notable changes to this project are documented here. Versions follow [SemVer
 
 ### Changed
 
+- **`[limits].inline_triage_max_output_kb` defaults to 7**, the break-even the 2026-09-24 run measured
+  (7.5 KB at N = 2, 7.0 KB at N = 4). The default was 6, from the 2026-09-23 matrix, while
+  `docs/CONFIG.md` said "about 7 KB": two numbers, one citation out of date. The template, the config
+  defaults, `docs/CONFIG.md` and `docs/CONCEPTS.md` now cite the 2026-09-24 report; a test pins the
+  default to what that matrix computes.
 - **Only a measured contradiction marks a fix stale.** `mark-stale` closes a fix without repairing
   anything, and nothing said what does not authorize it. Now the evidence rules, `/rite:fix`,
   `/rite:fix-all` and `rite-reproducer` agree: `NOT REPRODUCED` needs `why: ok` and an output that

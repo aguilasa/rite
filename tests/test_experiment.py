@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 import experiment  # noqa: E402
 import token_report as tr  # noqa: E402
+from rite_lib.config import DEFAULTS  # noqa: E402
 
 
 def invocation() -> tr.Invocation:
@@ -140,7 +141,7 @@ class ReportTest(unittest.TestCase):
         self.assertNotIn("## Labels compared", experiment.render_markdown(self.matrix()))
 
     def test_triage_of_the_measured_fix_all(self):
-        """The matrix of 2026-09-23 gives the table CONCEPTS.md quotes: inline from N = 2 up."""
+        """The matrix of 2026-09-23, the first one: inline from N = 2 up, break-even 6 KB."""
         path = Path(__file__).resolve().parent.parent / "docs" / "tokens" / "2026-09-23-fixall-as-is.json"
         cells = [c for c in json.loads(path.read_text(encoding="utf-8"))["cells"] if c.get("valid")]
         verdict = experiment.triage_verdict(cells)
@@ -150,6 +151,20 @@ class ReportTest(unittest.TestCase):
         self.assertEqual([round(rows[n]["inline"]["effective"]) for n in (1, 2, 4)], [7570, 7535, 9266])
         self.assertEqual([rows[n]["side"] for n in (1, 2, 4)], ["open", "inline", "inline"])
         self.assertEqual(verdict["inline_triage_max_output_kb"], 6)
+
+    def test_triage_of_the_fix_all_measured_against_inline(self):
+        """The matrix of 2026-09-24 gives the table CONCEPTS.md quotes and the shipped limit, 7 KB."""
+        path = (Path(__file__).resolve().parent.parent / "docs" / "tokens"
+                / "2026-09-24-fixall-as-is-vs-inline.json")
+        cells = [c for c in json.loads(path.read_text(encoding="utf-8"))["cells"]
+                 if c.get("valid") and c["label"] == "as-is"]
+        verdict = experiment.triage_verdict(cells)
+        self.assertEqual((verdict["verdict"], verdict["turn_over"]), ("apply", 2))
+        rows = {r["n"]: r for r in verdict["rows"]}
+        self.assertEqual([round(rows[n]["agent"]["effective"]) for n in (1, 2, 4)], [6232, 8447, 16563])
+        self.assertEqual([round(rows[n]["inline"]["effective"]) for n in (1, 2, 4)], [7335, 7494, 9027])
+        self.assertEqual(verdict["inline_triage_max_output_kb"], 7)
+        self.assertEqual(verdict["inline_triage_max_output_kb"], DEFAULTS["limits"]["inline_triage_max_output_kb"])
 
 
 if __name__ == "__main__":

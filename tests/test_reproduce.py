@@ -137,7 +137,7 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual((first["commands"][0]["exit_code"], first["commands"][0]["output"].strip()), (0, "BAD"))
         self.assertEqual(first["recorded"], ["BAD"])
         self.assertEqual((second["runnable"], second["commands"]), (False, []))
-        self.assertEqual(data["limit_kb"], 6)
+        self.assertEqual(data["limit_kb"], 7)
         self.assertEqual(self.reproduce("--all"), data)  # the same structure, call after call
 
     def test_quotes_mean_what_they_mean_in_bash(self):
