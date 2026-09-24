@@ -2,44 +2,13 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
-
-Inline triage confirmed by a run, and three defects the new e2e runs found.
-
-### Fixed
-
-- **A batch no longer loops on a gate that was red before it.** A wave whose gate is red aborts and
-  leaves its items in progress; when the defect was already in HEAD, `rite status` resumed the same
-  task and the next batch hit the same gate — the e2e lifecycle of both examples ran
-  `/rite:execute-batch` until it was out of steps (a rule of 0.4.0, unnoticed since the baselines were
-  from 0.3.0). The main thread now reruns the gates with the wave's edits stashed; still red, the
-  defect is opened as a `high` fix with the gate output as Evidence, and `/rite:fix-all` repairs it
-  before the wave resumes.
-- **`rite reproduce` runs evidence in bash**, as it was written — Git Bash on Windows, where
-  `shell=True` meant cmd.exe and a quoted `grep` became a usage error.
-- **Gates run in bash too**, like evidence: Git Bash on Windows, where `rite gates` used cmd.exe and
-  a gate with POSIX quoting (`test "$(…)" = '…'`, `CI=1 npm test`) was red there and green in the
-  model's own shell. `[gates].shell = "system"` keeps cmd.exe for gates written for it; `gates` and
-  `reproduce` name the shell they used. The e2e harness checks symptoms in the same shell.
-- **`/rite:close-cycle --yes` archives.** "Never choose an option that moves files" under `--yes` was
-  read as forbidding the move the command exists for; the invocation is the confirmation.
-
-### Measured
-
-- **Inline triage, run against 0.5.0**: twelve runs of `/rite:fix-all` on `node-minimal` with Sonnet 5,
-  N = 1, 2, 4, two repetitions each; every run valid, every symptom repaired. The whole invocation, in
-  effective tokens, drops by 32%, 15% and 36%; main-thread turns drop too (12 → 10, 16 → 13.5,
-  17 → 11.5), and no reproducer was started
-  ([docs/tokens/2026-09-24-fixall-as-is-vs-inline.md](docs/tokens/2026-09-24-fixall-as-is-vs-inline.md)).
-- **Baselines** of both examples re-recorded from a passing `run_loop` and `run_lifecycle` each; against
-  the 0.3.0 ones, every command is 37–70% lower in billed tokens.
-
 ## [0.6.0] — 2026-09-24
 
 Tokens, not money, and the triage decided. The report stops pricing and counts: four kinds of token
 apart, one cache-weighted number to compare, and every use of Claude Code, not only the rite's. With
-the triage judged per batch instead of per fix, the measurement of 0.5.0 already answers it:
-`/rite:fix-all` now triages inline and starts a reproducer only for what inline cannot decide.
+the triage judged per batch instead of per fix, `/rite:fix-all` now triages inline and starts a
+reproducer only for what inline cannot decide — and a run against 0.5.0 confirms it: the whole
+invocation costs 15–36% less, with fewer main-thread turns.
 
 ### Changed
 
@@ -55,9 +24,14 @@ the triage judged per batch instead of per fix, the measurement of 0.5.0 already
   command, output over `[limits].inline_triage_max_output_kb`, `CANNOT RUN`, or an output that does
   not decide. `/rite:fix` reproduces with `rite reproduce <FIX>`. The three verdict tokens live in
   `parts/evidence.md`, shared by inline triage and the agent.
+- **Gates run in bash** — Git Bash on Windows, where `rite gates` used cmd.exe and a gate with POSIX
+  quoting (`test "$(…)" = '…'`, `CI=1 npm test`) was red there and green in the model's own shell.
+  `[gates].shell = "system"` keeps cmd.exe for gates written for it. The e2e harness checks symptoms
+  in the same shell.
 - The triage verdict of `tools/experiment.py` is judged per batch, in effective tokens: one
   main-thread turn serves the whole batch. It reports the turn-over N and the output one fix may hold
-  inline, never a cap on the number of fixes.
+  inline, never a cap on the number of fixes. With several labels, its report compares them on the
+  whole invocation.
 
 ### Added
 
@@ -66,9 +40,21 @@ the triage judged per batch instead of per fix, the measurement of 0.5.0 already
   `--since/--until` (UTC days), `--project` (`--glob` kept), `--markdown FILE` (deterministic),
   and a **Totals** block with the subagent and ceremony shares.
 - **`rite reproduce <FIX>|--all [--tail N] [--scratch]`**: runs the `$ ` commands of a fix's fenced
-  Evidence (else its Verification) and reports commands, exit codes, output, the recorded Evidence,
-  `runnable` and `over_limit`. It measures and never judges.
-- `[limits].inline_triage_max_output_kb = 6`.
+  Evidence (else its Verification) in the gates' shell, and reports commands, exit codes, output, the
+  recorded Evidence, `runnable` and `over_limit`. It measures and never judges.
+- `[limits].inline_triage_max_output_kb = 6` and `[gates].shell = "bash"`.
+
+### Fixed
+
+- **A batch no longer loops on a gate that was red before it.** A wave whose gate is red aborts and
+  leaves its items in progress; when the defect was already in HEAD, `rite status` resumed the same
+  task and the next batch hit the same gate — the e2e lifecycle of both examples ran
+  `/rite:execute-batch` until it was out of steps (a rule of 0.4.0, unnoticed since the baselines were
+  from 0.3.0). The main thread now reruns the gates with the wave's edits stashed; still red, the
+  defect is opened as a `high` fix with the gate output as Evidence, and `/rite:fix-all` repairs it
+  before the wave resumes.
+- **`/rite:close-cycle --yes` archives.** "Never choose an option that moves files" under `--yes` was
+  read as forbidding the move the command exists for; the invocation is the confirmation.
 
 ### Measured
 
@@ -77,7 +63,14 @@ the triage judged per batch instead of per fix, the measurement of 0.5.0 already
   against one main-thread turn per batch, 6,183 vs 7,570 at N = 1 (within the dispersion), 8,215 vs
   7,535 at N = 2, 16,416 vs 9,266 at N = 4. The gap grows with the batch, so there is no fix-count
   limit. Past about 7 KB of output per fix (6.8 KB at N = 4, 7.1 KB at N = 2), holding it inline costs
-  more than that fix's reproducer: hence 6 KB. Not yet confirmed by a run with inline triage.
+  more than that fix's reproducer: hence 6 KB.
+- **Confirmed by a run against 0.5.0**: twelve runs of `/rite:fix-all` on `node-minimal` with Sonnet 5,
+  N = 1, 2, 4, two repetitions each; every run valid, every symptom repaired. The whole invocation, in
+  effective tokens, drops by 32%, 15% and 36%; main-thread turns drop too (12 → 10, 16 → 13.5,
+  17 → 11.5), and no reproducer was started
+  ([docs/tokens/2026-09-24-fixall-as-is-vs-inline.md](docs/tokens/2026-09-24-fixall-as-is-vs-inline.md)).
+- **Baselines** of both examples re-recorded from a passing `run_loop` and `run_lifecycle` each; against
+  the 0.3.0 ones, every command is 37–70% lower in billed tokens.
 
 ## [0.5.0] — 2026-09-23
 
