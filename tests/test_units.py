@@ -160,6 +160,8 @@ class SectionParsersTest(unittest.TestCase):
         body = ("- `make test` must pass\n\n| target | how |\n| --- | --- |\n"
                 "| `selftest` | `python tools/selftest.py` |\n")
         self.assertEqual(gate_commands(body), ["make test"])
+        prose = "- `make test`\n\n**But `ctest` is reachable** with the toolchain.\n*Only `CTestTestfile.cmake`.*\n"
+        self.assertEqual(gate_commands(prose), ["make test"], "bold or italic prose is not a bullet")
 
 
 class GlobTest(unittest.TestCase):

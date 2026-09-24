@@ -18,6 +18,8 @@ from .model import Cycle, Item, Project, RiteError, display, resolve_link
 from .naming import as_list
 
 CODE_SPAN = re.compile(r"`([^`]+)`")
+# a list item: the marker, then a space — `**Bold prose**` opens with a star and is no bullet
+BULLET = re.compile(r"^\s*[-*+]\s")
 
 
 # --- shared helpers ------------------------------------------------------------
@@ -286,7 +288,7 @@ def gate_commands(body: str) -> list[str]:
     item runs its gates before it closes."""
     out = []
     for line in body.splitlines():
-        if line.strip().startswith(("-", "*")):
+        if BULLET.match(line):
             span = CODE_SPAN.search(line)
             if span:
                 out.append(span.group(1).strip())
@@ -415,7 +417,7 @@ def evidence_commands(text: str, evidence: list[str] | None = None,
                 "broken": broken, "commands": [], "recorded": recorded}
     if not commands:
         commands = [span.group(1).strip() for line in body.splitlines()
-                    if line.strip().startswith(("-", "*")) for span in [CODE_SPAN.search(line)] if span]
+                    if BULLET.match(line) for span in [CODE_SPAN.search(line)] if span]
     if commands:
         return {"source": "Verification", "heading": found_verification[0], "why": "ok",
                 "commands": commands, "recorded": recorded}
