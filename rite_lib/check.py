@@ -18,6 +18,27 @@ REQUIRED = {
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+# a script an evidence line runs: `python x.py`, `bash tools/x.sh`, `node x.mjs`, `./x`
+_SCRIPT_RE = re.compile(r"""(?:^|[;&|(]\s*|\s)(?:(?:python3?|py|sh|bash|node|ruby|perl)\s+(?:-\S+\s+)*"""
+                        r"""([^\s;&|<>'"-][^\s;&|<>'"]*\.(?:py|sh|mjs|cjs|js|rb|pl))"""
+                        r"""|\./([^\s;&|<>'"]+))""")
+_PY_HEREDOC = re.compile(r"""\bpython3?\s+-\s*<<-?\s*(['"]?)([A-Za-z_][\w-]*)\1""")
+
+
+def _dynamic(path: str) -> bool:
+    """A path the shell builds (`$DIR/x.py`, `~/x`, `<placeholder>`), or an absolute one."""
+    return not path or any(c in path for c in "$~<>{}*") or path.startswith(("/", "\\")) or ":" in path
+
+
+def _python_heredoc(command: str) -> str | None:
+    """The body of a `python - <<EOF` heredoc in ``command``, else None."""
+    m = _PY_HEREDOC.search(command.splitlines()[0])
+    if not m:
+        return None
+    lines = command.splitlines()[1:]
+    return "\n".join(lines[:-1] if lines and lines[-1].strip() == m.group(2) else lines)
+
+
 def label_pattern(labels) -> str:
     """A regex alternation of the phase labels (`[sections].phase_label`, a title or a list)."""
     labels = [labels] if isinstance(labels, str) else labels
@@ -293,10 +314,45 @@ class Checker:
         `[sections]` names its own titles (`rite.py sections` proposes them)."""
         titles = [*self.p.section_titles("evidence"), *self.p.section_titles("verification")]
         for fix in cycle.fixes:
-            if fix.status in ("pending", "in-progress") and markdown.first_section(fix.body, titles) is None:
+            if fix.status not in ("pending", "in-progress"):
+                continue
+            if markdown.first_section(fix.body, titles) is None:
                 near = "".join(f"; near: '{h}'" for h in markdown.near_headings(fix.body, titles))
                 self.warn(fix.path, "no section titled " + " / ".join(f"'{t}'" for t in titles)
                           + f": reproduce finds no command (set [sections].evidence / verification){near}")
+            else:
+                self.check_evidence_runs(fix)
+
+    def check_evidence_runs(self, fix: Item) -> None:
+        """Evidence must run from the repository as written. Two ways it was seen not to: a script
+        that lived in a reviewer's scratch copy (`python run.py`), and a `python -` heredoc whose body
+        is the output it printed. Warnings: a script an earlier `$` line creates is not seen."""
+        from . import compose  # compose imports this module
+        try:
+            root = self.p.git_root(fix)
+        except RiteError:
+            root = self.p.root
+        for key in ("evidence", "verification"):
+            found = markdown.first_section(fix.body, self.p.section_titles(key))
+            if not found:
+                continue
+            moved = False  # after a `cd`, relative paths are no longer the repository's
+            for command in compose._shell_lines(found[1])[0]:
+                first = command.splitlines()[0]
+                moved = moved or bool(re.search(r"(?:^|[;&|]\s*)cd\s", command))
+                if not moved:
+                    for script in (a or b for a, b in _SCRIPT_RE.findall(first)):
+                        if not _dynamic(script) and not (root / script).exists():
+                            self.warn(fix.path, f"'{found[0]}' runs `{script}`, which is not in the repository: "
+                                      "evidence must run from HEAD as written")
+                body = _python_heredoc(command)
+                if body is not None:
+                    try:
+                        compile(body, "<evidence>", "exec")
+                    except SyntaxError as exc:
+                        self.warn(fix.path, f"'{found[0]}' pipes into python a heredoc that is not Python "
+                                  f"(line {exc.lineno}: {(exc.text or '').strip()[:60]!r}) — its output in "
+                                  "place of its script?")
 
     def check_profile(self, cycle: Cycle) -> None:
         prof = cycle.profile_path

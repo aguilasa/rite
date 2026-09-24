@@ -41,6 +41,12 @@ have its own proposed from its files, and a missing title is reported instead of
   `Evidência de que não é artefato` stays another section, and `check` names it as a near miss.
 - `rite sections` lets `files` and `scope` share a title, and leaves a key commented when the title
   Rite would write holds in under a tenth of the files.
+- **Evidence must run from the repository as written.** The reviewer agent may still experiment in a
+  scratch copy, but a `$` line may cite only versioned files, and a script it wrote goes whole into a
+  heredoc. A fix opened by a review cited `python run.py` from a copy that no longer existed, and a
+  heredoc holding its output instead of its script; neither could ever be reproduced. `rite check`
+  now warns about both in an open fix: a script the repository does not have, and a `python -`
+  heredoc that is not Python.
 - `migrate --from we2002` writes the pt-BR titles in the `rite.toml` it generates.
 - The plugin templates write the canonical titles, so a new fix in a pt-BR repository gets
   `## Evidência`.

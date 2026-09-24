@@ -205,6 +205,28 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("--all", err)
 
+    def evidence_warnings(self, fix_id: str) -> list[str]:
+        code, out, err = self.fx.rite("check", "--cycle", "alpha", "--json")
+        self.assertEqual(code, 0, err + out)
+        return [f["message"] for f in json.loads(out)["findings"]
+                if f["level"] == "warn" and fix_id in f["path"] and "Evidence" in f["message"]]
+
+    def test_check_warns_on_a_script_that_is_not_in_the_repository(self):
+        # a reviewer measured with scripts in its scratch copy, then cited them; the copy is gone
+        fix_id = self.add_fix("```text\n$ python run.py\n316 of 520\n$ python src/app.py\nhi\n"
+                              "$ python $TMP/x.py\n$ cd /tmp/scratch && python run2.py\n```")
+        warnings = self.evidence_warnings(fix_id)
+        self.assertEqual(len(warnings), 1, warnings)
+        self.assertIn("runs `run.py`, which is not in the repository", warnings[0])
+
+    def test_check_warns_on_a_python_heredoc_holding_its_output(self):
+        fix_id = self.add_fix("```text\n$ python - <<'EOF'\nslot 1 max rotation spread 4552\nEOF\n```")
+        warnings = self.evidence_warnings(fix_id)
+        self.assertEqual(len(warnings), 1, warnings)
+        self.assertIn("a heredoc that is not Python", warnings[0])
+        fine = self.add_fix("```text\n$ python - <<'EOF'\nprint(4552)\nEOF\n4552\n```")
+        self.assertEqual(self.evidence_warnings(fine), [])
+
 
 if __name__ == "__main__":
     unittest.main()

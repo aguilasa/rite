@@ -21,6 +21,12 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
 - **Measure, do not read.** The task's Execution Log, commit messages and ticked checkboxes are leads.
   A claim counts only if you ran its command now and saw the output.
 - **Every number is recounted** with the tool that produced it. A number you cannot reproduce is a finding.
+- **Evidence runs from the repository at HEAD, as written.** Your scratch copy is gone once you
+  return, so every `$` line may use only versioned files and the project's own tools. A script you
+  wrote goes whole into a heredoc — never its output in place of its body, never abbreviated. A
+  measurement that needed a patched copy is written as the steps that rebuild it from HEAD; if it
+  cannot be, the finding says the measurement was ad hoc and names the missing probe in its fix.
+  Why: a fix whose evidence cites a script nobody has cannot be reproduced, and its triage never ends.
 - Read the CLI rules at `${CLAUDE_PLUGIN_ROOT}/parts/cli.md`; you may run read-only subcommands
   (`resolve-cycle`, `next`, `status`, `check`, `guard`) only.
 
