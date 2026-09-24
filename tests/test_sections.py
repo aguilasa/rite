@@ -63,6 +63,23 @@ class PtBrBacklogTest(unittest.TestCase):
         self.assertIn('evidence = "Evidência"', data["block"])
         self.assertFalse(self.toml.read_text(encoding="utf-8").count("Evidência"), "a dry run writes nothing")
 
+    def test_files_and_scope_may_share_a_title(self):
+        for task in (self.root / "docs/tasks/wte").glob("0*.md"):
+            text = task.read_text(encoding="utf-8").replace("## Arquivos a criar ou modificar", "## Arquivos")
+            task.write_text(text, encoding="utf-8", newline="\n")
+        keys = self.js("sections", "--cycle", "wte")["keys"]
+        self.assertEqual((keys["files"]["titles"], keys["scope"]["titles"]), (["Arquivos"], ["Arquivos"]))
+
+    def test_a_title_in_under_a_tenth_of_the_files_is_only_a_candidate(self):
+        detector = sections.Detector(Project(config.load(self.root)), [])
+        tally = detector.tallies["scope"]
+        tally.files = 143
+        tally.votes = {"Arquivos criados/modificados": [sections.Vote("Arquivos criados/modificados", "a.md")] * 2}
+        tally.seen = {"Arquivos criados/modificados": 2}
+        verdict = detector.verdict("scope")
+        self.assertFalse(verdict["confident"])
+        self.assertEqual([c["title"] for c in verdict["candidates"]], ["Arquivos criados/modificados"])
+
     def test_what_nothing_matches_reliably_comes_out_commented(self):
         data = self.js("sections", "--cycle", "wte")
         gates = data["keys"]["gates"]

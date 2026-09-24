@@ -117,7 +117,7 @@ class Detector:
         self.p = project
         self.cycles = cycles
         self.tallies = {key: Tally(key) for key in KEYS}
-        self.taken: set[str] = set()
+        self.taken: dict[str, str] = {}  # title -> the key that claimed it
 
     # --- voting -----------------------------------------------------------------
     def _see(self, key: str, sections: list[tuple[str, str]]) -> None:
@@ -206,6 +206,12 @@ class Detector:
             self.read_profile(path)
         return {key: self.verdict(key) for key in KEYS}
 
+    def _free(self, title: str, key: str) -> bool:
+        """A title no other key claimed — files and scope may share one: the same list of paths,
+        in a fix and in a task."""
+        owner = self.taken.get(title)
+        return owner is None or {owner, key} == {"files", "scope"}
+
     def verdict(self, key: str) -> dict:
         tally = self.tallies[key]
         need = min(2, tally.files) or 1
@@ -217,14 +223,17 @@ class Detector:
             # the most voted title, and any other that holds its signal in most files where it occurs;
             # generated_artifacts is never accepted: its position is all there is to go on
             share = title == ranked[0][0] or 2 * len(votes) >= tally.seen.get(title, len(votes))
-            reliable = (key != "generated_artifacts" and title not in self.taken
+            reliable = (key != "generated_artifacts" and self._free(title, key)
                         and len(votes) >= need and share)
             (accepted if reliable else candidates).append(entry)
+        if accepted and 10 * accepted[0]["votes"] < tally.files:
+            # the title Rite would write holds in under a tenth of the files: a guess, not a convention
+            candidates, accepted = accepted + candidates, []
         candidates += [{"title": v.title, "votes": 0, "occurs": tally.seen.get(v.title, 0),
                         "example": v.file, "detail": v.detail}
                        for v in tally.hints.values() if v.title not in tally.votes]
-        candidates = [c for c in candidates if c["title"] not in self.taken]  # another key has it
-        self.taken.update(e["title"] for e in accepted)
+        candidates = [c for c in candidates if self._free(c["title"], key)]  # another key has it
+        self.taken.update({e["title"]: key for e in accepted})
         current = self.p.section_titles(key)
         explicit = key in _user_sections(self.p)
         detected = [e["title"] for e in accepted]
