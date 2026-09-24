@@ -54,7 +54,7 @@ GIT_RE = re.compile(SEGMENT + r"\s*git\b|\bgit -C\b")
 RITE_CLI_RE = re.compile(r"(rite\.py|bin/rite|\brite)[\"']?\s+(resolve-cycle|next|new-task|new-fix|"
                          r"commit-new|commit-refs|close|rebind|mark|mark-reviewed|mark-stale|sync|"
                          r"check|status|batch-plan|new-cycle|archive|publish|anchors|stats|relink|"
-                         r"migrate|guard|begin|context|gates|sweep|finish|tokens|cost)\b")
+                         r"migrate|guard|begin|context|gates|reproduce|sweep|finish|tokens|cost)\b")
 # a plugin's own prose: the fragments and command files commands read at runtime
 FRAGMENT_RE = re.compile(r"(plugins[\\/].*[\\/])?(shared|parts|commands|agents)[\\/][^\\/]+\.md$",
                          re.IGNORECASE)

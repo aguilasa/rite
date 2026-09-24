@@ -106,6 +106,24 @@ def cmd_gates(project: Project, args) -> int:
     return EXIT_OK if data["passed"] else EXIT_FAIL
 
 
+def cmd_reproduce(project: Project, args) -> int:
+    data = compose.reproduce(project, fix_id=args.id, cycle_name=args.cycle, all_open=args.all,
+                             tail=args.tail, scratch=args.scratch)
+    lines = []
+    for fix in data["fixes"]:
+        flag = "" if fix["runnable"] else " (no command: runnable false)"
+        flag += f" (over {data['limit_kb']} KB: hand it to an agent)" if fix["over_limit"] else ""
+        lines.append(f"{fix['id']}{flag}")
+        for run in fix["commands"]:
+            lines.append(f"  $ {run['command']}  -> exit {run['exit_code']}")
+            lines += [f"    {line}" for line in run["output"].splitlines()]
+        if fix["recorded"]:
+            lines.append("  recorded:")
+            lines += [f"    {line}" for line in fix["recorded"]]
+    _emit(args, data, "\n".join(lines) or "no open fix")
+    return EXIT_OK if data["count"] else EXIT_FAIL
+
+
 def cmd_sweep(project: Project, args) -> int:
     data = compose.sweep(project, terms=_ids(args.terms), cycle_name=args.cycle, item_id=args.id)
     lines = []
@@ -473,6 +491,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--id", help="run them in this item's repository")
     s.add_argument("--tail", type=int, default=20, help="lines kept from a passing gate")
     s.set_defaults(fn=cmd_gates)
+
+    s = sub.add_parser("reproduce", parents=[common],
+                       help="run a fix's Evidence commands and report their output (never a verdict)")
+    s.add_argument("id", nargs="?", help="the fix (or --all)")
+    s.add_argument("--all", action="store_true", help="every open fix of the cycle, one after the other")
+    s.add_argument("--kind", choices=("fix",), default="fix", help="only fixes carry evidence to reproduce")
+    s.add_argument("--tail", type=int, default=20, help="lines kept from a command that exits 0")
+    s.add_argument("--scratch", action="store_true", help="run in an exported copy of HEAD")
+    s.set_defaults(fn=cmd_reproduce)
 
     s = sub.add_parser("sweep", parents=[common], help="find stale mentions of what an item changed")
     s.add_argument("--terms", action="append", required=True, help="comma-separated or repeated")

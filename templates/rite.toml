@@ -66,6 +66,7 @@ context_kb = 24                             # cap of what `rite context` prints;
 read_kb            = 8                      # above this, commands slice a file instead of opening it whole
 delegate_above_kb  = 5000                   # repository size above which /rite:execute delegates to a worker
 sweep_hits         = 40                     # cap of hits `rite sweep` prints per term
+inline_triage_max_output_kb = 6             # a fix whose reproduction prints more goes to an agent (measured break-even)
 
 [status]
 review_age_days = 7

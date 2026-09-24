@@ -314,6 +314,133 @@ def gates(project: Project, *, cycle_name: str | None, item_id: str | None, tail
             "passed": all(r["passed"] for r in results), "count": len(results)}
 
 
+# --- reproduce -----------------------------------------------------------------
+SHELL_ERRORS = (126, 127)  # the shell could not run the command at all: not found, not executable
+
+
+def _fenced(body: str) -> list[list[str]]:
+    """The lines of each fenced block of a section."""
+    blocks, current = [], None
+    for line in body.splitlines():
+        if markdown._FENCE_RE.match(line):
+            if current is None:
+                current = []
+            else:
+                blocks.append(current)
+                current = None
+        elif current is not None:
+            current.append(line)
+    return blocks
+
+
+def _shell_lines(body: str) -> tuple[list[str], list[str]]:
+    """Commands (`$ ` lines inside fences) and every other line of those fences: the recorded output."""
+    commands, recorded = [], []
+    for block in _fenced(body):
+        for line in block:
+            stripped = line.strip()
+            if stripped.startswith("$"):
+                command = stripped[1:].strip()
+                if command:
+                    commands.append(command)
+            elif stripped:
+                recorded.append(line.rstrip())
+    return commands, recorded
+
+
+def evidence_commands(text: str) -> dict:
+    """Where a fix says how to see its symptom: `$ ` lines of the fenced Evidence, else of the
+    Verification, else code spans of the Verification's bullets. None of those: not runnable."""
+    evidence = markdown.section(text, "Evidence") or ""
+    commands, recorded = _shell_lines(evidence)
+    if commands:
+        return {"source": "Evidence", "commands": commands, "recorded": recorded}
+    verification = markdown.section(text, "Verification") or ""
+    commands, _ = _shell_lines(verification)
+    if not commands:
+        commands = [span.group(1).strip() for line in verification.splitlines()
+                    if line.strip().startswith(("-", "*")) for span in [CODE_SPAN.search(line)] if span]
+    if commands:
+        return {"source": "Verification", "commands": commands, "recorded": recorded}
+    return {"source": None, "commands": [], "recorded": recorded}
+
+
+def _export(repo: Path, into: Path) -> None:
+    """A copy of HEAD, for evidence that writes files: `git archive HEAD`, unpacked."""
+    import io
+    import tarfile
+    data = subprocess.run(["git", "archive", "--format=tar", "HEAD"], cwd=repo, capture_output=True,
+                          check=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+        if hasattr(tarfile, "data_filter"):
+            tar.extractall(into, filter="data")
+        else:  # Python before 3.11.4
+            tar.extractall(into)
+
+
+def _run_one(command: str, where: Path, tail: int) -> dict:
+    proc = subprocess.run(command, shell=True, cwd=where, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", env={**os.environ})
+    output = (proc.stdout or "") + (proc.stderr or "")
+    lines = output.splitlines()
+    return {"command": command, "exit_code": proc.returncode, "shell_error": proc.returncode in SHELL_ERRORS,
+            "output": output if proc.returncode else "\n".join(lines[-tail:]),
+            "truncated": proc.returncode == 0 and len(lines) > tail}
+
+
+def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, all_open: bool = False,
+              tail: int = 20, scratch: bool = False) -> dict:
+    """Run the evidence of one fix, or of every open fix of the cycle, and measure — never judge.
+
+    Whoever calls compares the output with the recorded Evidence and writes the verdict. Fixes run
+    one after the other, so a fix holding a serialized resource never shares it. An output above
+    `[limits].inline_triage_max_output_kb` is cut to its tail and flagged `over_limit`: the main
+    thread does not hold it; that fix goes to an agent. Runs only commands written in the
+    repository's own versioned fix files — the same trust `[gates].global` has."""
+    import shutil
+    import tempfile
+    cycle = project.resolve_cycle(cycle_name)
+    if all_open:
+        fixes = sorted(selection.open_fixes(cycle), key=lambda f: f.n)
+    elif fix_id:
+        _, item = project.find_item(fix_id, cycle)
+        if item.kind != "fix":
+            raise RiteError(f"{fix_id} is a {item.kind}, not a fix")
+        fixes = [item]
+    else:
+        raise RiteError("name a fix, or pass --all")
+    limit_kb = project.cfg["limits"]["inline_triage_max_output_kb"]
+    copies: dict[Path, Path] = {}
+    results = []
+    try:
+        for fix in fixes:
+            found = evidence_commands(fix.path.read_text(encoding="utf-8", errors="replace"))
+            repo = _repo_dir(project, fix)
+            where = repo
+            if scratch and found["commands"]:
+                if repo not in copies:
+                    copies[repo] = Path(tempfile.mkdtemp(prefix="rite-reproduce-"))
+                    _export(repo, copies[repo])
+                where = copies[repo]
+            runs = [_run_one(command, where, tail) for command in found["commands"]]
+            held = sum(len(r["output"].encode("utf-8")) for r in runs)
+            over = held > limit_kb * 1024
+            if over:
+                for r in runs:
+                    r["output"] = "\n".join(r["output"].splitlines()[-tail:])
+                    r["truncated"] = True
+            results.append({
+                "id": fix.id, "path": display(project.root, fix.path), "runnable": bool(found["commands"]),
+                "source": found["source"], "resources": fix.fields.get("resources") or [],
+                "recorded": found["recorded"], "commands": runs, "held_bytes": held, "over_limit": over,
+            })
+    finally:
+        for copy in copies.values():
+            shutil.rmtree(copy, ignore_errors=True)
+    return {"cycle": cycle.name, "scratch": scratch, "limit_kb": limit_kb, "count": len(results),
+            "fixes": results}
+
+
 # --- sweep ---------------------------------------------------------------------
 def sweep_targets(project: Project, cycle: Cycle) -> list[Path]:
     """The documents a change can make stale: the cycle, its profile and pitfalls, the plans, and the

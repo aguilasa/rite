@@ -58,7 +58,9 @@ DEFAULTS: dict = {
     "vocab": {"task_types": ["feature", "tool", "research", "verification", "closing"]},
     "profile": {"max_kb": 12},
     "output": {"context_kb": 24},
-    "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40},
+    # inline_triage_max_output_kb: measured break-even of holding a fix's reproduction inline
+    # against starting its reproducer (docs/tokens/2026-09-23-fixall-as-is.md)
+    "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40, "inline_triage_max_output_kb": 6},
     "status": {"review_age_days": 7},
     "hooks": {"stop_check": False},
 }
@@ -161,6 +163,9 @@ def parse(root: Path, text: str) -> Config:
     for res in data["resources"]["serialized"]:
         if not isinstance(res, dict) or "name" not in res:
             errors.append("[resources].serialized entries need a 'name'")
+    limit = data["limits"]["inline_triage_max_output_kb"]
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or limit <= 0:
+        errors.append("[limits].inline_triage_max_output_kb must be a number > 0")
     if errors:
         raise ConfigError(f"{CONFIG_NAME}: " + "; ".join(errors))
     return Config(root=root, data=data)

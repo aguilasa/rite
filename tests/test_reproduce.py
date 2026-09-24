@@ -1,0 +1,164 @@
+"""`rite reproduce`: a fix's evidence, run and measured, never judged."""
+
+import json
+import sys
+import unittest
+from pathlib import Path
+
+from fixtures import Fixture
+
+from rite_lib import compose
+
+PY = f'"{sys.executable}"'
+
+
+def fix_body(evidence: str, verification: str = "") -> str:
+    return f"""\
+---
+id: {{id}}
+title: t
+origin: ALP-TASK-01
+severity: low
+files: []
+resources: {{resources}}
+status: pending
+depends_on: []
+done_on: null
+done_commit: null
+---
+
+# {{id}} — t
+
+## Problem
+
+Wrong output.
+
+## Evidence
+
+{evidence}
+
+## Root cause
+
+## Fix
+
+## Verification
+
+{verification}
+
+## Execution Log
+"""
+
+
+class EvidenceCommandsTest(unittest.TestCase):
+    """Where the commands come from."""
+
+    def test_dollar_lines_of_the_fenced_evidence(self):
+        found = compose.evidence_commands(fix_body("```text\n$ node bin/x.mjs a\nBAD\n$ echo 2\n2\n```"))
+        self.assertEqual(found, {"source": "Evidence", "commands": ["node bin/x.mjs a", "echo 2"],
+                                 "recorded": ["BAD", "2"]})
+
+    def test_a_dollar_outside_a_fence_is_prose(self):
+        found = compose.evidence_commands(fix_body("$ not a command\n\n```text\n$\n```"))
+        self.assertEqual((found["source"], found["commands"]), (None, []))
+
+    def test_verification_is_the_fallback(self):
+        fenced = compose.evidence_commands(fix_body("```text\n$\nBAD\n```", "```sh\n$ run-check\n```"))
+        self.assertEqual((fenced["source"], fenced["commands"], fenced["recorded"]),
+                         ("Verification", ["run-check"], ["BAD"]))
+        bullet = compose.evidence_commands(fix_body("", "- `run-check --all` turns green"))
+        self.assertEqual((bullet["source"], bullet["commands"]), ("Verification", ["run-check --all"]))
+
+    def test_no_command_anywhere_is_not_runnable(self):
+        self.assertEqual(compose.evidence_commands(fix_body("It just breaks."))["source"], None)
+
+
+class ReproduceTest(unittest.TestCase):
+    def setUp(self):
+        self.fx = Fixture("subfolder")
+        self.root = self.fx.root
+        self.cycle = self.root / "docs/rite/cycles/alpha"
+
+    def tearDown(self):
+        self.fx.cleanup()
+
+    def add_fix(self, evidence: str, *, resources: str = "[]", verification: str = "") -> str:
+        code, out, err = self.fx.rite("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "t",
+                                      "--severity", "low", "--json")
+        self.assertEqual(code, 0, err)
+        fix_id = json.loads(out)["id"]
+        path = self.cycle / f"{fix_id}.md"
+        path.write_text(fix_body(evidence, verification).replace("{id}", fix_id)
+                        .replace("{resources}", resources), encoding="utf-8")
+        return fix_id
+
+    def reproduce(self, *args: str) -> dict:
+        code, out, err = self.fx.rite("reproduce", "--cycle", "alpha", *args, "--json")
+        self.assertEqual(code, 0, err + out)
+        return json.loads(out)
+
+    def test_the_whole_batch_in_one_call(self):
+        bad = self.add_fix(f"```text\n$ {PY} -c \"print('BAD')\"\nBAD\n```")
+        silent = self.add_fix("Nothing to run.")
+        data = self.reproduce("--all")
+        self.assertEqual([f["id"] for f in data["fixes"]], [bad, silent])
+        first, second = data["fixes"]
+        self.assertTrue(first["runnable"])
+        self.assertEqual((first["commands"][0]["exit_code"], first["commands"][0]["output"].strip()), (0, "BAD"))
+        self.assertEqual(first["recorded"], ["BAD"])
+        self.assertEqual((second["runnable"], second["commands"]), (False, []))
+        self.assertEqual(data["limit_kb"], 6)
+        self.assertEqual(self.reproduce("--all"), data)  # the same structure, call after call
+
+    def test_one_fix_and_a_missing_command(self):
+        fix_id = self.add_fix("```text\n$ rite-no-such-command-xyz\n```")
+        run = self.reproduce(fix_id)["fixes"][0]["commands"][0]
+        self.assertNotEqual(run["exit_code"], 0)  # the caller reads this as CANNOT RUN
+
+    def test_a_passing_command_is_cut_to_its_tail(self):
+        fix_id = self.add_fix(f"```text\n$ {PY} -c \"[print(i) for i in range(50)]\"\n```")
+        run = self.reproduce(fix_id, "--tail", "5")["fixes"][0]["commands"][0]
+        self.assertEqual(run["output"].split(), ["45", "46", "47", "48", "49"])
+        self.assertTrue(run["truncated"])
+
+    def test_an_output_above_the_limit_goes_to_an_agent(self):
+        toml = self.root / "rite.toml"
+        toml.write_text(toml.read_text(encoding="utf-8") + "\n[limits]\ninline_triage_max_output_kb = 1\n",
+                        encoding="utf-8")
+        # a failing command keeps its whole output — until it passes the limit
+        fix_id = self.add_fix(f"```text\n$ {PY} -c \"import sys; [print('x' * 99) for _ in range(40)]; "
+                              f"sys.exit(1)\"\n```")
+        fix = self.reproduce(fix_id, "--tail", "3")["fixes"][0]
+        self.assertTrue(fix["over_limit"])
+        self.assertGreater(fix["held_bytes"], 1024)
+        self.assertEqual(len(fix["commands"][0]["output"].splitlines()), 3)
+
+    def test_scratch_leaves_the_tree_alone(self):
+        writes = f"```text\n$ {PY} -c \"open('touched.txt', 'w').write('x')\"\n```"
+        fix_id = self.add_fix(writes)
+        self.reproduce(fix_id, "--scratch")
+        self.assertFalse((self.root / "touched.txt").exists())
+        self.reproduce(fix_id)
+        self.assertTrue((self.root / "touched.txt").exists())
+
+    def test_a_serialized_resource_runs_in_order_and_is_named(self):
+        first = self.add_fix(f"```text\n$ {PY} -c \"print(1)\"\n```", resources="[board]")
+        second = self.add_fix(f"```text\n$ {PY} -c \"print(2)\"\n```", resources="[board]")
+        data = self.reproduce("--all")
+        self.assertEqual([(f["id"], f["resources"]) for f in data["fixes"]], [(first, ["board"]), (second, ["board"])])
+
+    def test_the_limit_is_a_positive_number(self):
+        toml = self.root / "rite.toml"
+        toml.write_text(toml.read_text(encoding="utf-8") + "\n[limits]\ninline_triage_max_output_kb = 0\n",
+                        encoding="utf-8")
+        code, _, err = self.fx.rite("status")
+        self.assertEqual(code, 1)
+        self.assertIn("inline_triage_max_output_kb", err)
+
+    def test_needs_a_fix_or_all(self):
+        code, _, err = self.fx.rite("reproduce", "--cycle", "alpha")
+        self.assertEqual(code, 1)
+        self.assertIn("--all", err)
+
+
+if __name__ == "__main__":
+    unittest.main()
