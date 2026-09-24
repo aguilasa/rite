@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -130,6 +131,28 @@ class SectionsConfigTest(unittest.TestCase):
         for bad in ('evidence = []', 'gates = ""', 'scope = ["Scope", 3]'):
             with self.assertRaisesRegex(config.ConfigError, r"\[sections\]\.\w+ must be a title"):
                 config.parse(Path("."), "[sections]\n" + bad + "\n")
+
+
+class SectionParsersTest(unittest.TestCase):
+    def test_bare_paths_count_only_when_they_exist(self):
+        from rite_lib.batch import _section_paths
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "tools").mkdir()
+            (root / "tools/layout.py").write_text("", encoding="utf-8")
+            text = ("## Arquivos\n\n- tools/layout.py (linhas ~2050)\n- tools/gone.py\n"
+                    "- nada muda aqui.\n- `src/x.py` também\n")
+            self.assertEqual(_section_paths(text, ["Arquivos"], root), ["src/x.py", "tools/layout.py"])
+            self.assertEqual(_section_paths(text, ["Arquivos"]), ["src/x.py"])
+
+    def test_gates_table_takes_the_command_column(self):
+        from rite_lib.compose import _table_commands
+        rows = [["`selftest`", "nada", "`python tools/selftest.py`", "`ctest -R selftest`"],
+                ["`image`", "`IMAGE`", "`python tools/cli.py check`", "—"],
+                ["*(inside)*", "`IMAGE`", "`python tools/atlas.py --check-image`", "—"]]
+        self.assertEqual(_table_commands(rows), ["python tools/selftest.py", "python tools/cli.py check",
+                                                 "python tools/atlas.py --check-image"])
+        self.assertEqual(_table_commands([["`a`", "b"], ["`c`", "d"]]), [])
 
 
 class GlobTest(unittest.TestCase):

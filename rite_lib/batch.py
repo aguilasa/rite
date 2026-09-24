@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from . import markdown
 from .guard import glob_regex
@@ -16,6 +17,7 @@ from .model import Cycle, Item, Project, RiteError, display
 from .selection import SATISFIED, open_fixes
 
 _CODE_SPAN = re.compile(r"`([^`\s]+)`")
+_BARE_BULLET = re.compile(r"(?m)^\s*[-*]\s+([^\s`\[(]+)")
 _WILD = re.compile(r"[*?\[]")
 
 
@@ -35,26 +37,45 @@ def _as_list(value) -> list[str]:
     return [str(v) for v in value] if isinstance(value, list) else [str(value)]
 
 
-def _section_paths(text: str, titles: list[str]) -> list[str]:
+def _looks_like_path(token: str) -> bool:
+    return "/" in token or "." in token.rsplit("/", 1)[-1]
+
+
+def _section_paths(text: str, titles: list[str], root: Path | None = None) -> list[str]:
+    """Paths in backticks under the section; and, given the repository ``root``, a bullet that opens
+    with a bare path that exists there (`- src/a.py (the parser)`) — existence keeps prose out."""
     found_section = markdown.first_section(text, titles)
     if not found_section or not found_section[1]:
         return []
     found = []
     for m in _CODE_SPAN.finditer(found_section[1]):
         token = m.group(1).strip()
-        if "/" in token or "." in token.rsplit("/", 1)[-1]:
+        if _looks_like_path(token):
             found.append(token.lstrip("./"))
+    if root is not None:
+        for m in _BARE_BULLET.finditer(found_section[1]):
+            token = m.group(1).rstrip(",;:").lstrip("./")
+            try:
+                exists = _looks_like_path(token) and (root / token).exists()
+            except (OSError, ValueError):  # not a path the platform can even name
+                exists = False
+            if exists:
+                found.append(token)
     return found
 
 
 def predicted_files(project: Project, item: Item) -> tuple[list[str], bool]:
-    """Declared `files:` frontmatter wins; else paths in backticks under the `[sections]` files and
-    scope titles. (paths, declared?)"""
+    """Declared `files:` frontmatter wins; else the paths under the `[sections]` files and scope
+    titles. (paths, declared?)"""
     declared = _as_list(item.fields.get("files"))
     if declared:
         return declared, True
-    paths = (_section_paths(item.body, project.section_titles("files"))
-             + _section_paths(item.body, project.section_titles("scope")))
+    try:
+        root = project.git_root(item)
+    except RiteError:
+        root = project.root
+    paths = (_section_paths(item.body, project.section_titles("files"), root)
+             + _section_paths(item.body, project.section_titles("scope"), root))
     return list(dict.fromkeys(paths)), False
 
 

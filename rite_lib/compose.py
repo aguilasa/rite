@@ -280,14 +280,35 @@ def render_context(data: dict) -> str:
 
 
 # --- gates ---------------------------------------------------------------------
+_TABLE_RULE = re.compile(r"^:?-{3,}:?$")
+
+
+def _table_commands(rows: list[list[str]]) -> list[str]:
+    """The commands of a table: the first span of each row, in the first column where most rows hold
+    a span with a space in it — a command line, not a target name."""
+    for col in range(max((len(r) for r in rows), default=0)):
+        spans = [CODE_SPAN.search(r[col]) if col < len(r) else None for r in rows]
+        if sum(1 for s in spans if s and " " in s.group(1).strip()) * 2 > len(rows):
+            return [s.group(1).strip() for s in spans if s]
+    return []
+
+
 def profile_gates(project: Project, cycle: Cycle) -> list[str]:
-    """Commands the profile's Gates section lists, one per code span."""
+    """Commands the profile's Gates section lists: one per bullet's code span, and from a table, the
+    column that holds commands."""
     if not cycle.profile_path.is_file():
         return []
     found = markdown.first_section(cycle.profile_path.read_text(encoding="utf-8", errors="replace"),
                                    project.section_titles("gates"))
-    out = []
-    for line in (found[1] if found else "").splitlines():
+    out, table = [], []
+    for line in [*(found[1] if found else "").splitlines(), ""]:
+        if line.strip().startswith("|"):
+            table.append(markdown.table_cells(line))
+            continue
+        if table:  # the header, then the rule, then the rows
+            rows = table[2:] if len(table) > 1 and all(_TABLE_RULE.match(c) for c in table[1] if c) else []
+            out += _table_commands(rows)
+            table = []
         if line.strip().startswith(("-", "*")):
             span = CODE_SPAN.search(line)
             if span:

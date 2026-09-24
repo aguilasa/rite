@@ -93,37 +93,10 @@ class Report:
 
 
 # --- tables ------------------------------------------------------------------------
-def _cells(line: str) -> list[str]:
-    line = line.strip()
-    if line.startswith("|"):
-        line = line[1:]
-    if line.endswith("|") and not line.endswith("\\|"):
-        line = line[:-1]
-    # split on '|' except when escaped or inside a code span: legacy titles quote shell pipes
-    # (`a|b`), and splitting there shifts every later column of the row
-    cells, current, in_code, i = [], [], False, 0
-    while i < len(line):
-        ch = line[i]
-        if ch == "\\" and i + 1 < len(line) and line[i + 1] == "|":
-            current.append("|")
-            i += 2
-            continue
-        if ch == "`":
-            in_code = not in_code
-        if ch == "|" and not in_code:
-            cells.append("".join(current))
-            current = []
-        else:
-            current.append(ch)
-        i += 1
-    cells.append("".join(current))
-    return [c.strip() for c in cells]
-
-
 def _row(line: str, width: int) -> list[str]:
     """Cells of a table row; falls back to a plain split when code-span awareness breaks the width
     (an unbalanced backtick would otherwise swallow the rest of the row)."""
-    cells = _cells(line)
+    cells = markdown.table_cells(line)
     if len(cells) == width:
         return cells
     stripped = line.strip().strip("|")
@@ -142,7 +115,7 @@ def find_tables(text: str, must_have: tuple[str, ...]) -> list[tuple[int, int, l
     i = 0
     while i < len(lines) - 1:
         if lines[i].lstrip().startswith("|") and re.match(r"^\s*\|?\s*:?-{2,}", lines[i + 1]):
-            header = [h.lower() for h in _cells(lines[i])]
+            header = [h.lower() for h in markdown.table_cells(lines[i])]
             j = i + 2
             while j < len(lines) and lines[j].lstrip().startswith("|"):
                 j += 1

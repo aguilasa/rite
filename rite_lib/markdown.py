@@ -120,6 +120,34 @@ def section(text: str, title: str) -> str | None:
     return "\n".join(lines[start:]) if start is not None else None
 
 
+def table_cells(line: str) -> list[str]:
+    """Cells of a markdown table row, stripped."""
+    line = line.strip()
+    if line.startswith("|"):
+        line = line[1:]
+    if line.endswith("|") and not line.endswith("\\|"):
+        line = line[:-1]
+    # split on '|' except when escaped or inside a code span: legacy titles quote shell pipes
+    # (`a|b`), and splitting there shifts every later column of the row
+    cells, current, in_code, i = [], [], False, 0
+    while i < len(line):
+        ch = line[i]
+        if ch == "\\" and i + 1 < len(line) and line[i + 1] == "|":
+            current.append("|")
+            i += 2
+            continue
+        if ch == "`":
+            in_code = not in_code
+        if ch == "|" and not in_code:
+            cells.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+    cells.append("".join(current))
+    return [c.strip() for c in cells]
+
+
 def first_section(text: str, titles) -> tuple[str, str] | None:
     """(title, body) of the first of ``titles`` that has a section in ``text``, tried in order."""
     for title in ([titles] if isinstance(titles, str) else titles):
