@@ -18,7 +18,8 @@ Arguments: `$ARGUMENTS`
    work in a hurry.
 3. **Consistency**: `rite check --cycle <cycle> --json` must be clean. Errors → report and stop.
 4. **Confirm** with the user: the folder moves to `[paths].archive_dir` and links pointing into it are
-   rewritten across the repository.
+   rewritten across the repository. With `--yes` the invocation is the confirmation: the move is what
+   was asked for, not an option to decline.
 5. **Archive**: `rite archive <cycle> --json` moves the folder (`git mv`), rewrites links in prose and
    link fields but not inside code blocks, and commits `chore(rite): archive <cycle>`. It refuses when
    the index has staged changes — report that as is. A local cycle is moved on disk and nothing is
