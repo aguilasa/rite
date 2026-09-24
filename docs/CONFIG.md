@@ -87,8 +87,9 @@ order: [LOOKS-TASK-31, LOOKS-TASK-36, LOOKS-TASK-37, LOOKS-TASK-32]
 ## `[sections]`
 
 Heading names the CLI reads or writes, so projects can keep their own language. A section is found by
-its exact title (case-insensitive); a title the repository does not use is a section that is not
-there. That is why every key is configurable: one English `Evidence` once turned off the inline triage
+its title (case-insensitive) — exactly, or followed by a separator (` — `, ` - `, `:`, ` (`, ` *`):
+`Evidence — how it was seen` is the evidence, `Evidence of a harness artefact` is not. A title the
+repository does not use is a section that is not there. That is why every key is configurable: one English `Evidence` once turned off the inline triage
 of a whole pt-BR repository — every fix came back "no command", and nothing said why.
 
 Each value is a **title or a list of titles**. The first is the one Rite writes (new items, a created

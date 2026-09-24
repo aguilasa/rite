@@ -20,8 +20,9 @@ have its own proposed from its files, and a missing title is reported instead of
   use, recognising each section by what it holds, never by its words; every guess carries its
   evidence, a key nothing matches reliably comes out commented with its candidates, and `--write`
   merges only what matched, keeping comments and order. `/rite:init` uses it on an existing backlog.
-- `rite reproduce` gives each fix `why`: `ok`, `no_section` (with `looked_for`) or `no_command`, and
-  `heading`, the title it found.
+- `rite reproduce` gives each fix `why`: `ok`, `no_section` (with `looked_for`, and `near`: headings
+  that begin with a title without naming it), `no_command` or `unterminated`, and `heading`, the
+  title it found.
 
 ### Changed
 
@@ -31,6 +32,15 @@ have its own proposed from its files, and a missing title is reported instead of
   exists. Gates stay bullets only: the one gates table measured was a catalogue of sixty tools, some
   starting an emulator, and every item runs its gates before closing. `rite sections` shows such a
   table as a commented candidate.
+- **Multi-line evidence runs whole.** A `$ ` line ending in a backslash goes on over the next one,
+  and a heredoc takes its body up to its delimiter. Run line by line, `python - <<'EOF'` got no body
+  and waited on stdin, and exit 2 read like a reproduced symptom. A heredoc never closed runs nothing
+  (`why: unterminated`). Evidence and gates run with stdin closed.
+- **A heading with a separated suffix names its section**: `Evidência — e as três vezes`, `Log de
+  Execução *(preenchido após execução)*`. An exact heading wins; a plain space is not a separator, so
+  `Evidência de que não é artefato` stays another section, and `check` names it as a near miss.
+- `rite sections` lets `files` and `scope` share a title, and leaves a key commented when the title
+  Rite would write holds in under a tenth of the files.
 - `migrate --from we2002` writes the pt-BR titles in the `rite.toml` it generates.
 - The plugin templates write the canonical titles, so a new fix in a pt-BR repository gets
   `## Evidência`.
