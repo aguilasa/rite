@@ -73,12 +73,34 @@ class EvidenceCommandsTest(unittest.TestCase):
         found = compose.evidence_commands(fix_body("It just breaks."))
         self.assertEqual((found["source"], found["why"]), (None, "no_command"))
 
+    def test_a_heredoc_and_a_continued_line_are_one_command_each(self):
+        found = compose.evidence_commands(fix_body(
+            "```text\n"
+            "$ python - <<'EOF'   # the balance\nimport json\nprint(1)\nEOF\n1\n"
+            "$ for r in a b; do echo $r \\\n> done; done\na\nb\n"
+            "```"))
+        self.assertEqual(found["commands"], ["python - <<'EOF'   # the balance\nimport json\nprint(1)\nEOF",
+                                             "for r in a b; do echo $r \\\ndone; done"])
+        self.assertEqual(found["recorded"], ["1", "a", "b"])
+
+    def test_a_heredoc_never_closed_runs_nothing(self):
+        found = compose.evidence_commands(fix_body("```text\n$ echo ok\n$ cat <<X\nnever closed\n```"))
+        self.assertEqual((found["why"], found["commands"], found["broken"]), ("unterminated", [], ["cat <<X"]))
+
     def test_a_title_mismatch_is_no_section_not_no_command(self):
         text = "# CORR-X\n\n## Evidência\n\n```text\n$ grep -n x f\n```\n"
         found = compose.evidence_commands(text)
         self.assertEqual((found["why"], found["looked_for"]), ("no_section", ["Evidence", "Verification"]))
         found = compose.evidence_commands(text, ["Evidence", "Evidência"], ["Verification"])
         self.assertEqual((found["why"], found["heading"], found["commands"]), ("ok", "Evidência", ["grep -n x f"]))
+
+    def test_a_separated_suffix_still_names_the_section_and_a_near_miss_is_named(self):
+        suffixed = "# X\n\n## Evidência — e as três vezes\n\n```text\n$ grep -n x f\n```\n"
+        found = compose.evidence_commands(suffixed, ["Evidência"], ["Verificação"])
+        self.assertEqual((found["why"], found["heading"]), ("ok", "Evidência — e as três vezes"))
+        other = "# X\n\n## Evidência de que não é artefato\n\n```text\n$ grep -n x f\n```\n"
+        found = compose.evidence_commands(other, ["Evidência"], ["Verificação"])
+        self.assertEqual((found["why"], found["near"]), ("no_section", ["Evidência de que não é artefato"]))
 
 
 class ReproduceTest(unittest.TestCase):

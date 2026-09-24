@@ -294,8 +294,9 @@ class Checker:
         titles = [*self.p.section_titles("evidence"), *self.p.section_titles("verification")]
         for fix in cycle.fixes:
             if fix.status in ("pending", "in-progress") and markdown.first_section(fix.body, titles) is None:
+                near = "".join(f"; near: '{h}'" for h in markdown.near_headings(fix.body, titles))
                 self.warn(fix.path, "no section titled " + " / ".join(f"'{t}'" for t in titles)
-                          + ": reproduce finds no command (set [sections].evidence / verification)")
+                          + f": reproduce finds no command (set [sections].evidence / verification){near}")
 
     def check_profile(self, cycle: Cycle) -> None:
         prof = cycle.profile_path

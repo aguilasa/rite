@@ -119,6 +119,16 @@ class MarkdownTest(unittest.TestCase):
         out2 = markdown.append_to_section("# A\n", ["Execution Log", "Log de Execução"], "- first")
         self.assertTrue(out2.endswith("## Execution Log\n\n- first\n"))
 
+    def test_an_exact_title_wins_over_a_suffixed_one(self):
+        text = "## Log — 2026-08-30\n\nold\n\n## Log\n\nnew\n"
+        self.assertEqual(markdown.first_section(text, ["Log"]), ("Log", "\nnew"))
+        self.assertEqual(markdown.first_section("## Log *(filled after)*\n\n- a\n", ["Log"])[0],
+                         "Log *(filled after)*")
+        out = markdown.append_to_section("## Log *(filled after)*\n\n- a\n", ["Log"], "- b")
+        self.assertEqual(out, "## Log *(filled after)*\n\n- a\n- b\n")
+        self.assertIsNone(markdown.first_section("## Logbook\n\nx\n", ["Log"]))
+        self.assertEqual(markdown.near_headings("## Log of the harness\n", ["Log"]), ["Log of the harness"])
+
 
 class SectionsConfigTest(unittest.TestCase):
     def test_title_or_list(self):

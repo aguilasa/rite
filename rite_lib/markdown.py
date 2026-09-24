@@ -96,9 +96,26 @@ def is_external(target: str) -> bool:
     return bool(re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", target)) or target.startswith("//")
 
 
-def section(text: str, title: str) -> str | None:
+# what may follow a title in a heading that still names that section: `Evidence — how it was seen`,
+# `Execution Log *(filled after)*`. A plain space may not: `Evidence of a harness artefact` is another one
+_SEPARATORS = (" — ", " – ", " - ", ":", " (", " *")
+
+
+def title_matches(heading: str, title: str, *, loose: bool = False) -> bool:
+    """``heading`` is ``title`` (case-insensitive); ``loose``: or ``title`` followed by a separator."""
+    h, t = heading.strip().lower(), title.strip().lower()
+    return h == t or (loose and h.startswith(t) and h[len(t):].startswith(_SEPARATORS))
+
+
+def section(text: str, title: str, *, loose: bool = False) -> str | None:
     """Body of the first heading whose text equals ``title`` (case-insensitive), up to the next heading
-    of the same or higher level."""
+    of the same or higher level. ``loose``: a heading that adds a separated suffix counts too."""
+    found = _find_section(text, title, loose)
+    return found[1] if found else None
+
+
+def _find_section(text: str, title: str, loose: bool) -> tuple[str, str] | None:
+    """(the heading as written, body) of the first heading ``title`` names."""
     lines = text.splitlines()
     fence = None
     start = level = None
@@ -113,11 +130,11 @@ def section(text: str, title: str) -> str | None:
         if not h:
             continue
         if start is None:
-            if h.group(2).strip().lower() == title.strip().lower():
-                start, level = i + 1, len(h.group(1))
+            if title_matches(h.group(2), title, loose=loose):
+                start, level, heading = i + 1, len(h.group(1)), h.group(2).strip()
         elif len(h.group(1)) <= level:
-            return "\n".join(lines[start:i])
-    return "\n".join(lines[start:]) if start is not None else None
+            return heading, "\n".join(lines[start:i])
+    return (heading, "\n".join(lines[start:])) if start is not None else None
 
 
 def table_cells(line: str) -> list[str]:
@@ -149,12 +166,24 @@ def table_cells(line: str) -> list[str]:
 
 
 def first_section(text: str, titles) -> tuple[str, str] | None:
-    """(title, body) of the first of ``titles`` that has a section in ``text``, tried in order."""
-    for title in ([titles] if isinstance(titles, str) else titles):
-        body = section(text, title)
-        if body is not None:
-            return title, body
+    """(heading as written, body) of the first of ``titles`` that has a section in ``text``, tried in
+    order: an exact heading first, then one that adds a separated suffix (`Evidence — how it was seen`)."""
+    titles = [titles] if isinstance(titles, str) else titles
+    for loose in (False, True):
+        for title in titles:
+            found = _find_section(text, title, loose)
+            if found:
+                return found
     return None
+
+
+def near_headings(text: str, titles) -> list[str]:
+    """Headings that begin with one of ``titles`` without naming it (`Evidence of the harness`): what
+    a reader most likely meant when no section was found."""
+    titles = [titles] if isinstance(titles, str) else titles
+    return [h for _, h in headings(text)
+            if any(h.strip().lower().startswith(t.strip().lower()) for t in titles)
+            and not any(title_matches(h, t, loose=True) for t in titles)]
 
 
 def append_to_section(text: str, title, addition: str, level: int = 2) -> str:

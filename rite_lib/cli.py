@@ -114,8 +114,11 @@ def cmd_reproduce(project: Project, args) -> int:
         if fix["runnable"]:
             flag = ""
         elif fix["why"] == "no_section":
+            near = "".join(f'; near: "{h}"' for h in fix.get("near", []))
             flag = (" (no section: looked for " + ", ".join(f'"{t}"' for t in fix["looked_for"])
-                    + f" in {fix['path']}; runnable false)")
+                    + f" in {fix['path']}{near}; runnable false)")
+        elif fix["why"] == "unterminated":
+            flag = " (a heredoc is never closed, so nothing ran: runnable false)"
         else:
             flag = " (its section has no command: runnable false)"
         flag += f" (over {data['limit_kb']} KB: hand it to an agent)" if fix["over_limit"] else ""

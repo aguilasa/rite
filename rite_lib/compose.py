@@ -339,19 +339,52 @@ def _fenced(body: str) -> list[list[str]]:
     return blocks
 
 
-def _shell_lines(body: str) -> tuple[list[str], list[str]]:
-    """Commands (`$ ` lines inside fences) and every other line of those fences: the recorded output."""
-    commands, recorded = [], []
+_HEREDOC = re.compile(r"""(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_][\w-]*)\1""")
+
+
+def _continued(line: str) -> str:
+    """A line that goes on a command: the `> ` prompt a copied bash session shows is not part of it."""
+    line = line.rstrip()
+    return line[2:] if line.startswith("> ") else line
+
+
+def _shell_lines(body: str) -> tuple[list[str], list[str], list[str]]:
+    """Commands (`$ ` lines inside fences), every other line of those fences (the recorded output),
+    and the commands a heredoc left open.
+
+    A command goes on over a line ending in a backslash and over the body of each heredoc it opens, up
+    to its delimiter — one command, run whole. Why: run line by line, `python - <<'EOF'` got no body
+    and a continued `for` loop half its text; exit 2 read like a reproduced symptom. A heredoc with no
+    closing delimiter is not run at all: half a command measures nothing."""
+    commands, recorded, broken = [], [], []
     for block in _fenced(body):
-        for line in block:
-            stripped = line.strip()
-            if stripped.startswith("$"):
-                command = stripped[1:].strip()
-                if command:
-                    commands.append(command)
-            elif stripped:
-                recorded.append(line.rstrip())
-    return commands, recorded
+        i = 0
+        while i < len(block):
+            stripped = block[i].strip()
+            i += 1
+            if not stripped.startswith("$"):
+                if stripped:
+                    recorded.append(block[i - 1].rstrip())
+                continue
+            command = stripped[1:].strip()
+            if not command:
+                continue
+            while command.endswith("\\") and i < len(block):
+                command += "\n" + _continued(block[i])
+                i += 1
+            closed = True
+            for m in _HEREDOC.finditer(command):
+                delimiter, body_lines = m.group(2), []
+                while i < len(block) and _continued(block[i]).strip() != delimiter:
+                    body_lines.append(_continued(block[i]))
+                    i += 1
+                if i == len(block):
+                    closed = False
+                    break
+                command += "\n" + "\n".join([*body_lines, delimiter])
+                i += 1
+            (commands if closed else broken).append(command)
+    return commands, recorded, broken
 
 
 def evidence_commands(text: str, evidence: list[str] | None = None,
@@ -362,17 +395,24 @@ def evidence_commands(text: str, evidence: list[str] | None = None,
     ``evidence`` and ``verification`` are the titles `[sections]` accepts (the defaults when None).
     `source` names the kind of section whatever the language; `heading` is the title found. `why`
     tells the empty cases apart: `no_section` (neither title is there — `looked_for` lists them; a
-    title mismatch, not a clean fix) or `no_command` (a section is there, with nothing to run)."""
+    title mismatch, not a clean fix; `near` lists headings that begin with one), `no_command` (a
+    section is there, with nothing to run) or `unterminated` (a heredoc never closed; `broken`)."""
     evidence = evidence or as_list(DEFAULTS["sections"]["evidence"])
     verification = verification or as_list(DEFAULTS["sections"]["verification"])
     found_evidence = markdown.first_section(text, evidence)
     found_verification = markdown.first_section(text, verification)
-    commands, recorded = _shell_lines(found_evidence[1] if found_evidence else "")
+    commands, recorded, broken = _shell_lines(found_evidence[1] if found_evidence else "")
+    if broken:
+        return {"source": "Evidence", "heading": found_evidence[0], "why": "unterminated", "broken": broken,
+                "commands": [], "recorded": recorded}
     if commands:
         return {"source": "Evidence", "heading": found_evidence[0], "why": "ok", "commands": commands,
                 "recorded": recorded}
     body = found_verification[1] if found_verification else ""
-    commands, _ = _shell_lines(body)
+    commands, _, broken = _shell_lines(body)
+    if broken:
+        return {"source": "Verification", "heading": found_verification[0], "why": "unterminated",
+                "broken": broken, "commands": [], "recorded": recorded}
     if not commands:
         commands = [span.group(1).strip() for line in body.splitlines()
                     if line.strip().startswith(("-", "*")) for span in [CODE_SPAN.search(line)] if span]
@@ -382,7 +422,8 @@ def evidence_commands(text: str, evidence: list[str] | None = None,
     if found_evidence or found_verification:
         return {"source": None, "heading": None, "why": "no_command", "commands": [], "recorded": recorded}
     return {"source": None, "heading": None, "why": "no_section", "looked_for": [*evidence, *verification],
-            "commands": [], "recorded": recorded}
+            "near": markdown.near_headings(text, [*evidence, *verification]), "commands": [],
+            "recorded": recorded}
 
 
 def _export(repo: Path, into: Path) -> None:
@@ -484,7 +525,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
             results.append({
                 "id": fix.id, "path": display(project.root, fix.path), "runnable": bool(found["commands"]),
                 "source": found["source"], "heading": found["heading"], "why": found["why"],
-                **({"looked_for": found["looked_for"]} if "looked_for" in found else {}),
+                **{k: found[k] for k in ("looked_for", "near", "broken") if k in found},
                 "resources": fix.fields.get("resources") or [],
                 "recorded": found["recorded"], "commands": runs, "held_bytes": held, "over_limit": over,
             })
