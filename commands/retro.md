@@ -41,8 +41,7 @@ their fix IDs, applied or not · commit SHA.
 
 ## The CLI
 
-Every state read and every state change goes through it; never edit `status`, dates, SHAs or the
-generated tables by hand — hand-written bookkeeping drifts.
+Every state read and every state change goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json
@@ -67,16 +66,16 @@ them down only.
 
 ## Evidence
 
-- **Measure, do not read.** A claim counts only if you ran its command here and saw the output; logs
-  are leads.
-- **Every number has a tool**: quote its versioned command beside the number.
+- **Measure, do not read**: a claim counts only if you ran its command here; logs are leads.
+- **Every number has a tool**: quote its versioned command beside it.
 - **Control before test**: before trusting a checker, show it can fail.
 - **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
-  `REPRODUCED` → fix it · `NOT REPRODUCED` → *stale* (`rite mark-stale`), not fixed · `CANNOT RUN` →
-  an agent or a person, never a guess.
+  `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
+  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `shell_error`, missing path) → an agent or a
+  person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
-- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means not done: fix it, or stop and
-  report its output.
+- **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
+  output.
 
 ## Committing
 

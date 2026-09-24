@@ -228,5 +228,18 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual(self.evidence_warnings(fine), [])
 
 
+class StaleRuleTest(unittest.TestCase):
+    """`mark-stale` closes a fix unrepaired: the rule names what never authorizes it."""
+
+    def test_the_evidence_rule_never_reads_a_shell_error_as_stale(self):
+        root = Path(__file__).resolve().parent.parent
+        text = (root / "parts" / "evidence.md").read_text(encoding="utf-8")
+        rule = next(b for b in text.split("\n- ") if "NOT REPRODUCED" in b)
+        for term in ("why: ok", "shell_error", "CANNOT RUN", "never *stale*", "exit code is not a verdict"):
+            self.assertIn(term, " ".join(rule.split()), term)
+        reproducer = (root / "agents" / "rite-reproducer.md").read_text(encoding="utf-8")
+        self.assertIn("never `NOT REPRODUCED`", reproducer)
+
+
 if __name__ == "__main__":
     unittest.main()

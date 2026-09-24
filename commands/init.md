@@ -53,8 +53,7 @@ Detected conclusions with their evidence · questions and answers (or `assumed:`
 
 ## The CLI
 
-Every state read and every state change goes through it; never edit `status`, dates, SHAs or the
-generated tables by hand — hand-written bookkeeping drifts.
+Every state read and every state change goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json

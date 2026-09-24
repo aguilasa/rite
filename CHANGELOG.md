@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Only a measured contradiction marks a fix stale.** `mark-stale` closes a fix without repairing
+  anything, and nothing said what does not authorize it. Now the evidence rules, `/rite:fix`,
+  `/rite:fix-all` and `rite-reproducer` agree: `NOT REPRODUCED` needs `why: ok` and an output that
+  contradicts the recorded Evidence; `no_section`, `no_command`, `unterminated`, a `shell_error` or a
+  missing command or path is `CANNOT RUN`, never stale. The `/rite:fix-all` report lists the fixes
+  without a command as a finding against the review that opened them.
+
 ## [0.7.0] — 2026-09-24
 
 Section titles are configurable, all of them. In a pt-BR repository `rite reproduce` returned six

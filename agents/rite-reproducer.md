@@ -28,7 +28,9 @@ You check **one** fix: does its problem still happen?
 ## Output (exactly this format)
 
 The verdict is one of the three tokens the rite's evidence rules define — the same ones inline triage
-writes, so the main thread handles yours without rereading anything.
+writes, so the main thread handles yours without rereading anything. `NOT REPRODUCED` needs an
+output you measured that contradicts the recorded Evidence; a command that could not run (not found,
+a path that is gone) is `CANNOT RUN`, never `NOT REPRODUCED`. An exit code is not a verdict.
 
 ```
 FIX: <ID>

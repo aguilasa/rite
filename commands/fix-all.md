@@ -11,15 +11,15 @@ Arguments: `$ARGUMENTS`
 
 ## Steps
 
-1. `rite begin fix --cycle <cycle> --json` for the cycle and its config. The batch is the fix IDs given,
+1. `rite begin fix --cycle <cycle> --json`. The batch is the fix IDs given,
    or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle> --json`); fixes opened
    during the run are not added: a batch whose end moves is never done.
 2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for the batch.
-   Compare each fix's output with its `recorded` Evidence and write its verdict:
+   Compare each output with its `recorded` Evidence; write the verdict:
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
    - `REPRODUCED` → stays in the batch; paste the output into its Execution Log.
-   - **Residue** — `runnable: false`, `over_limit`, `CANNOT RUN`, or an output that does not decide:
-     only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
+   - **Residue** — `runnable: false`, `over_limit`, `shell_error`, `CANNOT RUN`, or an output that does
+     not decide: only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
      `rite context <FIX> --json`. Handle its verdict as above; `CANNOT RUN` stays in the batch.
 3. **Plan** with `--kind fix` on the remaining IDs. With `--plan`, stop here.
 4. **Run the waves.** Each worker follows the single-fix rules of `/rite:fix`: reproduce again, confirm
@@ -27,18 +27,17 @@ Arguments: `$ARGUMENTS`
 5. Sweep edits go in their own commit (`docs: sweep after <FIX>`), then `rite finish <FIX> --sha
    <work-SHA> --json`.
 6. **New problems** become new fixes (`rite new-fix --origin <FIX>`, fill the body,
-   `rite commit-new <ID>`), reported but not worked on in this run.
+   `rite commit-new <ID>`), reported, not worked on here.
 
 ## Report
 
-Triage, one line per fix: verdict, inline or agent (no command: a defect of the review that
-opened it) · waves and conflict pairs · per item: result, work SHA, bookkeeping SHA · gates ·
-new fixes opened · what to run next.
+Triage, one line per fix: verdict, inline or agent · fixes without a command (ID, `why`, origin): a
+defect of the review that opened it · waves and conflict pairs · per item: result, work SHA,
+bookkeeping SHA · gates · new fixes opened · what to run next.
 
 ## The CLI
 
-Every state read and every state change goes through it; never edit `status`, dates, SHAs or the
-generated tables by hand — hand-written bookkeeping drifts.
+Every state read and every state change goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json
@@ -70,16 +69,16 @@ Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edi
 
 ## Evidence
 
-- **Measure, do not read.** A claim counts only if you ran its command here and saw the output; logs
-  are leads.
-- **Every number has a tool**: quote its versioned command beside the number.
+- **Measure, do not read**: a claim counts only if you ran its command here; logs are leads.
+- **Every number has a tool**: quote its versioned command beside it.
 - **Control before test**: before trusting a checker, show it can fail.
 - **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
-  `REPRODUCED` → fix it · `NOT REPRODUCED` → *stale* (`rite mark-stale`), not fixed · `CANNOT RUN` →
-  an agent or a person, never a guess.
+  `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
+  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `shell_error`, missing path) → an agent or a
+  person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
-- **Gates** run through `rite gates [--id <ID>] --json`. A red gate means not done: fix it, or stop and
-  report its output.
+- **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
+  output.
 
 ## Committing
 

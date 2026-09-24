@@ -153,8 +153,9 @@ the agents multiply a fresh context per fix. At N = 1 the agent is ahead, but wi
 between repetitions, so the rule is stated from N = 2. What the main thread holds is the output: past
 about 7 KB per fix, holding it costs more than that fix's reproducer, hence
 `[limits].inline_triage_max_output_kb = 6`. So the triage is **inline by default, at any batch size;
-an agent only for the residue** — no command, output over the limit, `CANNOT RUN`, or an output that
-does not decide.
+an agent only for the residue** — no command (`why` other than `ok`), output over the limit, a
+`shell_error`, `CANNOT RUN`, or an output that does not decide. None of those is ever *stale*: only an
+output measured under `why: ok` that contradicts the recorded Evidence closes a fix unrepaired.
 
 Confirmed by a run: twelve `/rite:fix-all` invocations, the 0.5.0 tree against inline triage
 ([tokens/2026-09-24-fixall-as-is-vs-inline.md](tokens/2026-09-24-fixall-as-is-vs-inline.md)). The whole
