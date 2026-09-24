@@ -54,7 +54,7 @@ class EvidenceCommandsTest(unittest.TestCase):
 
     def test_dollar_lines_of_the_fenced_evidence(self):
         found = compose.evidence_commands(fix_body("```text\n$ node bin/x.mjs a\nBAD\n$ echo 2\n2\n```"))
-        self.assertEqual(found, {"source": "Evidence", "heading": "Evidence",
+        self.assertEqual(found, {"source": "Evidence", "heading": "Evidence", "why": "ok",
                                  "commands": ["node bin/x.mjs a", "echo 2"],
                                  "recorded": ["BAD", "2"]})
 
@@ -70,7 +70,15 @@ class EvidenceCommandsTest(unittest.TestCase):
         self.assertEqual((bullet["source"], bullet["commands"]), ("Verification", ["run-check --all"]))
 
     def test_no_command_anywhere_is_not_runnable(self):
-        self.assertEqual(compose.evidence_commands(fix_body("It just breaks."))["source"], None)
+        found = compose.evidence_commands(fix_body("It just breaks."))
+        self.assertEqual((found["source"], found["why"]), (None, "no_command"))
+
+    def test_a_title_mismatch_is_no_section_not_no_command(self):
+        text = "# CORR-X\n\n## Evidência\n\n```text\n$ grep -n x f\n```\n"
+        found = compose.evidence_commands(text)
+        self.assertEqual((found["why"], found["looked_for"]), ("no_section", ["Evidence", "Verification"]))
+        found = compose.evidence_commands(text, ["Evidence", "Evidência"], ["Verification"])
+        self.assertEqual((found["why"], found["heading"], found["commands"]), ("ok", "Evidência", ["grep -n x f"]))
 
 
 class ReproduceTest(unittest.TestCase):

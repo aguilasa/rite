@@ -112,6 +112,7 @@ class Checker:
         self.check_cycles_in_graph(cycle, index)
         if not self.quick:
             self.check_profile(cycle)
+            self.check_fix_sections(cycle)
             for f in [cycle.progress_path, cycle.fixes_path, *(i.path for i in cycle.items)]:
                 if f.is_file():
                     self.check_links(f)
@@ -286,6 +287,16 @@ class Checker:
         for node in index:
             visit(node, [])
 
+    def check_fix_sections(self, cycle: Cycle) -> None:
+        """An open fix with neither an evidence nor a verification title reproduces as "nothing to
+        run" — which reads like a clean fix. A warning: a legacy repository is like this until its
+        `[sections]` names its own titles (`rite.py sections` proposes them)."""
+        titles = [*self.p.section_titles("evidence"), *self.p.section_titles("verification")]
+        for fix in cycle.fixes:
+            if fix.status in ("pending", "in-progress") and markdown.first_section(fix.body, titles) is None:
+                self.warn(fix.path, "no section titled " + " / ".join(f"'{t}'" for t in titles)
+                          + ": reproduce finds no command (set [sections].evidence / verification)")
+
     def check_profile(self, cycle: Cycle) -> None:
         prof = cycle.profile_path
         if not prof.is_file():
@@ -299,6 +310,9 @@ class Checker:
                      "move measured pitfalls to the pitfalls file (/rite:retro compacts)")
         text = prof.read_text(encoding="utf-8", errors="replace")
         self.check_links(prof)
+        if not cycle.archived and markdown.first_section(text, self.p.section_titles("gates")) is None:
+            self.warn(prof, "no section titled " + " / ".join(f"'{t}'" for t in self.p.section_titles("gates"))
+                      + ": `rite.py gates` runs only [gates].global (set [sections].gates)")
         found = markdown.first_section(text, self.p.section_titles("phase_checks"))
         heading = found[0] if found else self.p.section_title("phase_checks")
         # template hints are not entries

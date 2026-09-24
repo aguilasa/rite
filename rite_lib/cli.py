@@ -111,7 +111,13 @@ def cmd_reproduce(project: Project, args) -> int:
                              tail=args.tail, scratch=args.scratch)
     lines = []
     for fix in data["fixes"]:
-        flag = "" if fix["runnable"] else " (no command: runnable false)"
+        if fix["runnable"]:
+            flag = ""
+        elif fix["why"] == "no_section":
+            flag = (" (no section: looked for " + ", ".join(f'"{t}"' for t in fix["looked_for"])
+                    + f" in {fix['path']}; runnable false)")
+        else:
+            flag = " (its section has no command: runnable false)"
         flag += f" (over {data['limit_kb']} KB: hand it to an agent)" if fix["over_limit"] else ""
         lines.append(f"{fix['id']}{flag}")
         for run in fix["commands"]:

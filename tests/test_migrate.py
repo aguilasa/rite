@@ -53,7 +53,8 @@ def legacy_task(item_id, title, sot, status, type_="implementação", deps="[]",
 
 
 def legacy_fix(item_id, status):
-    return f"---\nid: {item_id}\ntitle: \"x\"\ntype: correção\nstatus: {status}\ndepends_on: []\n---\n\n# {item_id}\n"
+    return (f"---\nid: {item_id}\ntitle: \"x\"\ntype: correção\nstatus: {status}\ndepends_on: []\n---\n\n# {item_id}\n\n"
+            "## Evidência\n\n```text\n$ echo quebrado\nquebrado\n```\n")
 
 
 class MigrateTest(unittest.TestCase):
@@ -65,7 +66,8 @@ class MigrateTest(unittest.TestCase):
         git(r, "config", "user.email", "t@example.invalid")
         git(r, "config", "core.autocrlf", "false")
         write(r / "docs/PLAN-LEG.md", PLAN)
-        write(r / "docs/prompts/perfil-leg.md", "# Perfil\n\n## Verificações específicas por fase\n\n**Fase 1:** medir\n")
+        write(r / "docs/prompts/perfil-leg.md", "# Perfil\n\n## Gates deste ciclo\n\n- `echo ok`\n\n"
+                                                "## Verificações específicas por fase\n\n**Fase 1:** medir\n")
         t = r / "docs/tasks"
         write(t / "progresso.md", PROGRESS)
         write(t / "correcoes-progresso.md", FIXES)
@@ -130,7 +132,11 @@ class MigrateTest(unittest.TestCase):
         code, out, _ = rite(self.root, "check", "--json")
         self.assertEqual(json.loads(out)["errors"], 0, out)
         warnings = [f["message"] for f in json.loads(out)["findings"] if f["level"] == "warn"]
-        self.assertEqual(warnings, ["id prefix PAR differs from cycle prefix LEG"])
+        self.assertEqual(warnings[0], "id prefix PAR differs from cycle prefix LEG")
+        # the English titles miss the pt-BR sections, and check says so instead of staying silent
+        self.assertEqual(len(warnings), 3, warnings)
+        self.assertIn("no section titled 'Gates'", warnings[1])
+        self.assertIn("no section titled 'Evidence' / 'Verification'", warnings[2])
         status = json.loads(rite(self.root, "status", "--json")[1])["cycles"][0]
         self.assertEqual(status["review_queue"], ["LEG-TASK-02"])
         self.assertEqual(status["open_fixes"]["low"], 1)
