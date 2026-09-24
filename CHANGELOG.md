@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Inline triage confirmed by a run, and three defects the new e2e runs found.
+
+### Fixed
+
+- **A batch no longer loops on a gate that was red before it.** A wave whose gate is red aborts and
+  leaves its items in progress; when the defect was already in HEAD, `rite status` resumed the same
+  task and the next batch hit the same gate — the e2e lifecycle of both examples ran
+  `/rite:execute-batch` until it was out of steps (a rule of 0.4.0, unnoticed since the baselines were
+  from 0.3.0). The main thread now reruns the gates with the wave's edits stashed; still red, the
+  defect is opened as a `high` fix with the gate output as Evidence, and `/rite:fix-all` repairs it
+  before the wave resumes.
+- **`rite reproduce` runs evidence in bash**, as it was written — Git Bash on Windows, where
+  `shell=True` meant cmd.exe and a quoted `grep` became a usage error.
+- **`/rite:close-cycle --yes` archives.** "Never choose an option that moves files" under `--yes` was
+  read as forbidding the move the command exists for; the invocation is the confirmation.
+
+### Measured
+
+- **Inline triage, run against 0.5.0**: twelve runs of `/rite:fix-all` on `node-minimal` with Sonnet 5,
+  N = 1, 2, 4, two repetitions each; every run valid, every symptom repaired. The whole invocation, in
+  effective tokens, drops by 32%, 15% and 36%; main-thread turns drop too (12 → 10, 16 → 13.5,
+  17 → 11.5), and no reproducer was started
+  ([docs/tokens/2026-09-24-fixall-as-is-vs-inline.md](docs/tokens/2026-09-24-fixall-as-is-vs-inline.md)).
+- **Baselines** of both examples re-recorded from a passing `run_loop` and `run_lifecycle` each; against
+  the 0.3.0 ones, every command is 37–70% lower in billed tokens.
+
 ## [0.6.0] — 2026-09-24
 
 Tokens, not money, and the triage decided. The report stops pricing and counts: four kinds of token

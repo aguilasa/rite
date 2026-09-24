@@ -156,6 +156,10 @@ about 7 KB per fix, holding it costs more than that fix's reproducer, hence
 an agent only for the residue** — no command, output over the limit, `CANNOT RUN`, or an output that
 does not decide.
 
+Confirmed by a run: twelve `/rite:fix-all` invocations, the 0.5.0 tree against inline triage
+([tokens/2026-09-24-fixall-as-is-vs-inline.md](tokens/2026-09-24-fixall-as-is-vs-inline.md)). The whole
+invocation costs 32%, 15% and 36% less at N = 1, 2 and 4, with fewer main-thread turns, not more.
+
 `rite tokens` (`tools/token_report.py`) reports the agent side apart, per agent type. With the agent
 fields in a baseline, `--check` fails on one agent more than the baseline, whatever the tolerance, so
 a new agent in the rite shows up in the gate.
