@@ -8,7 +8,10 @@ Starts from an example stripped of its rite.toml and cycle (only code, tests and
   3. /rite:plan-to-tasks ... --yes     -> tasks with anchors, a closing task, profile phase checks
   4. /rite:execute-batch <cycle> 2     -> first wave(s); then the manifest's defect is planted
   5. autopilot: run whatever `rite status` suggests (execute-batch / execute / review / fix-all)
-     until the cycle can close
+     until the cycle can close; every /rite:fix-all triages the example's small evidence inline,
+     with no reproducer agent
+  5b. the manifest's residue defect, whose evidence prints past the inline limit: /rite:fix-all
+     sends exactly that fix to one reproducer agent
   6. /rite:close-cycle <cycle> --yes   -> archived, links rewritten
   7. /rite:retro <cycle> --yes         -> retro.md
 and asserts on git log, frontmatter and `rite check` after every step.
@@ -26,11 +29,28 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from _example import (Expect, claude, finish, make_repo, plant_defect, rite_json,  # noqa: E402
-                      subjects, symptom)
+from _example import (Expect, agents_of, apply_defect, claude, finish, invocations,  # noqa: E402
+                      make_repo, plant_defect, rite_json, seed_fix, subjects, symptom, symptom_of)
 
 # the example ships a planned cycle; the lifecycle run creates its own from scratch
 STRIP = ("rite.toml", "rite")
+FIX_ALL = "/rite:fix-all"
+REPRODUCER = "rite:rite-reproducer"
+
+
+def fix_all(repo: Path, cycle: str, model: str, transcript: list[str]):
+    """Run /rite:fix-all and return (the fixes as `rite reproduce` saw them before, its invocation)."""
+    before = rite_json(repo, "reproduce", "--all", "--cycle", cycle).get("fixes", [])
+    seen = {i.session for i in invocations(repo, FIX_ALL)}
+    claude(repo, f"{FIX_ALL} {cycle}", model, transcript)
+    new = [i for i in invocations(repo, FIX_ALL) if i.session not in seen]
+    return before, (new[0] if len(new) == 1 else None)
+
+
+def residue(fix: dict) -> bool:
+    """What goes to an agent by the numbers alone, before any judgment of the output."""
+    return (not fix["runnable"] or fix["over_limit"]
+            or any(c.get("shell_error") for c in fix["commands"]))
 
 
 def main() -> int:
@@ -101,7 +121,17 @@ def main() -> int:
         if not prompt:
             expect(False, f"autopilot: unexpected suggestion {suggestion}")
             break
-        claude(repo, prompt, args.model, transcript)
+        if cmd == "fix":
+            before, inv = fix_all(repo, cycle, args.model, transcript)
+            lines = ", ".join(f"{f['id']} why={f['why']} over_limit={f['over_limit']}" for f in before)
+            if expect(inv is not None, f"fix-all: one {FIX_ALL} invocation in the transcripts"):
+                expect(not any(residue(f) for f in before),
+                       f"fix-all: every fix runnable and under the limit — else the review that opened "
+                       f"it wrote no usable evidence ({lines})")
+                expect(agents_of(inv, REPRODUCER) == 0,
+                       f"fix-all: small evidence triaged inline, {agents_of(inv, REPRODUCER)} reproducer(s)")
+        else:
+            claude(repo, prompt, args.model, transcript)
         expect.check_green(repo, f"after {prompt}")
     print("autopilot:", " -> ".join(str(c) for c in seen))
     expect("review" in seen, "autopilot: reviews ran")
@@ -109,6 +139,28 @@ def main() -> int:
     expect(seen and seen[-1] == "close-cycle", f"autopilot: cycle ready to close ({seen[-1] if seen else None})")
     expect(symptom(repo, manifest) == manifest["defect"]["good_output"],
            f"planted defect repaired ({symptom(repo, manifest)!r})")
+
+    # 5b. an evidence past the inline limit goes to exactly one reproducer
+    big = manifest.get("residue_defect")
+    if big is None:
+        print("SKIP residue: the manifest has no residue_defect")
+    else:
+        planted = apply_defect(repo, big)
+        if expect(planted is not None, "residue: defect planted"):
+            # the oldest close commit is a task's, from the first batch
+            origin = [s for s in subjects(repo) if s.startswith("chore(rite): close ")][-1].split()[-1]
+            fix_id = seed_fix(repo, big, origin, planted)
+            control = rite_json(repo, "reproduce", fix_id, "--cycle", cycle)["fixes"][0]
+            expect(control["over_limit"], f"residue: {fix_id} prints {control['held_bytes']} B, over "
+                                          f"the limit before the run")
+            _, inv = fix_all(repo, cycle, args.model, transcript)
+            if expect(inv is not None, f"residue: one {FIX_ALL} invocation in the transcripts"):
+                expect(agents_of(inv, REPRODUCER) == 1,
+                       f"residue: exactly one reproducer ({agents_of(inv, REPRODUCER)})")
+            expect(symptom_of(repo, big) == big["good_output"],
+                   f"residue: defect repaired ({symptom_of(repo, big)!r})")
+            expect.check_green(repo, "residue")
+            expect.clean_tree(repo, "residue")
 
     # 6. close cycle
     claude(repo, f"/rite:close-cycle {cycle} --yes", args.model, transcript)

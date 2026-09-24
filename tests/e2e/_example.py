@@ -36,8 +36,9 @@ def load_manifest(example: str) -> tuple[Path, dict]:
     missing = [k for k in DEFECT_REQUIRED if k not in defect]
     if missing:
         raise SystemExit(f"{manifest_path}: defect missing {missing}")
-    if "candidates" not in defect:
-        defect["candidates"] = [{k: defect[k] for k in ("find", "replace", "append") if k in defect}]
+    for defect in [defect] + ([manifest["residue_defect"]] if "residue_defect" in manifest else []):
+        if "candidates" not in defect:
+            defect["candidates"] = [{k: defect[k] for k in ("find", "replace", "append") if k in defect}]
     return directory, manifest
 
 
@@ -215,6 +216,23 @@ def seed_fixes(repo: Path, manifest: dict, defects: list[dict]) -> list[str]:
     return [f for fixes in opened.values() for f in fixes]
 
 
+def seed_fix(repo: Path, defect: dict, origin: str, planted: Path) -> str:
+    """Open and commit one fix for a defect planted in ``planted``, as a review would. Returns its ID."""
+    seen = symptom_of(repo, defect)
+    if seen != defect["bad_output"]:
+        raise AssertionError(f"{defect['title']}: symptom prints {seen!r}, not {defect['bad_output']!r}")
+    new = rite_json(repo, "new-fix", "--origin", origin, "--title", defect["title"],
+                    "--severity", defect["severity"])
+    if new.get("_code"):
+        raise AssertionError(f"rite new-fix: {new}")
+    files = [str(planted.relative_to(repo)).replace("\\", "/")]
+    fill_fix(repo / new["path"].lstrip("/"), {**defect, "files": files}, seen)
+    code, out = rite(repo, "commit-new", new["id"])
+    if code:
+        raise AssertionError(f"rite commit-new {new['id']}: {out}")
+    return new["id"]
+
+
 def open_fixes(repo: Path, cycle: str) -> int:
     status = rite_json(repo, "status", "--cycle", cycle)
     return sum(status["cycles"][0]["open_fixes"].values())
@@ -223,6 +241,20 @@ def open_fixes(repo: Path, cycle: str) -> int:
 def transcripts_for(repo: Path) -> Path:
     """Where Claude Code keeps the transcripts of the sessions run in ``repo``."""
     return Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(repo.resolve()))
+
+
+def invocations(repo: Path, command: str) -> list:
+    """The invocations of ``command`` in the transcripts of the sessions run in ``repo``."""
+    tools = str(ROOT / "tools")
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    import token_report
+    return [i for i in token_report.collect(transcripts_for(repo), None) if i.command == command]
+
+
+def agents_of(invocation, kind: str) -> int:
+    """How many subagents of type ``kind`` an invocation started."""
+    return sum(1 for run in invocation.agents if run.agent_type == kind)
 
 
 def symptom(repo: Path, manifest: dict) -> str:

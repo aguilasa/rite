@@ -14,5 +14,17 @@
     "symptom_command": "python -c \"from textkit import slugify; print(slugify('Hello, World!'))\"",
     "good_output": "hello-world",
     "bad_output": "HELLO-WORLD"
+  },
+  "residue_defect": {
+    "title": "slugify returns upper case again",
+    "severity": "low",
+    "file_glob": "textkit/*.py",
+    "find": "def slugify(",
+    "replace": "def _slugify_residue_ok(",
+    "append": "\n\ndef slugify(text):\n    return _slugify_residue_ok(text).upper()\n",
+    "commit_subject": "refactor: tweak slugify again",
+    "symptom_command": "python -c \"import sys; from textkit import slugify; s = slugify('Hello, World!'); [print(s) for _ in range(1000)]; sys.exit(s != 'hello-world')\"",
+    "good_output": "hello-world",
+    "bad_output": "HELLO-WORLD"
   }
 }

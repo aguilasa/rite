@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Versions follow [SemVer
 
 ## [Unreleased]
 
+### Added
+
+- **The lifecycle e2e asserts the triage, not only that it ran.** Every autopilot `/rite:fix-all`
+  must triage the example's small evidence with no `rite-reproducer`, and a new step plants the
+  manifest's `residue_defect`, whose evidence prints past `[limits].inline_triage_max_output_kb`, and
+  expects exactly one. A unit test checks, without a model, that the planted fix is over the limit.
+
 ### Changed
 
 - **Only a measured contradiction marks a fix stale.** `mark-stale` closes a fix without repairing

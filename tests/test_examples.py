@@ -1,6 +1,7 @@
 """Every example must be a valid Rite repository and carry a usable e2e manifest (no tokens spent)."""
 
 import json
+import re
 import shutil
 import sys
 import unittest
@@ -97,6 +98,39 @@ class ExamplesTest(unittest.TestCase):
             self.assertEqual(example.rite(repo, "check", "--all")[0], 0)
             plan = example.rite_json(repo, "batch-plan", "all", "--kind", "fix", "--cycle", manifest["cycle"])
             self.assertEqual(len(plan["waves"]), 1)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    @unittest.skipUnless(shutil.which("git"), "needs git")
+    def test_the_residue_defect_prints_past_the_inline_limit(self):
+        """Control for the lifecycle's residue step: without a model, the planted fix is over the
+        limit a fresh `rite.toml` gets, and the same command prints the good output without the defect."""
+        raw = json.loads((EXAMPLES / "python-minimal" / "e2e.json").read_text(encoding="utf-8"))
+        for key in (*DEFECT_REQUIRED, "title", "severity", "find", "replace"):
+            self.assertIn(key, raw["residue_defect"])
+        template = (ROOT / "templates" / "rite.toml").read_text(encoding="utf-8")
+        limit_kb = int(re.search(r"(?m)^inline_triage_max_output_kb\s*=\s*(\d+)", template).group(1))
+        tmp, repo, manifest = example.make_repo("python-minimal")
+        big = manifest["residue_defect"]
+        try:
+            # the lifecycle's tasks write slugify; a stand-in to the plan's contract does here
+            (repo / "textkit" / "__init__.py").write_text(
+                "import re\n\n\ndef slugify(text):\n"
+                "    return re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')\n", encoding="utf-8")
+            example.sh(repo, "git", "commit", "-qam", "feat: slugify")
+            self.assertEqual(example.symptom_of(repo, big), big["good_output"])
+            planted = example.apply_defect(repo, big)
+            self.assertIsNotNone(planted)
+            origin = example.rite_json(repo, "next", "task", "--cycle", manifest["cycle"])["id"]
+            fix_id = example.seed_fix(repo, big, origin, planted)
+            fix = example.rite_json(repo, "reproduce", fix_id, "--cycle", manifest["cycle"])["fixes"][0]
+            self.assertEqual((fix["runnable"], fix["why"]), (True, "ok"))
+            self.assertNotEqual(fix["commands"][0]["exit_code"], 0)
+            self.assertFalse(fix["commands"][0]["shell_error"])
+            self.assertGreater(fix["held_bytes"], limit_kb * 1024)
+            self.assertTrue(fix["over_limit"])
+            self.assertEqual(example.rite(repo, "check", "--all")[0], 0)
+            self.assertEqual(example.sh(repo, "git", "status", "--porcelain").strip(), "")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
