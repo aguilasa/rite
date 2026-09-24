@@ -86,13 +86,37 @@ order: [LOOKS-TASK-31, LOOKS-TASK-36, LOOKS-TASK-37, LOOKS-TASK-32]
 
 ## `[sections]`
 
-Heading names the CLI reads or writes, so projects can keep their own language.
+Heading names the CLI reads or writes, so projects can keep their own language. A section is found by
+its exact title (case-insensitive); a title the repository does not use is a section that is not
+there. That is why every key is configurable: one English `Evidence` once turned off the inline triage
+of a whole pt-BR repository — every fix came back "no command", and nothing said why.
 
-| Key | Default |
-| --- | --- |
-| `execution_log` | `"Execution Log"` |
-| `phase_checks` | `"Phase-specific checks"` (section of the profile) |
-| `phase_label` | `"Phase"` — the word `check` looks for inside that section (`Phase 3`, `Fase 3`, …) |
+Each value is a **title or a list of titles**. The first is the one Rite writes (new items, a created
+Execution Log); every entry is read, in order. A list is how a repository keeps items an older
+convention titled differently:
+
+```toml
+evidence      = ["Evidência", "Evidence"]
+execution_log = ["Log de Execução", "Log de Execução *(preenchido após execução)*"]
+```
+
+| Key | Default | Where, and who reads it |
+| --- | --- | --- |
+| `execution_log` | `"Execution Log"` | item; every transition appends its log line here |
+| `phase_checks` | `"Phase-specific checks"` | profile; `check` and `context` |
+| `phase_label` | `"Phase"` | the word looked for inside `phase_checks` (`Phase 3`, `Fase 3`, …) |
+| `evidence` | `"Evidence"` | fix; `reproduce` runs the `$ ` lines of its fenced blocks |
+| `verification` | `"Verification"` | fix; `reproduce`'s fallback: its `$ ` lines, else its bullets' code spans |
+| `files` | `"Files"` | item; `batch-plan` predicts the paths it lists (code spans, or bullets opening with a path that exists) |
+| `scope` | `"Scope"` | item; a second place `batch-plan` looks for paths |
+| `gates` | `"Gates"` | profile; `gates` runs its bullets' code spans, or a table's command column |
+| `serialized_resources` | `"Serialized resources"` | profile; `batch-plan` serializes the names it lists |
+| `confirmed_decisions` | `"Confirmed decisions"` | profile; part of `context` |
+| `generated_artifacts` | `"Generated artifacts"` | profile; part of `context` |
+
+`rite.py sections` proposes this block from the titles the items and profiles already use, and
+`--write` merges what it matched (see [COMMANDS.md](COMMANDS.md)). `check` warns about an open fix with
+no evidence or verification title, and about a live profile with no gates title.
 
 ## `[commit]`
 
@@ -211,4 +235,9 @@ profile_file  = "perfil-{cycle}.md"
 [sections]
 execution_log = "Log de Execução"
 phase_checks  = "Verificações por fase"
+phase_label   = "Fase"
+evidence      = "Evidência"
+verification  = "Verificação"
+files         = ["Arquivos a criar ou modificar", "Arquivos"]
+gates         = "Gates deste ciclo"
 ```

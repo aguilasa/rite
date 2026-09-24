@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Section titles are configurable, all of them. In a pt-BR repository `rite reproduce` returned six
+open fixes as "no command" though each had `$ ` lines under `## Evidência`: the heading was looked for
+in English only, it did not match, and the empty result read like a clean fix. The inline triage of
+0.6.0 never ran there, and nothing said why. Now every title comes from `[sections]`, a repository can
+have its own proposed from its files, and a missing title is reported instead of silent.
+
+### Added
+
+- **`[sections]` names every section Rite reads**: `evidence`, `verification`, `files`, `scope`,
+  `gates`, `serialized_resources`, `confirmed_decisions` and `generated_artifacts` join
+  `execution_log`, `phase_checks` and `phase_label`, with English defaults — a 0.6.0 `rite.toml` is
+  valid unchanged. Each value may be a list: the first title is the one Rite writes, all are read.
+- **`rite sections [--all] [--write]`** proposes the block from the titles items and profiles already
+  use, recognising each section by what it holds, never by its words; every guess carries its
+  evidence, a key nothing matches reliably comes out commented with its candidates, and `--write`
+  merges only what matched, keeping comments and order. `/rite:init` uses it on an existing backlog.
+- `rite reproduce` gives each fix `why`: `ok`, `no_section` (with `looked_for`) or `no_command`, and
+  `heading`, the title it found.
+
+### Changed
+
+- `rite check` warns about an open fix with neither an evidence nor a verification title, and about a
+  live profile with no gates title.
+- `batch-plan` reads a files section listing bare paths (`- src/a.py (the parser)`) when the path
+  exists; `rite gates` reads a gates section written as a table, from the column holding command
+  lines.
+- `migrate --from we2002` writes the pt-BR titles in the `rite.toml` it generates.
+- The plugin templates write the canonical titles, so a new fix in a pt-BR repository gets
+  `## Evidência`.
+
 ## [0.6.0] — 2026-09-24
 
 Tokens, not money, and the triage decided. The report stops pricing and counts: four kinds of token

@@ -112,6 +112,41 @@ Found and fixed while measuring (each now has a test in `tests/test_migrate.py`)
 - an archived cycle whose name comes from its progress file (`concluidos/` is cycle `wte`) could not be
   resolved by name.
 
+## Section titles
+
+Rite finds a fix's evidence, a profile's gates and an item's files by their headings, and a heading
+it does not know is a section that is not there. A 0.6.0 `rite.toml` named only `execution_log`,
+`phase_checks` and `phase_label`, so a pt-BR backlog lost the rest silently: `rite reproduce` found no
+command in any fix, `rite gates` ran only the global gates, and `batch-plan` ran every fix alone.
+
+Let the repository say which titles it uses:
+
+```sh
+rite.py sections --all            # the proposed block, each key with its evidence; nothing written
+rite.py sections --all --write    # merge the keys that matched into rite.toml
+rite.py check --all               # no "no section titled" warning left
+```
+
+A key it cannot settle comes out commented, with its candidates — decide it by hand. For a
+WE2002-style backlog the result is, typically:
+
+```toml
+[sections]
+execution_log        = ["Log de Execução", "Log de Execução *(preenchido após execução)*"]
+phase_checks         = "Verificações específicas por fase"
+phase_label          = "Fase"
+evidence             = "Evidência"
+verification         = "Verificação"
+files                = ["Arquivos a criar ou modificar", "Arquivos"]
+gates                = "Gates deste ciclo"
+serialized_resources = "Recursos serializados"
+confirmed_decisions  = "Contexto essencial — decisões já confirmadas"
+```
+
+`migrate --from we2002` writes this block itself. Serialized resources are read as one short name per
+bullet (`` - `emulator` — one at a time ``); a section written as prose yields none, so declare those
+in `[resources].serialized`.
+
 ## After migrating
 
 1. Replace `.claude/commands/*` wrappers with the plugin: `/plugin install rite@rite`.
