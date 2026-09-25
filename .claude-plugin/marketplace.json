@@ -11,7 +11,7 @@
       "name": "rite",
       "source": "./",
       "description": "A disciplined execute → review → fix workflow for long backlogs, with deterministic bookkeeping.",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "category": "productivity"
     }
   ]

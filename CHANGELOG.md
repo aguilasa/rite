@@ -2,7 +2,12 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.9.1] — 2026-09-25
+
+What 0.9.0 left behind. `/rite:fix-all --plan` still ran a triage that could close a fix, the
+pinned-revision warning flagged `git log <sha>..HEAD`, and the 8 KB command cap had started to decide
+the wording of rules. `--plan` now measures and reports without writing item state, an open range is
+not a pinned revision, and the cap is 10 KB.
 
 ### Changed
 
