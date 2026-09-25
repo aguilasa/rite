@@ -333,6 +333,9 @@ def mark_reviewed(project: Project, cycle: Cycle, item: Item, *, fixes: list[str
 def mark_stale(project: Project, cycle: Cycle, item: Item, *, reason: str, commit: bool = True) -> dict:
     if item.kind != "fix":
         raise RiteError("mark-stale applies to fixes")
+    if item.status == "blocked":
+        raise RiteError(f"{item.id} is blocked: stale needs the symptom measured, and its environment is "
+                        f"missing — once `{item.fields.get('unblocked_by')}` passes, mark it pending and reproduce")
     if item.status not in ("pending", "in-progress"):
         raise RiteError(f"{item.id} has status {item.status!r}")
     if not reason.strip():

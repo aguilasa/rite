@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 from . import frontmatter, gitutil, markdown, views
+from .config import OPEN_FIX_STATUSES
 from .model import Cycle, Project, RiteError, display, make_link, resolve_link
 from .ops import bookkeeping_message, render
 
@@ -112,11 +113,11 @@ def blockers(project: Project, cycle: Cycle) -> list[str]:
         elif t.status == "done" and not re.match(r"^\d{4}-\d{2}-\d{2}$", str(t.fields.get("reviewed_on") or "")):
             out.append(f"{t.id} is not reviewed (reviewed_on={t.fields.get('reviewed_on')})")
     for f in cycle.fixes:
-        if f.status in ("pending", "in-progress"):
-            out.append(f"{f.id} is open ({f.fields.get('severity')})")
-        elif f.status == "blocked":
+        if f.status == "blocked":  # waiting is still open: a cycle does not close over it
             out.append(f"{f.id} is blocked ({f.fields.get('severity')}) until "
                        f"`{f.fields.get('unblocked_by')}` passes")
+        elif f.status in OPEN_FIX_STATUSES:
+            out.append(f"{f.id} is open ({f.fields.get('severity')})")
     if views.out_of_sync(project, cycle):
         out.append("views out of sync (rite.py sync)")
     return out

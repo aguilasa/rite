@@ -10,6 +10,7 @@ from pathlib import Path
 from fixtures import git, rite, write
 from test_cli import FixtureCase, fields
 from test_migrate import FIXES, PLAN, PROGRESS, legacy_fix, legacy_task
+from test_reproduce import fix_body
 
 from rite_lib import frontmatter
 
@@ -120,6 +121,75 @@ class BlockedFixTest(FixtureCase):
         code, out, _ = self.fx.rite("archive", "alpha", "--dry-run", "--json")
         self.assertEqual(code, 1)
         self.assertTrue(any(b.startswith(f"{self.fix} is blocked") for b in json.loads(out)["blockers"]), out)
+
+
+class BlockedFixIsOpenTest(FixtureCase):
+    """Open is pending, in-progress or blocked; closed is done or stale. A blocked fix is still debt:
+    `check` verifies it and `status` counts it — only the pickers leave it out."""
+
+    def new_fix(self, severity: str) -> str:
+        return self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "t",
+                       "--severity", severity)["id"]
+
+    def block(self, fix_id: str) -> None:
+        self.ok("mark", fix_id, "blocked", "--reason", "needs the live oracle", "--unblocked-by", FAILS)
+
+    def run_py_warnings(self) -> list[str]:
+        code, out, err = self.fx.rite("check", "--cycle", "alpha", "--json")
+        return [f"{f['path']}: {f['message']}" for f in json.loads(out)["findings"]
+                if f["level"] == "warn" and "run.py" in f["message"]]
+
+    def test_check_verifies_the_evidence_of_a_blocked_fix_not_of_a_closed_one(self):
+        fix_id = self.new_fix("low")
+        path = self.root / "docs/rite/cycles/alpha" / f"{fix_id}.md"
+        body = fix_body("```text\n$ python run.py\n316 of 520\n```").replace("{id}", fix_id)
+        path.write_text(body.replace("{resources}", "[]"), encoding="utf-8")
+        self.assertEqual(len(self.run_py_warnings()), 1)
+        self.block(fix_id)
+        warnings = self.run_py_warnings()
+        self.assertEqual(len(warnings), 1, warnings)
+        self.assertIn(fix_id, warnings[0])
+        for closed in ("done", "stale"):
+            text = frontmatter.set_fields(path.read_text(encoding="utf-8"),
+                                          {"status": closed, "unblocked_by": None})
+            path.write_text(text, encoding="utf-8")
+            self.assertEqual(self.run_py_warnings(), [], closed)
+
+    def test_status_counts_blocked_fixes_by_severity_and_apart(self):
+        fixes = [self.new_fix(s) for s in ("high", "medium", "low")]
+        for fix_id in fixes:
+            self.block(fix_id)
+        cyc = self.js("status", "--cycle", "alpha")["cycles"][0]
+        self.assertEqual(cyc["open_fixes"], {"critical": 0, "high": 1, "medium": 1, "low": 1})
+        self.assertEqual(cyc["open_fixes_blocked"], 3)
+        self.assertEqual(list(cyc["blocked_fixes"]), fixes)
+        self.assertNotEqual(cyc["suggestion"]["command"], "fix")  # a blocked high is nothing to pick
+        self.assertIsNone(cyc["next_fix"]["id"])
+        text = self.ok("status", "--cycle", "alpha")
+        self.assertIn("high 1, medium 1, low 1; blocked: 3 — ", text)
+        self.assertIn(f"{fixes[0]} until `{FAILS}` passes", text)
+
+    def test_the_pickers_leave_blocked_fixes_out(self):
+        high, low = self.new_fix("high"), self.new_fix("low")
+        self.block(high)
+        pick = self.js("next", "fix", "--cycle", "alpha")
+        self.assertEqual((pick["id"], pick["unblocked_by"]), (low, {high: FAILS}))
+        for targets in (("all",), ("5",)):
+            items = self.js("batch-plan", *targets, "--kind", "fix", "--cycle", "alpha")["items"]
+            self.assertEqual([i["id"] for i in items], [low], targets)
+        self.block(low)
+        code, out, _ = self.fx.rite("next", "fix", "--cycle", "alpha", "--json")
+        self.assertEqual((code, json.loads(out)["id"]), (1, None))
+
+    def test_a_blocked_fix_neither_goes_stale_nor_lets_the_cycle_archive(self):
+        fix_id = self.new_fix("medium")
+        self.block(fix_id)
+        code, out, err = self.fx.rite("mark-stale", fix_id, "--reason", "gone")
+        self.assertNotEqual(code, 0)
+        self.assertIn("mark it pending", err + out)
+        code, out, _ = self.fx.rite("archive", "alpha", "--dry-run", "--json")
+        self.assertEqual(code, 1)
+        self.assertTrue(any(b.startswith(f"{fix_id} is blocked") for b in json.loads(out)["blockers"]), out)
 
 
 class MigrateBlockedFixTest(unittest.TestCase):

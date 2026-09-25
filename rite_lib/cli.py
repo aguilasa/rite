@@ -303,7 +303,8 @@ def cmd_status(project: Project, args) -> int:
             + (f" ({', '.join(s['review_queue'])})" if s["review_queue"] else "")
             + (f"; aged: {', '.join(s['review_aged'])}" if s["review_aged"] else ""),
             "  open fixes: " + ", ".join(f"{k} {v}" for k, v in fx.items())
-            + (f"; blocked: {selection.until(s['blocked_fixes'])}" if s["blocked_fixes"] else ""),
+            + (f"; blocked: {s['open_fixes_blocked']} — {selection.until(s['blocked_fixes'])}"
+               if s["blocked_fixes"] else ""),
             f"  next task: {s['next_task']['id'] or '— ' + s['next_task']['reason']}",
             f"  next review: {s['next_review']['id'] or '—'}",
             f"  next fix: {s['next_fix']['id'] or '—'}",
@@ -322,7 +323,7 @@ def cmd_batch_plan(project: Project, args) -> int:
     if tokens == ["all"]:
         if args.kind != "fix":
             raise RiteError("'all' is only for fixes; a task batch takes a number (default 2)")
-        tokens = [str(max(len(selection.open_fixes(cycle)), 1))]
+        tokens = [str(max(sum(f.status != "blocked" for f in selection.open_fixes(cycle)), 1))]
     count = int(tokens[0]) if len(tokens) == 1 and tokens[0].isdigit() else None
     ids = [] if count is not None else tokens
     if count is not None and count < 1:

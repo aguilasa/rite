@@ -129,7 +129,8 @@ def select(cycle: Cycle, kind: str, count: int | None, ids: list[str]) -> list[I
         pool = [t for t in cycle.tasks if t.status in ("in-progress", "pending")]
         pool.sort(key=lambda t: t.status != "in-progress")  # stable: keeps execution order
     else:
-        pool = sorted(open_fixes(cycle), key=lambda f: (f.status != "in-progress", f.severity_rank, f.n))
+        pool = sorted((f for f in open_fixes(cycle) if f.status != "blocked"),
+                      key=lambda f: (f.status != "in-progress", f.severity_rank, f.n))
     chosen: list[Item] = []
     taken: set[str] = set()
     for it in pool:

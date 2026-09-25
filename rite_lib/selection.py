@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
-from .config import SEVERITIES
+from .config import OPEN_FIX_STATUSES, SEVERITIES
 from .model import Cycle, Item
 
 SATISFIED = {"done", "skipped", "stale"}
@@ -69,7 +69,7 @@ def next_review(cycle: Cycle) -> Pick:
 
 
 def open_fixes(cycle: Cycle) -> list[Item]:
-    return [f for f in cycle.fixes if f.status in ("pending", "in-progress")]
+    return [f for f in cycle.fixes if f.status in OPEN_FIX_STATUSES]
 
 
 def blocked_fixes(cycle: Cycle) -> dict[str, str]:
@@ -85,7 +85,8 @@ def until(waiting: dict[str, str]) -> str:
 
 def next_fix(cycle: Cycle) -> Pick:
     index = cycle.by_id()
-    fixes = sorted(open_fixes(cycle), key=lambda f: (f.status != "in-progress", f.severity_rank, f.n))
+    fixes = sorted((f for f in open_fixes(cycle) if f.status != "blocked"),
+                   key=lambda f: (f.status != "in-progress", f.severity_rank, f.n))
     waiting = blocked_fixes(cycle)
     blocked: dict[str, list[str]] = {}
     for f in fixes:
@@ -101,7 +102,7 @@ def next_fix(cycle: Cycle) -> Pick:
         return Pick(None, f"all open fixes are blocked; {first} waits for {', '.join(blocked[first])}", blocked,
                     waiting)
     if waiting:
-        return Pick(None, f"no open fix; status=blocked: {until(waiting)}", unblocked_by=waiting)
+        return Pick(None, f"nothing to pick; status=blocked: {until(waiting)}", unblocked_by=waiting)
     return Pick(None, "no open fix")
 
 
@@ -122,9 +123,10 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
     fixes = open_fixes(cycle)
     waiting = blocked_fixes(cycle)
     by_sev = {s: sum(1 for f in fixes if f.fields.get("severity") == s) for s in SEVERITIES}
+    urgent = any(f.status != "blocked" and f.fields.get("severity") in ("critical", "high") for f in fixes)
     task_pick, fix_pick, review_pick = next_task(cycle), next_fix(cycle), next_review(cycle)
 
-    if by_sev["critical"] or by_sev["high"]:
+    if urgent:
         suggestion = ("fix", "critical/high fixes are open — fix before building on top of them")
     elif aged or len(queue) >= 3:
         suggestion = ("review", f"review queue has {len(queue)} item(s)"
@@ -155,7 +157,8 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
         "tasks": {**counts, "total": len(cycle.tasks)},
         "review_queue": [t.id for t in queue],
         "review_aged": [t.id for t in aged],
-        "open_fixes": by_sev,
+        "open_fixes": by_sev,  # blocked included: waiting is still debt
+        "open_fixes_blocked": len(waiting),
         "blocked_fixes": waiting,
         "next_task": task_pick,
         "next_review": review_pick,

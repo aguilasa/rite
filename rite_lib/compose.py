@@ -497,9 +497,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     import tempfile
     cycle = project.resolve_cycle(cycle_name)
     if all_open:
-        waiting = selection.blocked_fixes(cycle)
-        fixes = sorted([*selection.open_fixes(cycle), *(f for f in cycle.fixes if f.id in waiting)],
-                       key=lambda f: f.n)
+        fixes = sorted(selection.open_fixes(cycle), key=lambda f: f.n)
     elif fix_id:
         _, item = project.find_item(fix_id, cycle)
         if item.kind != "fix":

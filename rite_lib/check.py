@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import gitutil, markdown, views
-from .config import FIX_STATUSES, NO_COMMIT, SEVERITIES, TASK_STATUSES
+from .config import FIX_STATUSES, NO_COMMIT, OPEN_FIX_STATUSES, SEVERITIES, TASK_STATUSES
 from .model import Cycle, Item, Project, RiteError, display, resolve_link
 
 REQUIRED = {
@@ -342,7 +342,7 @@ class Checker:
         `[sections]` names its own titles (`rite.py sections` proposes them)."""
         titles = [*self.p.section_titles("evidence"), *self.p.section_titles("verification")]
         for fix in cycle.fixes:
-            if fix.status not in ("pending", "in-progress"):
+            if fix.status not in OPEN_FIX_STATUSES:
                 continue
             if markdown.first_section(fix.body, titles) is None:
                 near = "".join(f"; near: '{h}'" for h in markdown.near_headings(fix.body, titles))
