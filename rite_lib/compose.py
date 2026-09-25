@@ -491,12 +491,15 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     one after the other, so a fix holding a serialized resource never shares it. An output above
     `[limits].inline_triage_max_output_kb` is cut to its tail and flagged `over_limit`: the main
     thread does not hold it; that fix goes to an agent. Runs only commands written in the
-    repository's own versioned fix files — the same trust `[gates].global` has."""
+    repository's own versioned fix files — the same trust `[gates].global` has. A blocked fix runs
+    its `unblocked_by` in place of its evidence: exit 0 says the environment it waited on is there."""
     import shutil
     import tempfile
     cycle = project.resolve_cycle(cycle_name)
     if all_open:
-        fixes = sorted(selection.open_fixes(cycle), key=lambda f: f.n)
+        waiting = selection.blocked_fixes(cycle)
+        fixes = sorted([*selection.open_fixes(cycle), *(f for f in cycle.fixes if f.id in waiting)],
+                       key=lambda f: f.n)
     elif fix_id:
         _, item = project.find_item(fix_id, cycle)
         if item.kind != "fix":
@@ -510,6 +513,18 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     results = []
     try:
         for fix in fixes:
+            if fix.status == "blocked":
+                # the evidence needs what the environment lacks; the unblock command is what decides
+                command = str(fix.fields.get("unblocked_by") or "").strip()
+                results.append({
+                    "id": fix.id, "path": display(project.root, fix.path), "runnable": False,
+                    "source": None, "heading": None, "why": "blocked", "blocked": True,
+                    "unblocked_by": command or None,
+                    "unblock": _run_one(command, _repo_dir(project, fix), tail, shell) if command else None,
+                    "resources": fix.fields.get("resources") or [],
+                    "recorded": [], "commands": [], "held_bytes": 0, "over_limit": False,
+                })
+                continue
             found = evidence_commands(fix.path.read_text(encoding="utf-8", errors="replace"),
                                       project.section_titles("evidence"), project.section_titles("verification"))
             repo = _repo_dir(project, fix)
@@ -528,7 +543,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                     r["truncated"] = True
             results.append({
                 "id": fix.id, "path": display(project.root, fix.path), "runnable": bool(found["commands"]),
-                "source": found["source"], "heading": found["heading"], "why": found["why"],
+                "source": found["source"], "heading": found["heading"], "why": found["why"], "blocked": False,
                 **{k: found[k] for k in ("looked_for", "near", "broken") if k in found},
                 "resources": fix.fields.get("resources") or [],
                 "recorded": found["recorded"], "commands": runs, "held_bytes": held, "over_limit": over,

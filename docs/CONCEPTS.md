@@ -43,8 +43,14 @@ keep their history (`git mv`).
   `<!-- rite:begin … -->` and `<!-- rite:end -->`; the rest is free text. `rite sync` regenerates the
   region; `rite check` fails when it is stale.
 - **Vocabulary is closed**: task status `pending | in-progress | done | blocked | skipped`; fix status
-  `pending | in-progress | done | stale`; severity `critical | high | medium | low`;
+  `pending | in-progress | done | blocked | stale`; severity `critical | high | medium | low`;
   `reviewed_on` is `null` (not reviewable), `pending`, or a date.
+- **A blocked task waits on another task; a blocked fix waits on the environment** (an emulator, a
+  credential, hardware), which Rite does not know. So a blocked fix names in `unblocked_by` the
+  command that passes once the environment is there: `rite mark <FIX> blocked --reason "<what is
+  missing>" --unblocked-by "<command>"`. `next fix` skips it and names that command, `reproduce
+  --all` runs it in place of the evidence, and `/rite:fix-all` returns the fix to the queue when it
+  passes. A block with no exit test is refused: nothing would ever re-check it.
 
 ## Two commits per item
 

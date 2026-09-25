@@ -71,7 +71,7 @@ TASK_STATUS = {
 FIX_STATUS = {
     "pendente": "pending", "em andamento": "in-progress", "concluída": "done", "concluída": "done",
     "concluído": "done", "concluido": "done", "envelhecida": "stale", "envelhecido": "stale",
-    "obsoleta": "stale",
+    "obsoleta": "stale", "bloqueada": "blocked", "bloqueado": "blocked",
 }
 SEVERITY = {"crítica": "critical", "critica": "critical", "alta": "high", "média": "medium",
             "media": "medium", "baixa": "low"}
@@ -348,6 +348,11 @@ def migrate_cycle(project: Project, cycle_dir: Path, finder: CommitFinder, repor
             row = frows.get(item.id, {})
             raw = str(f.get("status") or "").lower()
             status = row.get("status") or FIX_STATUS.get(raw, raw if raw in config.FIX_STATUSES else "pending")
+            if status == "blocked" and not f.get("unblocked_by"):
+                # a blocked fix names the command that unblocks it; migrate has none to carry
+                status = "pending"
+                report.warnings.append(f"{item.id}: was blocked with no command that unblocks it; set pending "
+                                       f"(rite.py mark {item.id} blocked --reason … --unblocked-by \"<command>\")")
             up["status"] = status
             origin = row.get("origin") or f.get("origin") or f.get("origem")
             if not origin:

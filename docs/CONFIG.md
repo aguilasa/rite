@@ -176,7 +176,8 @@ check = "python tools/gen.py --check"
 Statuses and severities are fixed, not configurable:
 
 - task `status`: `pending`, `in-progress`, `done`, `blocked`, `skipped`
-- fix `status`: `pending`, `in-progress`, `done`, `stale`
+- fix `status`: `pending`, `in-progress`, `done`, `blocked` (with `unblocked_by`, the command that
+  unblocks it), `stale`
 - fix `severity`: `critical`, `high`, `medium`, `low`
 - task `reviewed_on`: `null` (not reviewable yet), `pending` (awaiting review), `YYYY-MM-DD`
 

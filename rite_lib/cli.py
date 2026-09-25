@@ -29,10 +29,11 @@ def _emit(args, data, text: str) -> None:
 
 
 def _pick_text(root: Path, label: str, pick: selection.Pick) -> str:
-    if pick.item:
-        return (f"{label}: {pick.item.id} — {pick.item.title}\n"
-                f"  file: {display(root, pick.item.path)}\n  why: {pick.reason}")
-    return f"{label}: none — {pick.reason}"
+    if not pick.item:
+        return f"{label}: none — {pick.reason}"
+    text = (f"{label}: {pick.item.id} — {pick.item.title}\n"
+            f"  file: {display(root, pick.item.path)}\n  why: {pick.reason}")
+    return text + (f"\n  blocked: {selection.until(pick.unblocked_by)}" if pick.unblocked_by else "")
 
 
 def _project(args) -> Project:
@@ -118,12 +119,18 @@ def cmd_reproduce(project: Project, args) -> int:
             near = "".join(f'; near: "{h}"' for h in fix.get("near", []))
             flag = (" (no section: looked for " + ", ".join(f'"{t}"' for t in fix["looked_for"])
                     + f" in {fix['path']}{near}; runnable false)")
+        elif fix["blocked"]:
+            unblock = fix["unblock"]
+            flag = (f" (blocked; unblocked by `{fix['unblocked_by']}` -> exit {unblock['exit_code']})"
+                    if unblock else " (blocked, with no unblocked_by: nothing re-checks it)")
         elif fix["why"] == "unterminated":
             flag = " (a heredoc is never closed, so nothing ran: runnable false)"
         else:
             flag = " (its section has no command: runnable false)"
         flag += f" (over {data['limit_kb']} KB: hand it to an agent)" if fix["over_limit"] else ""
         lines.append(f"{fix['id']}{flag}")
+        if fix["blocked"] and fix["unblock"]:
+            lines += [f"    {line}" for line in fix["unblock"]["output"].splitlines()]
         for run in fix["commands"]:
             lines.append(f"  $ {run['command']}  -> exit {run['exit_code']}")
             lines += [f"    {line}" for line in run["output"].splitlines()]
@@ -225,7 +232,8 @@ def cmd_rebind(project: Project, args) -> int:
 
 def cmd_mark(project: Project, args) -> int:
     cycle, item = _item(project, args, args.id)
-    res = ops.mark(project, cycle, item, args.status, reason=args.reason or "", commit=args.commit)
+    res = ops.mark(project, cycle, item, args.status, reason=args.reason or "",
+                   unblocked_by=args.unblocked_by or "", commit=args.commit)
     _emit(args, res, _result_text(f"marked {args.status}", res))
     return EXIT_OK
 
@@ -294,7 +302,8 @@ def cmd_status(project: Project, args) -> int:
             f"  review queue: {len(s['review_queue'])}"
             + (f" ({', '.join(s['review_queue'])})" if s["review_queue"] else "")
             + (f"; aged: {', '.join(s['review_aged'])}" if s["review_aged"] else ""),
-            "  open fixes: " + ", ".join(f"{k} {v}" for k, v in fx.items()),
+            "  open fixes: " + ", ".join(f"{k} {v}" for k, v in fx.items())
+            + (f"; blocked: {selection.until(s['blocked_fixes'])}" if s["blocked_fixes"] else ""),
             f"  next task: {s['next_task']['id'] or '— ' + s['next_task']['reason']}",
             f"  next review: {s['next_review']['id'] or '—'}",
             f"  next fix: {s['next_fix']['id'] or '—'}",
@@ -524,7 +533,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("reproduce", parents=[common],
                        help="run a fix's Evidence commands and report their output (never a verdict)")
     s.add_argument("id", nargs="?", help="the fix (or --all)")
-    s.add_argument("--all", action="store_true", help="every open fix of the cycle, one after the other")
+    s.add_argument("--all", action="store_true", help="every open or blocked fix of the cycle, one after the other")
     s.add_argument("--kind", choices=("fix",), default="fix", help="only fixes carry evidence to reproduce")
     s.add_argument("--tail", type=int, default=20, help="lines kept from a command that exits 0")
     s.add_argument("--scratch", action="store_true", help="run in an exported copy of HEAD")
@@ -591,6 +600,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("id")
     s.add_argument("status")
     s.add_argument("--reason")
+    s.add_argument("--unblocked-by", help="a blocked fix: the command that passes once it can go on")
     s.add_argument("--commit", action="store_true")
     s.set_defaults(fn=cmd_mark)
 

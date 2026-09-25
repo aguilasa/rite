@@ -16,6 +16,7 @@ class Pick:
     item: Item | None
     reason: str
     blocked_by: dict[str, list[str]] | None = None
+    unblocked_by: dict[str, str] | None = None  # blocked fixes, each with the command that unblocks it
 
     def as_dict(self, root) -> dict:
         from .model import display
@@ -25,6 +26,7 @@ class Pick:
             "path": display(root, self.item.path) if self.item else None,
             "reason": self.reason,
             "blocked_by": self.blocked_by or {},
+            "unblocked_by": self.unblocked_by or {},
         }
 
 
@@ -70,20 +72,36 @@ def open_fixes(cycle: Cycle) -> list[Item]:
     return [f for f in cycle.fixes if f.status in ("pending", "in-progress")]
 
 
+def blocked_fixes(cycle: Cycle) -> dict[str, str]:
+    """{fix ID: the command that unblocks it}, in ID order."""
+    return {f.id: str(f.fields.get("unblocked_by") or "") for f in sorted(cycle.fixes, key=lambda f: f.n)
+            if f.status == "blocked"}
+
+
+def until(waiting: dict[str, str]) -> str:
+    return ", ".join(f"{fid} until `{cmd}` passes" if cmd else f"{fid} (no unblocked_by)"
+                     for fid, cmd in waiting.items())
+
+
 def next_fix(cycle: Cycle) -> Pick:
     index = cycle.by_id()
     fixes = sorted(open_fixes(cycle), key=lambda f: (f.status != "in-progress", f.severity_rank, f.n))
+    waiting = blocked_fixes(cycle)
     blocked: dict[str, list[str]] = {}
     for f in fixes:
         missing = unmet_deps(f, index)
         if f.status == "in-progress":
-            return Pick(f, "in-progress fix resumes first")
+            return Pick(f, "in-progress fix resumes first", unblocked_by=waiting)
         if not missing:
-            return Pick(f, "most severe open fix (then lowest ID) whose depends_on are satisfied")
+            return Pick(f, "most severe open fix (then lowest ID) whose depends_on are satisfied",
+                        unblocked_by=waiting)
         blocked[f.id] = missing
     if blocked:
         first = next(iter(blocked))
-        return Pick(None, f"all open fixes are blocked; {first} waits for {', '.join(blocked[first])}", blocked)
+        return Pick(None, f"all open fixes are blocked; {first} waits for {', '.join(blocked[first])}", blocked,
+                    waiting)
+    if waiting:
+        return Pick(None, f"no open fix; status=blocked: {until(waiting)}", unblocked_by=waiting)
     return Pick(None, "no open fix")
 
 
@@ -102,6 +120,7 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
     queue = review_queue(cycle)
     aged = [t for t in queue if (_age(t.fields.get("done_on"), today) or 0) > review_age_days]
     fixes = open_fixes(cycle)
+    waiting = blocked_fixes(cycle)
     by_sev = {s: sum(1 for f in fixes if f.fields.get("severity") == s) for s in SEVERITIES}
     task_pick, fix_pick, review_pick = next_task(cycle), next_fix(cycle), next_review(cycle)
 
@@ -118,11 +137,14 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
         suggestion = ("fix", "no task ready; open fixes remain")
     elif not cycle.tasks:
         suggestion = ("plan-to-tasks", "cycle has no tasks")
-    elif all(t.status in ("done", "skipped") for t in cycle.tasks) and not fixes:
+    elif all(t.status in ("done", "skipped") for t in cycle.tasks) and not fixes and not waiting:
         suggestion = ("close-cycle", "every task done/skipped and reviewed, no open fix")
     elif (blocked := [t.id for t in cycle.tasks if t.status == "blocked"]):
         suggestion = ("execute", f"only blocked tasks remain ({', '.join(blocked)}); /rite:execute {blocked[0]} "
                                  "re-checks the recorded cause and unblocks it if the cause is gone")
+    elif waiting and all(t.status in ("done", "skipped") for t in cycle.tasks):
+        suggestion = ("fix-all", f"only blocked fixes remain ({', '.join(waiting)}); /rite:fix-all re-runs "
+                                 "their unblocked_by and returns the ones that pass to the queue")
     else:
         suggestion = ("unblock", task_pick.reason)
 
@@ -134,6 +156,7 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
         "review_queue": [t.id for t in queue],
         "review_aged": [t.id for t in aged],
         "open_fixes": by_sev,
+        "blocked_fixes": waiting,
         "next_task": task_pick,
         "next_review": review_pick,
         "next_fix": fix_pick,

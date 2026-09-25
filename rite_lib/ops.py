@@ -274,14 +274,33 @@ def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: st
 
 
 def mark(project: Project, cycle: Cycle, item: Item, status: str, *, reason: str = "",
-         commit: bool = False) -> dict:
+         unblocked_by: str = "", commit: bool = False) -> dict:
+    """Set a status `close` and `mark-stale` do not. A blocked task waits on another task, which Rite
+    re-evaluates by itself; a blocked fix waits on the environment, which Rite does not know — so it
+    names the command that passes once the environment is there, and `reproduce` runs it."""
     allowed = [s for s in (TASK_STATUSES if item.kind == "task" else FIX_STATUSES) if s not in ("done", "stale")]
     if status not in allowed:
         raise RiteError(f"mark accepts {allowed} for a {item.kind}; use 'close' for done"
                         + (" and 'mark-stale' for stale" if item.kind == "fix" else ""))
+    unblocked_by = unblocked_by.strip()
+    blocked_fix = item.kind == "fix" and status == "blocked"
+    if unblocked_by and not blocked_fix:
+        raise RiteError("--unblocked-by applies to a fix marked blocked")
+    if blocked_fix and not unblocked_by:
+        raise RiteError('a blocked fix needs --unblocked-by "<command>": the command that passes once the '
+                        "environment is there. A block with no exit test is a lost item: nothing re-checks it")
+    if blocked_fix and not reason.strip():
+        raise RiteError("a blocked fix needs --reason: what is missing, and the SHA of any partial work")
+    updates: dict = {"status": status}
+    if blocked_fix:
+        updates["unblocked_by"] = unblocked_by
+    elif item.kind == "fix" and item.fields.get("unblocked_by") is not None:
+        updates["unblocked_by"] = None  # leaving the block: its exit test goes with it
     today = dt.date.today().isoformat()
     log = f"- **{status}** ({today})" + (f": {reason}" if reason else "")
-    _write_item(item, {"status": status}, log if (reason or status in ("blocked", "skipped")) else None,
+    if blocked_fix:
+        log += f" — unblocked by `{unblocked_by}`"
+    _write_item(item, updates, log if (reason or status in ("blocked", "skipped")) else None,
                 project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, status, item.id, cycle=cycle), commit)
     return {"id": item.id, "status": status, **result}

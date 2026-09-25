@@ -114,6 +114,9 @@ def blockers(project: Project, cycle: Cycle) -> list[str]:
     for f in cycle.fixes:
         if f.status in ("pending", "in-progress"):
             out.append(f"{f.id} is open ({f.fields.get('severity')})")
+        elif f.status == "blocked":
+            out.append(f"{f.id} is blocked ({f.fields.get('severity')}) until "
+                       f"`{f.fields.get('unblocked_by')}` passes")
     if views.out_of_sync(project, cycle):
         out.append("views out of sync (rite.py sync)")
     return out

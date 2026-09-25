@@ -209,6 +209,7 @@ class Checker:
                 where = owner.get(origin)
                 self.err(item.path, f"origin {origin or '(empty)'} "
                          + (f"belongs to cycle {where.name}" if where else "does not exist"))
+            self.check_unblocked_by(item)
 
         for dep in item.depends_on:
             if dep == item.id:
@@ -350,6 +351,32 @@ class Checker:
             else:
                 self.check_evidence_runs(fix)
 
+    def check_unblocked_by(self, fix: Item) -> None:
+        """A blocked fix waits on the environment; `unblocked_by` is the only thing that re-checks it."""
+        command = str(fix.fields.get("unblocked_by") or "").strip()
+        if fix.status != "blocked":
+            if command:
+                self.err(fix.path, f"unblocked_by is set but status is {fix.status}")
+            return
+        if not command:
+            self.err(fix.path, "status blocked without unblocked_by: nothing re-checks it "
+                     "(rite.py mark <FIX> blocked --reason … --unblocked-by \"<command>\")")
+            return
+        if self.quick:
+            return
+        for script in self.missing_scripts(fix, command):
+            self.warn(fix.path, f"unblocked_by runs `{script}`, which is not in the repository: "
+                      "the command must run from HEAD as written")
+
+    def missing_scripts(self, fix: Item, command: str) -> list[str]:
+        """Scripts the first line of ``command`` runs that are not in the fix's repository."""
+        try:
+            root = self.p.git_root(fix)
+        except RiteError:
+            root = self.p.root
+        return [s for s in (a or b for a, b in _SCRIPT_RE.findall(command.splitlines()[0]))
+                if not _dynamic(s) and not (root / s).exists()]
+
     def check_evidence_runs(self, fix: Item) -> None:
         """Evidence must run from the repository as written. Two ways it was seen not to: a script
         that lived in a reviewer's scratch copy (`python run.py`), and a `python -` heredoc whose body
@@ -357,10 +384,6 @@ class Checker:
         Evidence must also be able to pass once fixed: a command over a pinned git revision prints
         the same after the repair, so the fix would reproduce forever."""
         from . import compose  # compose imports this module
-        try:
-            root = self.p.git_root(fix)
-        except RiteError:
-            root = self.p.root
         for key in ("evidence", "verification"):
             found = markdown.first_section(fix.body, self.p.section_titles(key))
             if not found:
@@ -370,10 +393,9 @@ class Checker:
                 first = command.splitlines()[0]
                 moved = moved or bool(re.search(r"(?:^|[;&|]\s*)cd\s", command))
                 if not moved:
-                    for script in (a or b for a, b in _SCRIPT_RE.findall(first)):
-                        if not _dynamic(script) and not (root / script).exists():
-                            self.warn(fix.path, f"'{found[0]}' runs `{script}`, which is not in the repository: "
-                                      "evidence must run from HEAD as written")
+                    for script in self.missing_scripts(fix, first):
+                        self.warn(fix.path, f"'{found[0]}' runs `{script}`, which is not in the repository: "
+                                  "evidence must run from HEAD as written")
                 if _pinned(command):
                     self.warn(fix.path, f"'{found[0]}' runs `{first}`, which reads a fixed git revision: "
                               "it documents, never verifies — add a command over the working tree")

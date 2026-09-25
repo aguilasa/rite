@@ -83,7 +83,9 @@ ENUMS = {
 }
 
 TASK_STATUSES = ("pending", "in-progress", "done", "blocked", "skipped")
-FIX_STATUSES = ("pending", "in-progress", "done", "stale")
+# a blocked fix waits on the environment (emulator, credential, hardware) and names in `unblocked_by`
+# the command that passes once it is there; Rite runs it to re-evaluate the block
+FIX_STATUSES = ("pending", "in-progress", "done", "blocked", "stale")
 SEVERITIES = ("critical", "high", "medium", "low")
 # done_commit of an item closed with --no-repo: its only artifact lives outside git. Not hex, never a SHA.
 NO_COMMIT = "none"
