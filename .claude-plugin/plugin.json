@@ -1,6 +1,6 @@
 {
   "name": "rite",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "A disciplined execute → review → fix workflow for long backlogs: cycles, tasks, independent reviews and evidence-first fixes, with deterministic bookkeeping.",
   "author": {
     "name": "aguilasa"

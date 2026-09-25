@@ -2,7 +2,13 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.9.0] — 2026-09-25
+
+What the first real `/rite:fix-all --plan` exposed. A planning run marked its first fix `in-progress`
+and so chose what the next run resumed; a file cited as `grep -n` prints it (`docs/x.md:512`) slipped
+past the conflict matrix, and two fixes editing it shared a wave; and Evidence that reads a pinned git
+revision reproduced forever. `--plan` now takes no item, a location suffix is dropped before a path
+is compared, and `rite check` warns on a command that can never turn green.
 
 ### Fixed
 
