@@ -26,5 +26,6 @@ Execution Log never are — a run that only plans must not decide an item's fate
 4. **Serially, in item order**, for each DONE item: stage exactly its files, work commit with the
    references from `rite begin`, then `rite finish <ID> --json`. Workers edit, the main thread commits
    — no races on the index or the views.
-5. STALE → `rite mark-stale`; BLOCKED → `rite mark <ID> blocked --reason "…" --commit`; one failure
+5. STALE → `rite mark-stale`; BLOCKED → `rite mark <ID> blocked --reason "…" --commit` (a fix adds
+   `--unblocked-by "<command>"`); one failure
    does not stop the batch. Forwarded notes go into the destination items' Notes, committed together.

@@ -21,7 +21,7 @@ One fix per invocation, then stop. Batches are `/rite:fix-all`.
      report, stop. "Fixing" right code is how regressions get in.
    - *No runnable evidence* (any `why` but `ok`, a `shell_error`) → write one that shows the problem
      into the Evidence section first. If the problem cannot be made observable,
-     `rite mark <FIX> blocked --reason "..." --commit` and stop.
+     `rite mark <FIX> blocked --reason "..." --unblocked-by "<command>" --commit` and stop.
    - *Reproduced* → paste the decisive output under the Execution Log and continue.
 4. **Root cause**: confirm or correct that section before changing anything. A defect in generated
    output is fixed in the generator.

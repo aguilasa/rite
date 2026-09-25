@@ -15,13 +15,16 @@ Arguments: `$ARGUMENTS`
    --json`); fixes opened mid-run wait: a batch that grows never ends.
 2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for all.
    Compare each output with its `recorded` Evidence; write the verdict:
+   - `blocked: true` → its `unblock` ran its `unblocked_by` — the gesture `/rite:execute` makes with a
+     blocked task. Exit 0 → `rite mark <FIX> pending --reason "<command> now passes" --commit`, then
+     `rite reproduce <FIX> --json` and it joins the batch; else it stays blocked: report command and output.
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
    - `REPRODUCED` → stays in the batch; paste the output into its Execution Log.
    - **Residue** — `runnable: false`, `over_limit`, `shell_error`, `CANNOT RUN`, or an output that does
      not decide: only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
      `rite context <FIX> --json`. Handle its verdict as above; `CANNOT RUN` stays in the batch.
    - **With `--plan` the triage is dry**: `--plan` measures and reports, never writes — report each
-     verdict and whether it was decided inline or is residue, with no `mark-stale`, no Execution Log and
+     verdict and whether it was decided inline or is residue, with no `mark-stale` or `mark`, no Execution Log and
      no `rite:rite-reproducer` (residue is counted, not sent). `mark-stale` closes a fix: a planning run
      must not take it out of the backlog, and the inline/residue split is what a plan is run to measure.
 3. **Plan** with `--kind fix` on the remaining IDs (with `--plan`: all but the `NOT REPRODUCED`).

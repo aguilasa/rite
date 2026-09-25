@@ -22,7 +22,7 @@ One fix per invocation, then stop. Batches are `/rite:fix-all`.
      report, stop. "Fixing" right code is how regressions get in.
    - *No runnable evidence* (any `why` but `ok`, a `shell_error`) → write one that shows the problem
      into the Evidence section first. If the problem cannot be made observable,
-     `rite mark <FIX> blocked --reason "..." --commit` and stop.
+     `rite mark <FIX> blocked --reason "..." --unblocked-by "<command>" --commit` and stop.
    - *Reproduced* → paste the decisive output under the Execution Log and continue.
 4. **Root cause**: confirm or correct that section before changing anything. A defect in generated
    output is fixed in the generator.
@@ -69,6 +69,9 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
   own SHA). No work commit, only a document outside git: `--no-repo --reason "…"`, never borrow HEAD.
 - Others: `rite mark <ID> blocked|skipped --reason "…" --commit`, `mark-reviewed <ID> [--fixes …]`,
   `mark-stale <FIX> --reason "…"`, `rebind <ID> --sha <commit>` after a squash.
+- A fix blocked by the environment adds `--unblocked-by "<command that passes once it is there>"`.
+  Partial work: commit what is coherent, then `mark blocked` with the `--reason` naming what is
+  missing and the partial SHA — never `close` (not done), never `mark-stale` (the symptom is there).
 - A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
   commit its documents yourself.
 

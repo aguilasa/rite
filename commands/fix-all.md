@@ -16,13 +16,16 @@ Arguments: `$ARGUMENTS`
    --json`); fixes opened mid-run wait: a batch that grows never ends.
 2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for all.
    Compare each output with its `recorded` Evidence; write the verdict:
+   - `blocked: true` → its `unblock` ran its `unblocked_by` — the gesture `/rite:execute` makes with a
+     blocked task. Exit 0 → `rite mark <FIX> pending --reason "<command> now passes" --commit`, then
+     `rite reproduce <FIX> --json` and it joins the batch; else it stays blocked: report command and output.
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
    - `REPRODUCED` → stays in the batch; paste the output into its Execution Log.
    - **Residue** — `runnable: false`, `over_limit`, `shell_error`, `CANNOT RUN`, or an output that does
      not decide: only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
      `rite context <FIX> --json`. Handle its verdict as above; `CANNOT RUN` stays in the batch.
    - **With `--plan` the triage is dry**: `--plan` measures and reports, never writes — report each
-     verdict and whether it was decided inline or is residue, with no `mark-stale`, no Execution Log and
+     verdict and whether it was decided inline or is residue, with no `mark-stale` or `mark`, no Execution Log and
      no `rite:rite-reproducer` (residue is counted, not sent). `mark-stale` closes a fix: a planning run
      must not take it out of the backlog, and the inline/residue split is what a plan is run to measure.
 3. **Plan** with `--kind fix` on the remaining IDs (with `--plan`: all but the `NOT REPRODUCED`).
@@ -66,6 +69,9 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
   own SHA). No work commit, only a document outside git: `--no-repo --reason "…"`, never borrow HEAD.
 - Others: `rite mark <ID> blocked|skipped --reason "…" --commit`, `mark-reviewed <ID> [--fixes …]`,
   `mark-stale <FIX> --reason "…"`, `rebind <ID> --sha <commit>` after a squash.
+- A fix blocked by the environment adds `--unblocked-by "<command that passes once it is there>"`.
+  Partial work: commit what is coherent, then `mark blocked` with the `--reason` naming what is
+  missing and the partial SHA — never `close` (not done), never `mark-stale` (the symptom is there).
 - A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
   commit its documents yourself.
 
@@ -126,7 +132,8 @@ Execution Log never are — a run that only plans must not decide an item's fate
 4. **Serially, in item order**, for each DONE item: stage exactly its files, work commit with the
    references from `rite begin`, then `rite finish <ID> --json`. Workers edit, the main thread commits
    — no races on the index or the views.
-5. STALE → `rite mark-stale`; BLOCKED → `rite mark <ID> blocked --reason "…" --commit`; one failure
+5. STALE → `rite mark-stale`; BLOCKED → `rite mark <ID> blocked --reason "…" --commit` (a fix adds
+   `--unblocked-by "<command>"`); one failure
    does not stop the batch. Forwarded notes go into the destination items' Notes, committed together.
 
 ## Workspace
