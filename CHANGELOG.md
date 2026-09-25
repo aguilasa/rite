@@ -2,6 +2,37 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [0.9.3] — 2026-09-25
+
+`rite tokens --check` compared a baseline of one measurement against every run a glob matched — 27
+e2e runs of many versions, 109 invocations against 18. The gate was red on history, not on a
+regression. A measurement now carries its scope, and the check compares it before any number.
+
+### Fixed
+
+- **`--check` compares scope before numbers.** A measurement records in `window` how many sessions
+  and project folders it spans. When it spans more than the baseline, the check fails with a scope
+  line naming both sides — `SCOPE this measurement spans 109 invocation(s) in 109 session(s) across
+  27 project folder(s); the baseline 14 in 14 across 1 — not a regression` — and exits 3, not 1. A
+  baseline without scope is named, not trusted blindly.
+- **A `--dir` that does not exist** is nothing measured (exit 2), not a traceback.
+
+### Added
+
+- **`rite tokens --latest`** keeps only the project folder written last among those matched: the run
+  just made, not the sum of every run. For a baseline, measure one run: `--dir` of its folder, or
+  `--latest`.
+- **The e2e runs check their own tokens.** `run_loop.py` and `run_lifecycle.py` end with a check of
+  that run's transcripts against its baseline. It reports, it does not fail the run: tokens vary
+  between runs of the same model, and the run's verdict is behaviour.
+
+### Changed
+
+- **One baseline per e2e script:** `tests/baselines/<example>.loop.json` and
+  `<example>.lifecycle.json`, each one run. The old files each summed a loop run and a lifecycle run.
+  Re-recorded from the same 0.6.0 transcripts: each pair reproduces the old file number for number,
+  so only the scope is new.
+
 ## [0.9.2] — 2026-09-25
 
 `rite tokens` saw a command only when it was typed. A command entered through the `Skill` tool — a
