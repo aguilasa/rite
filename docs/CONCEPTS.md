@@ -164,6 +164,12 @@ an agent only for the residue** — no command (`why` other than `ok`), output o
 `shell_error`, `CANNOT RUN`, or an output that does not decide. None of those is ever *stale*: only an
 output measured under `why: ok` that contradicts the recorded Evidence closes a fix unrepaired.
 
+The 7 KB is the example's, not a constant: **the cost of a subagent grows with the size of the
+repository, so does the cost of an inline turn, and it is the ratio between the two that decides.**
+On a real repository a reproducer cost 20× the example's and the break-even was 72 KB
+([tokens/2026-09-25-inline-triage-limit.md](tokens/2026-09-25-inline-triage-limit.md)). So the limit
+is measured, not inherited: `rite tokens --suggest-limits` gives the repository's own.
+
 Confirmed by a run: twelve `/rite:fix-all` invocations, the 0.5.0 tree against inline triage
 ([tokens/2026-09-24-fixall-as-is-vs-inline.md](tokens/2026-09-24-fixall-as-is-vs-inline.md)). The whole
 invocation costs 32%, 15% and 36% less at N = 1, 2 and 4, with fewer main-thread turns, not more.
