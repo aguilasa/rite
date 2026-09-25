@@ -467,6 +467,7 @@ def cmd_tokens(args) -> int:
         value = getattr(args, flag)
         argv += [f"--{flag}", value] if value else []
     argv += [x for c in args.command or [] for x in ("--command", c)]
+    argv += ["--latest"] if args.latest else []
     argv += ["--json"] if args.json else []
     return token_report.main(argv)
 
@@ -676,6 +677,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="folder of Claude Code transcripts (default: ~/.claude/projects)")
     s.add_argument("--project", "--glob", dest="project",
                    help="only transcripts whose path matches this pattern")
+    s.add_argument("--latest", action="store_true",
+                   help="only the project folder written last among those matched: one run, not all")
     s.add_argument("--by", choices=("command", "session", "day", "project", "agent"), default="command",
                    help="what a row is (default: command)")
     s.add_argument("--since", help="only invocations from this day on (UTC, YYYY-MM-DD)")

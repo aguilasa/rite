@@ -9,8 +9,13 @@ needs no `rite.toml`.
 rite tokens                                             # per command, medians per invocation
 rite tokens --by day --since 2026-09-01 --markdown usage.md
 rite tokens --project "*slugkit*" --top 10
-rite tokens --project "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
+rite tokens --project "*rite-node-minimal-*" --latest --check tests/baselines/node-minimal.json
 ```
+
+`--project` with a glob sums every run it matches — every run, of every version. To compare with a
+baseline, measure one run: `--dir` of its project folder, or `--latest`. A baseline records its scope
+(sessions, project folders), and `--check` on a measurement that spans more fails on scope (exit 3)
+before comparing a number.
 
 ## Invocations and rows
 
@@ -26,6 +31,7 @@ Both doors into a command count, under the same name: typed (`<command-name>`) a
 | `--by command\|session\|day\|project\|agent` | what a row is (default `command`) |
 | `--since D` / `--until D` | only invocations whose first entry falls in the window (UTC days, inclusive) |
 | `--project GLOB` | only transcripts whose path matches (`--glob` is the same flag) |
+| `--latest` | only the project folder written last among those matched: one run, not their sum |
 | `--command C` | only these commands (repeatable) |
 | `--top N` | the N largest tool results: size, tool, target — never the text |
 | `--markdown FILE` | also write the report as deterministic markdown |

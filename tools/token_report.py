@@ -31,9 +31,14 @@ targets, never the text of a transcript.
 
     python tools/token_report.py --dir ~/.claude/projects --project "*node-minimal*" --top 10
     python tools/token_report.py --by day --since 2026-09-01 --markdown usage.md
-    python tools/token_report.py --project "*rite-node-minimal-*" --check tests/baselines/node-minimal.json
+    python tools/token_report.py --project "*rite-node-minimal-*" --latest --check tests/baselines/node-minimal.json
 
-Exit codes: 0 ok · 1 a checked command regressed beyond the tolerance · 2 nothing measured.
+A pattern sums every project folder it matches — every run, of every version. A baseline is one run
+and records its scope (sessions, project folders); ``--check`` compares scope before numbers. To
+compare, measure one run: ``--dir`` of its folder, or ``--latest``.
+
+Exit codes: 0 ok · 1 a checked command regressed beyond the tolerance · 2 nothing measured ·
+3 the measurement spans more than the baseline did.
 """
 from __future__ import annotations
 
@@ -431,15 +436,38 @@ def attribute(invocations: list[Invocation], agent_files: list[Path], sidechains
             run.absorb(found)
 
 
-def collect(root: Path, pattern: str | None) -> list[Invocation]:
+def _run_folder(root: Path, path: Path) -> Path:
+    """The project folder a transcript belongs to: one per working folder, so one per e2e run."""
+    parts = path.relative_to(root).parts
+    return root / parts[0] if len(parts) > 1 else root
+
+
+def collect(root: Path, pattern: str | None, latest: bool = False) -> list[Invocation]:
+    """Every invocation under ``root`` whose path matches ``pattern``; with ``latest``, only those of
+    the project folder written last — the run just made, not the sum of every run the pattern matches."""
+    if not root.exists():
+        return []
     files = sorted(root.rglob("*.jsonl")) if root.is_dir() else [root]
     if pattern:
         files = [f for f in files if f.match(pattern) or any(p.match(pattern) for p in f.parents)]
+    if latest and files and root.is_dir():
+        newest: dict[Path, float] = {}
+        for f in files:
+            folder = _run_folder(root, f)
+            newest[folder] = max(newest.get(folder, 0.0), f.stat().st_mtime)
+        last = max(newest, key=lambda folder: (newest[folder], str(folder)))
+        files = [f for f in files if _run_folder(root, f) == last]
     sidechains = Sidechains()
     invocations = [inv for f in files if f.parent.name != "subagents"
                    for inv in read_file(f, sidechains)]
     attribute(invocations, [f for f in files if f.parent.name == "subagents"], sidechains)
     return invocations
+
+
+def scope_of(invocations: list[Invocation]) -> dict:
+    """How much a measurement spans: its sessions and project folders. An e2e run is one folder."""
+    return {"sessions": len({inv.session for inv in invocations}),
+            "projects": len({inv.project for inv in invocations})}
 
 
 def median(values: list[float]) -> int:
@@ -610,7 +638,9 @@ def _header(data: dict) -> str:
     w = data.get("cache_weight", CACHE_WEIGHT)
     per = "median per invocation" if data.get("statistic", "median") == "median" else "total per row"
     window = data.get("window") or {}
-    scope = [f"{k} {v}" for k, v in window.items() if v]
+    scope = [f"{k} {v}" for k, v in window.items() if v and k in ("project", "since", "until")]
+    if window.get("latest"):
+        scope.append("latest run")
     return (f"{data['invocations']} invocation(s), by {data.get('by', 'command')}, {per}"
             + (f" ({', '.join(scope)})" if scope else "")
             + f"; effective = billed + {w:g} × cache read — {WEIGHT_NOTE}")
@@ -706,11 +736,30 @@ def render_markdown(data: dict, top: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def compare_scope(data: dict, baseline: dict) -> tuple[bool, str]:
+    """Does the measurement span no more than the baseline did? Medians over many runs of many
+    versions against one run measure history, not a regression — so that is said, not compared."""
+    want, got = baseline.get("window") or {}, data.get("window") or {}
+    if "sessions" not in want or "projects" not in want:
+        return True, "SCOPE? baseline records no scope; re-record it"
+    if "sessions" not in got or "projects" not in got:
+        return True, ""
+    if got["sessions"] <= want["sessions"] and got["projects"] <= want["projects"]:
+        return True, ""
+    return False, (f"SCOPE this measurement spans {data['invocations']} invocation(s) in {got['sessions']} "
+                   f"session(s) across {got['projects']} project folder(s); the baseline "
+                   f"{baseline.get('invocations', '?')} in {want['sessions']} across {want['projects']} — "
+                   f"not a regression: measure one run (--dir <its folder>, or --latest)")
+
+
 def check(data: dict, baseline_path: Path, tolerance: float) -> tuple[int, list[str]]:
-    """Compare against a baseline. Agent metrics are compared only where both sides have them, so
-    a baseline written before they existed still passes on what it does have."""
+    """Compare against a baseline: scope first, then numbers. Agent metrics are compared only where
+    both sides have them, so a baseline written before they existed still passes on what it does have."""
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
-    messages, failures = [], 0
+    fits, line = compare_scope(data, baseline)
+    if not fits:
+        return 1, [line]
+    messages, failures = ([line] if line else []), 0
 
     def compare(name: str, metric: str, got: int, want: int) -> None:
         nonlocal failures
@@ -760,6 +809,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="folder of Claude Code transcripts (default: ~/.claude/projects)")
     p.add_argument("--project", "--glob", dest="project",
                    help="only transcripts whose path matches this pattern")
+    p.add_argument("--latest", action="store_true",
+                   help="only the project folder written last among those matched: one run, not all")
     p.add_argument("--by", choices=AXES, default="command", help="what a row is (default: command)")
     p.add_argument("--since", type=_date, help="only invocations from this day on (UTC, YYYY-MM-DD)")
     p.add_argument("--until", type=_date, help="only invocations up to this day (UTC, inclusive)")
@@ -779,7 +830,7 @@ def main(argv: list[str] | None = None) -> int:
         print("token_report: a baseline is per command: use --by command", file=sys.stderr)
         return 2
 
-    invocations = collect(Path(args.dir).expanduser(), args.project)
+    invocations = collect(Path(args.dir).expanduser(), args.project, args.latest)
     if args.command:
         wanted = set(args.command)
         invocations = [i for i in invocations if i.command in wanted]
@@ -791,7 +842,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"token_report: no invocation found under {args.dir}", file=sys.stderr)
         return 2
     data = summarize(invocations, args.cache_weight, args.by)
-    data["window"] = {"project": args.project, "since": args.since, "until": args.until}
+    data["window"] = {"project": args.project, "since": args.since, "until": args.until,
+                      "latest": args.latest, **scope_of(invocations)}
     top = largest_results(invocations, args.top)
 
     if args.write_baseline:
@@ -813,6 +865,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         failures, messages = check(data, Path(args.check), args.tolerance)
         print("\n".join(["", f"check against {args.check} (tolerance {args.tolerance}%)", *messages]))
+        if messages and messages[0].startswith("SCOPE "):
+            return 3
         return 1 if failures else 0
     return 0
 

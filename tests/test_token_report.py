@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -129,6 +130,7 @@ class TokenReportTest(unittest.TestCase):
         self.assertIn("/rite:execute", out.getvalue())
         with tempfile.TemporaryDirectory() as empty:
             self.assertEqual(tr.main(["--dir", empty]), 2)
+            self.assertEqual(tr.main(["--dir", str(Path(empty) / "no-such-run")]), 2)
 
 
 AGENT_USAGE = {"input_tokens": 1, "cache_creation_input_tokens": 200, "cache_read_input_tokens": 3000,
@@ -505,6 +507,87 @@ class SkillInvocationTest(unittest.TestCase):
         fix_all = groups["/rite:fix-all"]
         self.assertEqual((fix_all["agents"], fix_all["agent"]["billed"]), (1, 2 * 221))
         self.assertEqual(groups["(no command)"]["agents"], 0)
+
+
+class ScopeTest(unittest.TestCase):
+    """A baseline is one run; a glob over many runs is history, and the check says so."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="rite-scope-")
+        self.dir = Path(self._tmp.name)
+        for name, session, when in (("run-a", "sa", 1_000_000_000), ("run-b", "sb", 1_000_000_600)):
+            path = self.dir / name / f"{session}.jsonl"
+            write_jsonl(path, [at(entry, "2026-09-24T10:00:00Z", session, f"/tmp/{name}")
+                               for entry in TRANSCRIPT])
+            os.utime(path, (when, when))
+        # run-a has one more session: the older run is the bigger one, so "latest" is not "largest"
+        extra = self.dir / "run-a" / "sa2.jsonl"
+        write_jsonl(extra, [at(entry, "2026-09-24T09:00:00Z", "sa2", "/tmp/run-a") for entry in TRANSCRIPT])
+        os.utime(extra, (1_000_000_000, 1_000_000_000))
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def run_cli(self, *args: str) -> tuple[int, str]:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = tr.main(["--dir", str(self.dir), *args])
+        return code, out.getvalue()
+
+    def baseline_of(self, run: str) -> Path:
+        path = self.dir / f"{run}.baseline.json"
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(tr.main(["--dir", str(self.dir / run), "--write-baseline", str(path)]), 0)
+        return path
+
+    def test_a_glob_sums_every_run_it_matches(self):
+        code, out = self.run_cli("--project", "*run-*", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(data["invocations"], 6)  # 2 per session, 3 sessions
+        self.assertEqual((data["window"]["sessions"], data["window"]["projects"]), (3, 2))
+
+    def test_latest_measures_the_newest_run_only(self):
+        code, out = self.run_cli("--project", "*run-*", "--latest", "--json")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(data["invocations"], 2)
+        self.assertEqual((data["window"]["sessions"], data["window"]["projects"]), (1, 1))
+        self.assertTrue(data["window"]["latest"])
+        self.assertEqual({i.project for i in tr.collect(self.dir, "*run-*", latest=True)}, {"/tmp/run-b"})
+
+    def test_check_over_more_runs_than_the_baseline_fails_on_scope_not_on_numbers(self):
+        baseline = self.baseline_of("run-a")
+        code, out = self.run_cli("--project", "*run-*", "--check", str(baseline))
+        self.assertEqual(code, 3)
+        check = out.split("check against", 1)[1]
+        self.assertIn("SCOPE", check)
+        self.assertIn("6 invocation(s) in 3 session(s) across 2 project folder(s)", check)
+        self.assertIn("the baseline 4 in 2 across 1", check)
+        self.assertNotIn("WORSE", check)
+        self.assertNotIn("ok   ", check)
+
+    def test_check_in_the_scope_of_the_baseline_passes(self):
+        baseline = self.baseline_of("run-b")
+        code, out = self.run_cli("--project", "*run-*", "--latest", "--check", str(baseline))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("SCOPE", out.split("check against", 1)[1])
+
+    def test_a_written_baseline_carries_its_scope(self):
+        data = json.loads(self.baseline_of("run-a").read_text(encoding="utf-8"))
+        self.assertEqual(data["invocations"], 4)
+        self.assertEqual({k: data["window"][k] for k in ("sessions", "projects", "latest")},
+                         {"sessions": 2, "projects": 1, "latest": False})
+        self.assertIn("project", data["window"])
+
+    def test_a_baseline_without_scope_is_named_not_trusted_blindly(self):
+        baseline = self.dir / "old.json"
+        baseline.write_text(json.dumps({"commands": {"/rite:execute": {"billed": 10 ** 6, "turns": 99}}}),
+                            encoding="utf-8")
+        code, out = self.run_cli("--project", "*run-*", "--check", str(baseline))
+        self.assertEqual(code, 0)
+        self.assertIn("SCOPE? baseline records no scope", out)
 
 
 class BaselineFilesTest(unittest.TestCase):

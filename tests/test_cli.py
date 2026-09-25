@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -619,6 +620,11 @@ class TokensTest(unittest.TestCase):
             data = json.loads(out)
             self.assertEqual((data["by"], data["invocations"], list(data["groups"])), ("day", 1, ["2026-09-20"]))
             self.assertIn("# Token report", report.read_text(encoding="utf-8"))
+            os.utime(transcripts / "skip" / "s.jsonl", (2_000_000_000, 2_000_000_000))
+            code, out, _ = rite(Path(tmp), "tokens", "--dir", str(transcripts), "--latest", "--json")
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["window"]["projects"], 1)
+            self.assertTrue(json.loads(out)["window"]["latest"])
 
     def test_nothing_measured(self):
         with tempfile.TemporaryDirectory() as tmp:
