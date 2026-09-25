@@ -67,8 +67,9 @@ DEFAULTS: dict = {
     "vocab": {"task_types": ["feature", "tool", "research", "verification", "closing"]},
     "profile": {"max_kb": 12},
     "output": {"context_kb": 24},
-    # inline_triage_max_output_kb: measured break-even of holding a fix's reproduction inline
-    # against starting its reproducer (docs/tokens/2026-09-24-fixall-as-is-vs-inline.md)
+    # inline_triage_max_output_kb: break-even of holding a fix's reproduction inline against starting
+    # its reproducer, measured on a small example (docs/tokens/2026-09-24-fixall-as-is-vs-inline.md);
+    # a repository measures its own with `rite tokens --suggest-limits`
     "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40, "inline_triage_max_output_kb": 7},
     "status": {"review_age_days": 7},
     "hooks": {"stop_check": False},

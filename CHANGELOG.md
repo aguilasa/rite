@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+`[limits].inline_triage_max_output_kb = 7` came from a small example. Measured on a real repository,
+a reproducer costs twenty times what it costs there, and the break-even is 72 KB, not 7: the limit
+is the repository's, not the plugin's. Now the repository measures it.
+
+### Added
+
+- **`rite tokens --suggest-limits`**: from the window's `/rite:fix-all` runs, a reproducer against a
+  main-thread turn of the same project, the limit per batch size (N = 1, 2, 4) and the value to put in
+  `rite.toml`, with the inputs, how many invocations and agents back them, the formula and the weight.
+  Fewer than 3 measured reproducers, or no `/rite:fix-all`, give `insufficient data` naming what is
+  missing (exit 2). It states its scope and honours `--project`, `--since`, `--until`, `--latest`;
+  `--json` has the raw numbers.
+
+### Changed
+
+- The default stays 7, but `templates/rite.toml`, `docs/CONFIG.md` and the config comment say what it
+  is — the break-even of a small example — and point to `--suggest-limits`. Triage itself is unchanged.
+- Measurement recorded in `docs/tokens/2026-09-25-inline-triage-limit.md`.
+
 ## [0.10.1] — 2026-09-25
 
 A blocked fix is waiting, not gone. The first run with the new state showed the rest of Rite

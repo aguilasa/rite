@@ -10,6 +10,7 @@ rite tokens                                             # per command, medians p
 rite tokens --by day --since 2026-09-01 --markdown usage.md
 rite tokens --project "*slugkit*" --top 10
 rite tokens --project "*rite-node-minimal-*" --latest --check tests/baselines/node-minimal.lifecycle.json
+rite tokens --project "*my-repo*" --suggest-limits      # this repository's inline-triage limit
 ```
 
 `--project` with a glob sums every run it matches — every run, of every version. To compare with a
@@ -38,6 +39,7 @@ Both doors into a command count, under the same name: typed (`<command-name>`) a
 | `--markdown FILE` | also write the report as deterministic markdown |
 | `--json`, `--check B`, `--tolerance P` | machine output; compare with a baseline (per command only) |
 | `--cache-weight W` | the weight of a cache read in `effective` (default `0.1`) |
+| `--suggest-limits` | instead of the report, the `[limits].inline_triage_max_output_kb` the window supports ([below](#the-inline-triage-limit)) |
 
 By command a row holds **medians** per invocation: one long invocation must not decide the number a
 baseline is compared to. By session, day or project a row is a period, so it holds **totals**. By
@@ -75,6 +77,28 @@ baseline, whatever the tolerance: a new agent in the rite shows up in the gate.
 
 The `usage` a main-thread `Agent` result carries is the agent's **last** turn, not its total; the
 report sums the agent's own transcript instead.
+
+## The inline-triage limit
+
+`/rite:fix-all` triages inline — one main-thread turn runs every fix's evidence — and hands a fix to a
+`rite-reproducer` only when its output is over `[limits].inline_triage_max_output_kb`. Where that line
+sits depends on the repository: a fresh context there carries its profile, plan and documents, and a
+main-thread turn re-reads a context that grows with them. `--suggest-limits` measures both from the
+window's `/rite:fix-all` runs and prints the limit per batch size N (1, 2, 4):
+
+    budget   = agent_effective - main_turn_effective / N
+    limit_kb = budget / (1 + w × turns_after) × 4 / 1024
+
+`agent_effective` is a reproducer (median billed and median cache reads, weighed), `main_turn_effective`
+a main-thread turn of `/rite:fix-all` (the same, per turn), `turns_after` the median number of
+main-thread turns that carried a reproducer's result — what held output is read back on. 4 bytes per
+token is rough, and said so. When the budget is not positive the agent wins whatever the output. The
+recommendation is the N = 1 value (a larger batch allows more); when the agent always wins there, the
+smallest N that has a budget. Fewer than 3 measured reproducers, or no `/rite:fix-all` in the window,
+give `insufficient data` naming what is missing (exit 2). The output states its scope; `--project`,
+`--since`, `--until` and `--latest` cut the window as for the report, and `--json` has the raw inputs,
+the limit per N and the weight. Measured on 2026-09-25:
+[tokens/2026-09-25-inline-triage-limit.md](tokens/2026-09-25-inline-triage-limit.md).
 
 ## What is kept
 
