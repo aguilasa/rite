@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Starting a cycle from a plan written elsewhere took a manual step: `mkdir docs/plans` and copy the
+plan there before `/rite:new-cycle --plan`. Skipping it failed in confusing ways: an absolute path
+surfaced as `rite: '...' is not in the subpath of '...'` (a `ValueError` from the link), and with
+`link_style = "relative"` the cycle silently stored a `../../..` link that left the repository.
+
+### Added
+
+- **`rite new-cycle --copy-plan`**: copies the whole plan into `[paths].plans_dir` (created when
+  missing) and links the copy; the copy joins the `chore(rite): new cycle` commit. An identical file
+  already there is reused; a different one is never overwritten. `--plan` now also takes an absolute
+  or `~` path. `--json` reports `plan` and `plan_copied_from`. `/rite:new-cycle` asks whether to copy
+  a plan outside `plans_dir` (default yes when it is outside the repository).
+
+### Fixed
+
+- A plan outside the repository is refused with a message naming `--copy-plan`, instead of the
+  `ValueError` or an escaping relative link. A plan inside the repository behaves as before.
+
 ## [0.11.0] — 2026-09-25
 
 `[limits].inline_triage_max_output_kb = 7` came from a small example. Measured on a real repository,

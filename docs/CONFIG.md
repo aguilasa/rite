@@ -34,7 +34,7 @@ All paths are relative to the repository root.
 | `cycles_root` | `"docs/rite/cycles"` | Where cycles live. A **cycle** is any folder holding `progress_file`. If `cycles_root` itself holds one, the repository uses the flat layout (one cycle, no sub-folders). |
 | `archive_dir` | `"docs/rite/cycles/archive"` | Closed cycles. Never scanned for live work; still scanned for ID uniqueness. |
 | `profiles_dir` | `"docs/rite/profiles"` | Cycle profiles and pitfalls files. |
-| `plans_dir` | `"docs/plans"` | Plans (sources of truth). |
+| `plans_dir` | `"docs/plans"` | Plans (sources of truth). `new-cycle --copy-plan` copies an outside plan here. |
 | `templates_dir` | `""` | Optional folder with local overrides of the plugin templates (`task.md`, `fix.md`, …). |
 | `link_style` | `"root-absolute"` | `root-absolute` (`/docs/x.md`) or `relative` (`../x.md`). `check` enforces it on every link and `source_of_truth`. |
 | `default_cycle` | `""` | Cycle used when a command gets none. Empty = flat layout if present, else the only live cycle, else ask. |

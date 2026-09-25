@@ -18,7 +18,8 @@ _PREFIX_RE = re.compile(r"^[A-Za-z0-9]+$")
 
 # --- new cycle -----------------------------------------------------------------
 def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = None,
-              ticket: str | None = None, local: bool = False, commit: bool = False) -> dict:
+              ticket: str | None = None, local: bool = False, commit: bool = False,
+              copy_plan: bool = False) -> dict:
     if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", name):
         raise RiteError(f"cycle name {name!r}: use letters, digits, '.', '_' or '-'")
     if not _PREFIX_RE.match(prefix):
@@ -32,11 +33,25 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
     for c in project.live_cycles():
         if c.prefix == prefix:
             raise RiteError(f"prefix {prefix} is used by live cycle {c.name}")
-    plan_link = ""
+    if copy_plan and not plan:
+        raise RiteError("--copy-plan needs --plan")
+    plan_link, plan_path, copy_from, copied_from = "", None, None, None
     if plan:
-        plan_path, _ = resolve_link(project.root, project.root / "x", plan if plan.startswith("/") else "/" + plan)
-        if not plan_path.is_file():
-            raise RiteError(f"plan {plan} not found")
+        source = _plan_source(project, plan)
+        plan_path = source
+        if copy_plan:
+            plans_dir = project.cfg.path("plans_dir")
+            target = plans_dir / source.name
+            if source != target.resolve():
+                if not target.exists():
+                    copy_from = source
+                elif target.read_bytes() != source.read_bytes():
+                    raise RiteError(f"{display(project.root, target)} already exists and differs from {source}; "
+                                    "rename one of them")
+                copied_from, plan_path = plan, target
+        elif not _inside(project.root, source):
+            raise RiteError(f"plan {plan} is outside the repository; pass --copy-plan to copy it into "
+                            f"{display(project.root, project.cfg.path('plans_dir'))}")
         plan_link = make_link(project.root, path / project.progress_name, plan_path, project.cfg.link_style)
 
     naming = project.cfg["naming"]
@@ -45,6 +60,10 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
     pitfalls = profiles / naming["pitfalls_file"].format(cycle=name)
     values = {"cycle": name, "prefix": prefix, "plan": frontmatter.dump_value(plan_link or None)}
     created = []
+    if copy_from:
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(copy_from, plan_path)
+        created.append(plan_path)
     path.mkdir(parents=True)
     for tpl, dest in (("progress.md", path / project.progress_name), ("fixes.md", path / project.fixes_name),
                       ("profile.md", profile), ("pitfalls.md", pitfalls)):
@@ -66,9 +85,37 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
     if commit and not cycle.local:
         sha = gitutil.commit_paths(project.root, created,
                                    bookkeeping_message(project, "new cycle", name, cycle=cycle))
+    local_paths = [path, profile, pitfalls] + ([plan_path] if copy_from else [])
     return {"cycle": name, "prefix": prefix, "path": display(project.root, path), "ticket": cycle.ticket,
-            "local": cycle.local, "created": [display(project.root, p) for p in created], "commit": sha,
-            "ignored": _ignored(project, [path, profile, pitfalls]) if cycle.local else None}
+            "local": cycle.local, "plan": display(project.root, plan_path) if plan_path else None,
+            "plan_copied_from": copied_from,
+            "created": [display(project.root, p) for p in created], "commit": sha,
+            "ignored": _ignored(project, local_paths) if cycle.local else None}
+
+
+def _plan_source(project: Project, plan: str) -> Path:
+    """The plan file ``--plan`` names: repo-relative, root-absolute (``/docs/x.md``) or OS-absolute.
+
+    A leading ``/`` is ambiguous on POSIX, where it is also OS-absolute: the repo file wins when it
+    exists, so ``/docs/plans/x.md`` keeps meaning the plan inside the repository.
+    """
+    p = Path(plan).expanduser()
+    in_repo = (project.root / plan.lstrip("/")).resolve()
+    if p.is_absolute() and not (plan.startswith("/") and in_repo.is_file()):
+        source = p.resolve()
+    else:
+        source, _ = resolve_link(project.root, project.root / "x", "/" + plan.lstrip("/"))
+    if not source.is_file():
+        raise RiteError(f"plan {plan} not found")
+    return source
+
+
+def _inside(root: Path, path: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def publish(project: Project, cycle: Cycle) -> dict:

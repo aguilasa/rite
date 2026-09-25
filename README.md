@@ -67,6 +67,7 @@ C:\work\                 ← not a git repository; rite.toml goes here
 6. Create the cycle with its ticket:
    ```text
    /rite:new-cycle my-cycle --plan docs/plans/plan-name.md --ticket PROJ-123
+   /rite:new-cycle my-cycle --plan ~/drafts/plan.md --copy-plan   # a plan outside the repository
    ```
    Confirm the suggested prefix (e.g. `MY`). Without `--ticket` the command asks for one. In a single
    repository it also asks whether the cycle is **local** (its documents stay out of git); in a

@@ -19,7 +19,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | Command | Does |
 | --- | --- |
 | `/rite:init [--yes]` | Detects layout, ID conventions, languages, commit style, protected paths and documented gates; asks the rest; writes `rite.toml` and a short `CLAUDE.md` block. Never moves files. |
-| `/rite:new-cycle <name> [--prefix X] [--plan P] [--ticket KEY] [--local]` | `rite new-cycle`: folder, views, profile skeleton, pitfalls file; seeds the profile only with facts. Asks for the tracker ticket and whether the cycle is local ([CONCEPTS.md](CONCEPTS.md#local-cycles)). |
+| `/rite:new-cycle <name> [--prefix X] [--plan P] [--copy-plan] [--ticket KEY] [--local]` | `rite new-cycle`: folder, views, profile skeleton, pitfalls file; seeds the profile only with facts. Asks for the tracker ticket and whether the cycle is local ([CONCEPTS.md](CONCEPTS.md#local-cycles)), and whether to copy a plan outside `plans_dir` into it (`--copy-plan`; a plan outside the repository is refused without it). |
 | `/rite:plan-to-tasks <plan> [cycle] [--dry-run]` | Proposes phases, tasks with anchored `source_of_truth` (from `rite anchors`), verifiable criteria, `depends_on`, a closing task per phase, a graph and phase checks; writes after confirmation; `rite check` must pass. |
 | `/rite:status [cycle]` | Read-only summary and the suggested next command. |
 | `/rite:close-cycle <cycle>` | `rite archive --dry-run` blockers, else archive with link rewriting. |
@@ -54,7 +54,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `mark ID STATUS [--reason R]`, `mark FIX blocked --reason R --unblocked-by CMD`, `mark-reviewed ID [--fixes …]`, `mark-stale FIX --reason …` | other transitions; a blocked fix names the command that unblocks it (`unblocked_by`), and leaving `blocked` clears it |
 | `sync`, `check [--quick]`, `status` | views, validation, summary; `sync`/`check`/`relink` take `--include-archived` |
 | `batch-plan N\|IDs\|all [--kind task\|fix]` | inventory, conflict matrix, waves |
-| `new-cycle NAME --prefix X [--ticket K] [--local]`, `archive NAME [--dry-run]`, `publish NAME` | lifecycle; `publish` makes a local cycle tracked |
+| `new-cycle NAME --prefix X [--plan P] [--copy-plan] [--ticket K] [--local]`, `archive NAME [--dry-run]`, `publish NAME` | lifecycle; `publish` makes a local cycle tracked |
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth`; retro numbers |
 | `sections [--all] [--write]` | propose `[sections]` from the titles the items and profiles use, recognised by what each section holds (fenced `$ ` lines, lists of paths, command lines, the item's last section, phases named) and never by the words of the title; each guess with its evidence, a key nothing matches reliably commented with its candidates. `--all` reads every cycle, archived too; `--write` merges only the matched keys into `rite.toml`, keeping comments, other keys and their order |
 | `relink [--write]`, `migrate --from we2002 [--write]` | normalize link style; convert a legacy backlog (see [MIGRATING.md](MIGRATING.md)) |

@@ -1,6 +1,6 @@
 ---
 description: Create a new Rite cycle — folder, progress and fixes views, profile skeleton and pitfalls file
-argument-hint: "<name> [--prefix X] [--plan path] [--ticket KEY] [--local] [--yes]"
+argument-hint: "<name> [--prefix X] [--plan path] [--copy-plan] [--ticket KEY] [--local] [--yes]"
 parts: [cli, asking, reporting]
 ---
 
@@ -19,11 +19,15 @@ Arguments: `$ARGUMENTS`
    - Unless `--yes`, ask in one question: the cycle's **ticket** in an external tracker (optional; every
      commit of the cycle carries it) and whether the cycle is **local** (its documents stay out of git;
      code commits still go to the repository). In a workspace, skip the local question — every cycle
-     there is local.
-2. **Create**: `rite new-cycle <name> --prefix <X> [--plan <path>] [--ticket <KEY>] [--local] --commit
-   --json`. It writes the cycle folder with its progress and fixes files, the profile skeleton and an
-   empty pitfalls file, and commits them; a local cycle commits nothing. It refuses flat layouts,
-   existing folders and prefixes already used — report such a refusal as is. For a local cycle, show
+     there is local. When `--plan` is outside `[paths].plans_dir`, the same question asks whether to
+     copy it there: default yes when it is outside the repository (it cannot be used from there), no
+     otherwise; `--copy-plan` answers it. Under `--yes`, take the default.
+2. **Create**: `rite new-cycle <name> --prefix <X> [--plan <path>] [--copy-plan] [--ticket <KEY>]
+   [--local] --commit --json`, with `--copy-plan` when copying was chosen. It writes the cycle folder
+   with its progress and fixes files, the profile skeleton and an empty pitfalls file (and copies the
+   plan), and commits them; a local cycle commits nothing. It refuses flat layouts, existing folders,
+   prefixes already used, an outside plan without `--copy-plan` and a copy that would overwrite a
+   different file — report such a refusal as is. For a local cycle, show
    the paths whose `ignored` is `false` and the `.gitignore` lines that cover them, and let the user
    add them: `.gitignore` is shared with everyone, so do not edit it.
 3. **Seed the profile** only with what is already established: decisions the plan states as decided,
@@ -33,7 +37,7 @@ Arguments: `$ARGUMENTS`
 
 ## Report
 
-Cycle (name, prefix, folder, ticket, local or tracked) · created files · what was seeded and from
-where · commit SHAs · next: `/rite:plan-to-tasks <plan> <name>`.
+Cycle (name, prefix, folder, ticket, local or tracked) · created files · copied plan (from → to) ·
+what was seeded and from where · commit SHAs · next: `/rite:plan-to-tasks <plan> <name>`.
 
 <!-- rite:parts -->

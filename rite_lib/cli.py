@@ -339,9 +339,11 @@ def cmd_batch_plan(project: Project, args) -> int:
 def cmd_new_cycle(project: Project, args) -> int:
     from . import lifecycle
     res = lifecycle.new_cycle(project, args.name, args.prefix, plan=args.plan, ticket=args.ticket,
-                              local=args.local, commit=args.commit)
+                              local=args.local, commit=args.commit, copy_plan=args.copy_plan)
     lines = [f"created cycle {res['cycle']} [{res['prefix']}] at {res['path']}"
              + (f", ticket {res['ticket']}" if res["ticket"] else "") + (", local" if res["local"] else "")]
+    if res["plan_copied_from"]:
+        lines.append(f"  copied plan {res['plan_copied_from']} -> {res['plan']}")
     lines += [f"  {p}" for p in res["created"]]
     if res["commit"]:
         lines.append(f"  committed {res['commit']}")
@@ -642,7 +644,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("new-cycle", parents=[common], help="create a cycle folder, views, profile and pitfalls")
     s.add_argument("name")
     s.add_argument("--prefix", required=True)
-    s.add_argument("--plan", help="plan file (repo-relative)")
+    s.add_argument("--plan", help="plan file (repo-relative, root-absolute or absolute)")
+    s.add_argument("--copy-plan", action="store_true", help="copy an outside plan into [paths].plans_dir")
     s.add_argument("--ticket", help="external tracker key the cycle's commits carry, e.g. PROJ-123")
     s.add_argument("--local", action="store_true", help="documents stay out of git: no bookkeeping commits")
     s.add_argument("--commit", action="store_true")

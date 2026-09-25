@@ -1,5 +1,7 @@
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from fixtures import write
 
@@ -36,6 +38,95 @@ class NewCycleTest(FixtureCase):
         self.assertEqual(code, 1)
         self.assertIn("used by live cycle alpha", err)
         self.assertEqual(self.fx.rite("new-cycle", "bad name", "--prefix", "X")[0], 1)
+
+
+class NewCycleCopyPlanTest(FixtureCase):
+    def setUp(self):
+        super().setUp()
+        self.outside = tempfile.TemporaryDirectory()
+        self.addCleanup(self.outside.cleanup)
+        self.source = Path(self.outside.name) / "draft.md"
+        self.source.write_bytes(b"# Draft\n\n## 1. Scope\n")
+
+    def test_outside_plan_without_the_flag_is_refused(self):
+        code, _, err = self.fx.rite("new-cycle", "gamma", "--prefix", "GAM", "--plan", str(self.source))
+        self.assertEqual(code, 1)
+        self.assertIn("--copy-plan", err)
+        self.assertFalse((self.root / "docs/rite/cycles/gamma").exists())
+        self.assertEqual(self.fx.git("status", "--porcelain"), "")
+
+    def test_outside_plan_is_copied_and_committed(self):
+        res = self.js("new-cycle", "gamma", "--prefix", "GAM", "--plan", str(self.source), "--copy-plan", "--commit")
+        target = self.root / "docs/plans/draft.md"
+        self.assertEqual(target.read_bytes(), self.source.read_bytes())
+        self.assertEqual((res["plan"], res["plan_copied_from"]), ("docs/plans/draft.md", str(self.source)))
+        self.assertEqual(fields(self.root / "docs/rite/cycles/gamma/progress.md")["plan"], "/docs/plans/draft.md")
+        self.assertEqual(self.log(1), ["chore(rite): new cycle gamma"])
+        self.assertIn("docs/plans/draft.md", self.fx.git("show", "--name-only", "--format=", "HEAD").splitlines())
+        self.assertEqual(self.fx.git("status", "--porcelain"), "")
+
+    def test_identical_target_is_reused(self):
+        write(self.root / "docs/plans/draft.md", self.source.read_text(encoding="utf-8"))
+        self.fx.git("add", "docs/plans/draft.md")
+        self.fx.git("commit", "-q", "-m", "docs: draft")
+        res = self.js("new-cycle", "gamma", "--prefix", "GAM", "--plan", str(self.source), "--copy-plan", "--commit")
+        self.assertEqual(res["plan_copied_from"], str(self.source))
+        self.assertNotIn("docs/plans/draft.md", res["created"])
+        self.assertNotIn("docs/plans/draft.md", self.fx.git("show", "--name-only", "--format=", "HEAD").splitlines())
+
+    def test_different_target_is_never_overwritten(self):
+        target = self.root / "docs/plans/draft.md"
+        write(target, "# Another draft\n")
+        before = target.read_bytes()
+        code, _, err = self.fx.rite("new-cycle", "gamma", "--prefix", "GAM", "--plan", str(self.source), "--copy-plan")
+        self.assertEqual(code, 1)
+        self.assertIn("already exists and differs", err)
+        self.assertEqual(target.read_bytes(), before)
+        self.assertFalse((self.root / "docs/rite/cycles/gamma").exists())
+
+    def test_plan_already_in_plans_dir_is_not_copied(self):
+        res = self.js("new-cycle", "gamma", "--prefix", "GAM", "--plan", "docs/plans/PLAN-alpha.md", "--copy-plan")
+        self.assertIsNone(res["plan_copied_from"])
+        self.assertEqual(res["plan"], "docs/plans/PLAN-alpha.md")
+
+    def test_copy_plan_needs_a_plan(self):
+        code, _, err = self.fx.rite("new-cycle", "gamma", "--prefix", "GAM", "--copy-plan")
+        self.assertEqual(code, 1)
+        self.assertIn("--plan", err)
+        self.assertFalse((self.root / "docs/rite/cycles/gamma").exists())
+
+    def test_local_cycle_copies_without_committing(self):
+        write(self.root / ".gitignore", "docs/rite/cycles/gamma/\ndocs/rite/profiles/gamma*\n")
+        self.fx.git("add", ".gitignore")
+        self.fx.git("commit", "-q", "-m", "chore: ignore gamma")
+        before = self.log()
+        res = self.js("new-cycle", "gamma", "--prefix", "GAM", "--local", "--plan", str(self.source),
+                      "--copy-plan", "--commit")
+        self.assertIsNone(res["commit"])
+        self.assertTrue((self.root / "docs/plans/draft.md").is_file())
+        self.assertIn("docs/plans/draft.md", res["ignored"])
+        self.assertFalse(res["ignored"]["docs/plans/draft.md"])
+        self.assertEqual(self.log(), before)
+
+    def test_inside_plan_outside_plans_dir_is_linked_in_place(self):
+        write(self.root / "notes/p.md", "# Notes\n")
+        res = self.js("new-cycle", "gamma", "--prefix", "GAM", "--plan", "notes/p.md")
+        self.assertIsNone(res["plan_copied_from"])
+        self.assertEqual(fields(self.root / "docs/rite/cycles/gamma/progress.md")["plan"], "/notes/p.md")
+
+
+class NewCycleCopyPlanRelativeTest(FixtureCase):
+    layout = "legacy"
+
+    def test_relative_link_points_at_the_copy(self):
+        with tempfile.TemporaryDirectory() as outside:
+            source = Path(outside) / "draft.md"
+            source.write_text("# Draft\n", encoding="utf-8")
+            self.js("new-cycle", "gamma", "--prefix", "GAM", "--plan", str(source), "--copy-plan")
+        progress = self.root / "docs/tasks/gamma/progresso.md"
+        link = fields(progress)["plan"]
+        self.assertEqual(link, "../../draft.md")
+        self.assertEqual((progress.parent / link).resolve(), (self.root / "docs/draft.md").resolve())
 
 
 class ArchiveTest(FixtureCase):
