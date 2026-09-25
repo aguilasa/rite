@@ -19,7 +19,8 @@ Arguments: `$ARGUMENTS`
    - "all", "everything" or a number above 8 → refuse and ask for a number: review must keep pace;
    - `--plan` → stop after the plan.
    - Nothing selectable but `blocked` tasks exist → re-run the check behind each recorded cause; gone →
-     `rite mark <ID> pending --reason "..." --commit`. Plan again; still nothing → report and stop.
+     `rite mark <ID> pending --reason "..." --commit` (with `--plan`, report the causes that are gone
+     and mark nothing). Plan again; still nothing → report and stop.
 2. **Plan** with `--kind task`. Closing tasks always run alone, in the last wave.
 3. **Run the waves.** Each worker follows the single-task rules of `/rite:execute`: scope, done
    criteria verified by running them, sweep inside its own files, negative results recorded. **No
@@ -98,7 +99,9 @@ resource and no dependency; when the dependency graph and the conflict matrix di
 **Plan.** `rite batch-plan <count|IDs> --kind <task|fix> --cycle <cycle> --json`. An item whose `files`
 is empty or inferred runs alone, so read it, write its predicted paths into its `files:` (and
 `resources:`) planning fields — never the state fields — and plan again. Show items, conflict pairs
-and waves; with `--plan`, stop and commit those edits (`chore(rite): plan batch <IDs>`).
+and waves; with `--plan`, stop and commit those edits (`chore(rite): plan batch <IDs>`). With
+`--plan`, only planning fields (`files:`, `resources:`) are written; status, dates, SHAs and the
+Execution Log never are — a run that only plans must not decide an item's fate.
 
 **Each wave.**
 

@@ -18,7 +18,8 @@ Arguments: `$ARGUMENTS`
    - "all", "everything" or a number above 8 → refuse and ask for a number: review must keep pace;
    - `--plan` → stop after the plan.
    - Nothing selectable but `blocked` tasks exist → re-run the check behind each recorded cause; gone →
-     `rite mark <ID> pending --reason "..." --commit`. Plan again; still nothing → report and stop.
+     `rite mark <ID> pending --reason "..." --commit` (with `--plan`, report the causes that are gone
+     and mark nothing). Plan again; still nothing → report and stop.
 2. **Plan** with `--kind task`. Closing tasks always run alone, in the last wave.
 3. **Run the waves.** Each worker follows the single-task rules of `/rite:execute`: scope, done
    criteria verified by running them, sweep inside its own files, negative results recorded. **No

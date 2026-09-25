@@ -20,7 +20,12 @@ Arguments: `$ARGUMENTS`
    - **Residue** — `runnable: false`, `over_limit`, `shell_error`, `CANNOT RUN`, or an output that does
      not decide: only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
      `rite context <FIX> --json`. Handle its verdict as above; `CANNOT RUN` stays in the batch.
-3. **Plan** with `--kind fix` on the remaining IDs. With `--plan`, stop here.
+   - **With `--plan` the triage is dry**: `--plan` measures and reports, never writes — report each
+     verdict and whether it was decided inline or is residue, with no `mark-stale`, no Execution Log and
+     no `rite:rite-reproducer` (residue is counted, not sent). `mark-stale` closes a fix: a planning run
+     must not take it out of the backlog, and the inline/residue split is what a plan is run to measure.
+3. **Plan** with `--kind fix` on the remaining IDs (with `--plan`: all but the `NOT REPRODUCED`).
+   With `--plan`, stop here.
 4. **Run the waves.** Each worker follows the single-fix rules of `/rite:fix`: reproduce again, confirm
    the root cause, repair the generator when the output is generated, never widen the scope.
 5. Sweep edits go in their own commit (`docs: sweep after <FIX>`), then `rite finish <FIX> --sha

@@ -14,6 +14,17 @@ All notable changes to this project are documented here. Versions follow [SemVer
   the CLI, the trailers exist so `git log --grep` finds an item's commits, and a red gate is reported
   with its output.
 
+### Fixed
+
+- **`--plan` measures and reports, never writes item state.** `/rite:fix-all --plan` ran the whole
+  inline triage before it stopped, and the triage runs `rite mark-stale` — it closes a fix and commits
+  — and pastes output into the Execution Log: a planning run could take a fix out of the backlog. With
+  `--plan` the triage is now dry: each verdict is reported, inline or residue, with no `mark-stale`, no
+  Execution Log and no reproducer agent; the plan covers every fix but the `NOT REPRODUCED` ones.
+  `/rite:execute-batch --plan` no longer moves a `blocked` task whose cause is gone back to `pending`;
+  it reports it. The batch rule says it in one sentence: with `--plan`, only planning fields (`files:`,
+  `resources:`) are written; status, dates, SHAs and the Execution Log never are.
+
 ## [0.9.0] — 2026-09-25
 
 What the first real `/rite:fix-all --plan` exposed. A planning run marked its first fix `in-progress`

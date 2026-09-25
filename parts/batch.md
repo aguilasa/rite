@@ -7,7 +7,9 @@ resource and no dependency; when the dependency graph and the conflict matrix di
 **Plan.** `rite batch-plan <count|IDs> --kind <task|fix> --cycle <cycle> --json`. An item whose `files`
 is empty or inferred runs alone, so read it, write its predicted paths into its `files:` (and
 `resources:`) planning fields — never the state fields — and plan again. Show items, conflict pairs
-and waves; with `--plan`, stop and commit those edits (`chore(rite): plan batch <IDs>`).
+and waves; with `--plan`, stop and commit those edits (`chore(rite): plan batch <IDs>`). With
+`--plan`, only planning fields (`files:`, `resources:`) are written; status, dates, SHAs and the
+Execution Log never are — a run that only plans must not decide an item's fate.
 
 **Each wave.**
 

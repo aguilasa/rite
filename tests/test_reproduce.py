@@ -1,6 +1,7 @@
 """`rite reproduce`: a fix's evidence, run and measured, never judged."""
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -139,6 +140,17 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual((second["runnable"], second["commands"]), (False, []))
         self.assertEqual(data["limit_kb"], 7)
         self.assertEqual(self.reproduce("--all"), data)  # the same structure, call after call
+
+    def test_reproduce_all_writes_nothing(self):
+        # `/rite:fix-all --plan` triages with it: a fix that no longer reproduces must stay open
+        gone = self.add_fix(f"```text\n$ {PY} -c \"print('GOOD')\"\nBAD\n```")
+        path = self.cycle / f"{gone}.md"
+        before, status = path.read_bytes(), self.fx.git("status", "--porcelain")
+        run = self.reproduce("--all")["fixes"][0]
+        self.assertEqual((run["commands"][0]["output"].strip(), run["recorded"]), ("GOOD", ["BAD"]))
+        self.assertEqual(path.read_bytes(), before)
+        self.assertIn(b"status: pending", before)
+        self.assertEqual(self.fx.git("status", "--porcelain"), status)
 
     def test_quotes_mean_what_they_mean_in_bash(self):
         # evidence is copied from bash sessions; cmd.exe would print the quotes and split on spaces
@@ -293,6 +305,35 @@ class StaleRuleTest(unittest.TestCase):
             self.assertIn(term, rule, term)
         review = " ".join((root / "commands" / "_review.body.md").read_text(encoding="utf-8").split())
         self.assertIn("runs on the working tree", review)
+
+
+class PlanWritesNothingTest(unittest.TestCase):
+    """`--plan` measures and reports: it may write planning fields, never an item's state."""
+
+    root = Path(__file__).resolve().parent.parent
+
+    def read(self, rel: str) -> str:
+        return " ".join((self.root / rel).read_text(encoding="utf-8").split())
+
+    def test_the_batch_rule_names_what_a_plan_may_write(self):
+        text = self.read("parts/batch.md")
+        rule = next(s for s in text.split(". ") if "With `--plan`, only planning fields" in s)
+        for term in ("`files:`", "status", "dates", "SHAs", "Execution Log", "never"):
+            self.assertIn(term, rule, term)
+
+    def test_fix_all_plan_triage_is_dry(self):
+        body = self.read("commands/_fix-all.body.md")
+        at = body.index("measures and reports, never writes")
+        dry = body[at:at + 400]
+        for term in ("no `mark-stale`", "no Execution Log", "no `rite:rite-reproducer`"):
+            self.assertIn(term, dry, term)
+
+    def test_execute_batch_plan_marks_nothing(self):
+        body = (self.root / "commands/_execute-batch.body.md").read_text(encoding="utf-8")
+        marks = [" ".join(entry.split()) for entry in re.split(r"\n\s*(?:- |\d+\. )", body) if "rite mark" in entry]
+        self.assertTrue(marks)
+        for entry in marks:
+            self.assertIn("--plan", entry, entry)
 
 
 if __name__ == "__main__":
