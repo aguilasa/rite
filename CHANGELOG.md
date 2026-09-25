@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.11.0] — 2026-09-25
 
 `[limits].inline_triage_max_output_kb = 7` came from a small example. Measured on a real repository,
 a reproducer costs twenty times what it costs there, and the break-even is 72 KB, not 7: the limit
