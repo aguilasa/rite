@@ -395,6 +395,22 @@ class BatchPlanTest(FixtureCase):
             self.js("new-fix", "--cycle", "beta", "--origin", "BET-TASK-01", "--title", title, "--severity", "low")
         self.assertEqual(len(self.plan("all", kind="fix")["items"]), 3)
 
+    def test_a_path_cited_at_a_line_still_conflicts(self):
+        # two fixes name one file, one of them as `grep -n` prints it: they must not share a wave
+        self.add(1, files="[src/a.py]")
+        ids = []
+        for title, cited in (("one", "`src/shared.py:12`"), ("two", "`src/shared.py`")):
+            fix_id = self.js("new-fix", "--cycle", "beta", "--origin", "BET-TASK-01", "--title", title,
+                             "--severity", "low")["id"]
+            path = self.root / "docs/rite/cycles/beta" / f"{fix_id}.md"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(text.replace("## Files\n\n-\n", f"## Files\n\n- {cited}\n"), encoding="utf-8")
+            ids.append(fix_id)
+        data = self.plan("all", kind="fix")
+        self.assertEqual([i["files"] for i in data["items"]], [["src/shared.py"], ["src/shared.py"]])
+        self.assertEqual(data["waves"], [[ids[0]], [ids[1]]])
+        self.assertIn("files: src/shared.py", data["items"][0]["conflicts"][ids[1]])
+
 
 class HookTest(FixtureCase):
     def hook(self, script: str, event: dict) -> subprocess.CompletedProcess:

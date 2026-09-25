@@ -19,6 +19,8 @@ from .selection import SATISFIED, open_fixes
 _CODE_SPAN = re.compile(r"`([^`\s]+)`")
 _BARE_BULLET = re.compile(r"(?m)^\s*[-*]\s+([^\s`\[(]+)")
 _WILD = re.compile(r"[*?\[]")
+# where in the file, not which file: `grep -n` and editors (`:12`, `:12:7`), GitHub (`#L12`, `#L12-L20`)
+_LOCATION = re.compile(r"(?::\d+(?::\d+)?|#L\d+(?:-L?\d+)?)$")
 
 
 @dataclass
@@ -43,22 +45,23 @@ def _looks_like_path(token: str) -> bool:
 
 def paths_in(body: str, root: Path | None = None) -> list[str]:
     """Paths in backticks; and, given the repository ``root``, a bullet that opens with a bare path
-    that exists there (`- src/a.py (the parser)`) — existence keeps prose out."""
+    that exists there (`- src/a.py (the parser)`) — existence keeps prose out. A location suffix
+    (`a.md:512`, `a.md#L12`) is dropped: the conflict matrix compares files, and `a.md:512` is none."""
     found = []
     for m in _CODE_SPAN.finditer(body):
-        token = m.group(1).strip()
+        token = _LOCATION.sub("", m.group(1).strip())
         if _looks_like_path(token):
             found.append(token.lstrip("./"))
     if root is not None:
         for m in _BARE_BULLET.finditer(body):
-            token = m.group(1).rstrip(",;:").lstrip("./")
+            token = _LOCATION.sub("", m.group(1).rstrip(",;:")).lstrip("./")
             try:
                 exists = _looks_like_path(token) and (root / token).exists()
             except (OSError, ValueError):  # not a path the platform can even name
                 exists = False
             if exists:
                 found.append(token)
-    return found
+    return list(dict.fromkeys(found))
 
 
 def _section_paths(text: str, titles: list[str], root: Path | None = None) -> list[str]:

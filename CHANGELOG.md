@@ -11,6 +11,10 @@ All notable changes to this project are documented here. Versions follow [SemVer
   read-only run then decided what the next run resumed first (`in-progress fix resumes first`).
   `rite begin --no-claim` resolves cycle, item, paths and config without marking; both bodies pass it
   under `--plan`.
+- **A path cited at a line still conflicts.** `batch-plan` inferred `docs/x.md:512` (a code span) as
+  that string and dropped a bare `- docs/x.md:512`, so two fixes naming one file, one of them as
+  `grep -n` prints it, shared a wave. `paths_in` now drops `:12`, `:12:7`, `#L12` and `#L12-L20` before
+  it tests the path, and returns each file once.
 
 ## [0.8.0] — 2026-09-24
 

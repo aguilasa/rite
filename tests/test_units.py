@@ -4,7 +4,7 @@ from pathlib import Path
 
 import fixtures  # noqa: F401  (puts the plugin root on sys.path)
 
-from rite_lib import config, frontmatter, markdown
+from rite_lib import batch, config, frontmatter, markdown
 from rite_lib.guard import glob_regex
 from rite_lib.naming import Naming, slugify
 from rite_lib.config import DEFAULTS
@@ -171,6 +171,22 @@ class GlobTest(unittest.TestCase):
         self.assertTrue(glob_regex("**/*.gen.ts").match("y.gen.ts"))
         self.assertFalse(glob_regex("src/*.py").match("src/a/b.py"))
         self.assertTrue(glob_regex("vendor/").match("vendor/lib.js"))
+
+
+class PathsInTest(unittest.TestCase):
+    """A path cited at a line is the file: `grep -n`, editors and GitHub all add the location."""
+
+    def test_a_location_suffix_is_not_part_of_the_path(self):
+        for cited in ("a/b.md:512", "a/b.md:512:7", "a/b.md#L12", "a/b.md#L12-L20", "a/b.md"):
+            self.assertEqual(batch.paths_in(f"- `{cited}` (the cited place)"), ["a/b.md"], cited)
+        self.assertEqual(batch.paths_in("- `a/b.md:1`\n- `a/b.md`\n- `a/b.md#L3`\n"), ["a/b.md"])
+
+    def test_a_bare_bullet_with_a_location_is_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "docs").mkdir()
+            (Path(tmp) / "docs" / "perfil.md").write_text("x\n", encoding="utf-8")
+            self.assertEqual(batch.paths_in("- docs/perfil.md:512\n- docs/perfil.md#L9 (again)\n", Path(tmp)),
+                             ["docs/perfil.md"])
 
 
 if __name__ == "__main__":
