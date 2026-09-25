@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.10.0] — 2026-09-25
 
 A fix the environment would not let finish — an emulator, a credential, hardware missing — had no
 state: `mark … blocked` was refused for a fix, so it stayed `in-progress` with nobody on it, or went
