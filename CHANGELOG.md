@@ -24,6 +24,10 @@ All notable changes to this project are documented here. Versions follow [SemVer
   `/rite:execute-batch --plan` no longer moves a `blocked` task whose cause is gone back to `pending`;
   it reports it. The batch rule says it in one sentence: with `--plan`, only planning fields (`files:`,
   `resources:`) are written; status, dates, SHAs and the Execution Log never are.
+- **An open range is not a pinned revision.** The 0.9.0 warning took any hash in a `git log` or
+  `git diff` for a fixed revision, so `git log <sha>..HEAD` — legitimate evidence that a change is not
+  in yet, and whose output moves with HEAD — was flagged. A range is fixed only between two hashes;
+  one with `HEAD`, a branch, a tag or an empty side (`<sha>..HEAD`, `<sha>...main`, `<sha>..`) is not.
 
 ## [0.9.0] — 2026-09-25
 

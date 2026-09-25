@@ -272,7 +272,7 @@ class ReproduceTest(unittest.TestCase):
                   "for rev in 42c23a32 6a2c16fb; do git ls-tree -r --name-only $rev src \\\n"
                   "    | while read f; do git show $rev:$f | wc -l; done; done",
                   "git diff 42c23a32 6a2c16fb -- src/app.py",
-                  "git log --oneline 42c23a32..6a2c16fb"]
+                  "git log --oneline 42c23a32..6a2c16fb", "git diff 42c23a32...6a2c16fb"]
         for command in pinned:
             fix_id = self.add_fix(f"```text\n$ {command}\n7\n```")
             warnings = self.evidence_warnings(fix_id)
@@ -281,7 +281,11 @@ class ReproduceTest(unittest.TestCase):
             self.assertIn("documents, never verifies", warnings[0])
         # the working tree, or a revision that moves with it
         for command in ("git diff 42c23a32 -- src/app.py", "git log -3 --oneline", "git show HEAD:src/app.py",
-                        "grep -n 32405 src/app.py", "git log --grep deadbeef"):
+                        "grep -n 32405 src/app.py", "git log --grep deadbeef",
+                        # an open range moves with HEAD: "this is not in yet" is legitimate evidence
+                        "git log --oneline 42c23a32..HEAD", "git diff 42c23a32..HEAD -- src/app.py",
+                        "git log 42c23a32...main", "git log 42c23a32.. -- src/app.py",
+                        "git diff v1.2..42c23a32"):
             fix_id = self.add_fix(f"```text\n$ {command}\n7\n```")
             self.assertEqual(self.evidence_warnings(fix_id), [], command)
 

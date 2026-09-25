@@ -26,6 +26,8 @@ _SCRIPT_RE = re.compile(r"""(?:^|[;&|(]\s*|\s)(?:(?:python3?|py|sh|bash|node|rub
 _SHA = re.compile(r"(?<![\w/-])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![\w-])")
 _GIT_AT = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?(?:show|log|ls-tree|cat-file|blame|archive)\b")
 _GIT_DIFF = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?diff\b")
+# a revision range as one argument: `a..b`, `a...b`, either side possibly empty
+_RANGE = re.compile(r"(\S*?)\.\.\.?(\S*)")
 _PY_HEREDOC = re.compile(r"""\bpython3?\s+-\s*<<-?\s*(['"]?)([A-Za-z_][\w-]*)\1""")
 
 
@@ -36,13 +38,23 @@ def _dynamic(path: str) -> bool:
 
 def _pinned(command: str) -> bool:
     """A command that reads a commit named by its hash prints the same before and after a repair.
-    `git diff <sha>` alone compares with the working tree, so a diff needs two revisions."""
-    shas = _SHA.findall(command)
+    `git diff <sha>` alone compares with the working tree, so a diff needs two revisions. A range
+    is fixed only between two hashes: one with `HEAD`, a branch, a tag or an empty side
+    (`<sha>..HEAD`, `<sha>...main`, `<sha>..`) moves with the repository, so it is dropped."""
+    kept, fixed_range = [], False
+    for token in command.split():
+        m = _RANGE.fullmatch(token)
+        if not m:
+            kept.append(token)
+        elif _SHA.fullmatch(m.group(1)) and _SHA.fullmatch(m.group(2)):
+            fixed_range = True
+            kept.append(token)
+    shas = _SHA.findall(" ".join(kept))
     if not shas:
         return False
     if _GIT_AT.search(command):
         return True
-    return bool(_GIT_DIFF.search(command)) and (len(shas) > 1 or ".." in command)
+    return bool(_GIT_DIFF.search(command)) and (len(shas) > 1 or fixed_range)
 
 
 def _python_heredoc(command: str) -> str | None:
