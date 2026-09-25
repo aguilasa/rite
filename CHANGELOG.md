@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [0.9.2] — 2026-09-25
+
+`rite tokens` saw a command only when it was typed. A command entered through the `Skill` tool — a
+pasted instruction, a model-invoked skill — fell into `(no command)`, so a real `/rite:fix-all` run
+was missing from the report. Both doors now count, under the same name.
+
+### Fixed
+
+- **`rite tokens` counts commands invoked through the `Skill` tool.** An invocation opened only on
+  `<command-name>`, the marker of a typed slash command. A `Skill` call now opens one too, named as
+  the typed door (`rite:fix-all` is `/rite:fix-all`); a `Skill` call naming the invocation already
+  open continues it, so a typed command is never counted twice. The invocation starts at the turn of
+  the call: in a pasted instruction, the turns spent reading it stay in `(no command)`. The baselines
+  are unchanged — both e2e transcript sets report the same numbers before and after.
+
 ## [0.9.1] — 2026-09-25
 
 What 0.9.0 left behind. `/rite:fix-all --plan` still ran a triage that could close a fix, the
