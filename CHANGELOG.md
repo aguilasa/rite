@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.10.1] — 2026-09-25
 
 A blocked fix is waiting, not gone. The first run with the new state showed the rest of Rite
 treating it as out of the backlog: `check` stopped verifying its Evidence — hiding a broken one for
