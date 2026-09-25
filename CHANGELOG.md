@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+A blocked fix is waiting, not gone. The first run with the new state showed the rest of Rite
+treating it as out of the backlog: `check` stopped verifying its Evidence — hiding a broken one for
+exactly as long as there was time to fix it — and `status` counted three waiting fixes as zero.
+
+### Fixed
+
+- **One definition of an open fix**: `pending`, `in-progress` or `blocked` (`OPEN_FIX_STATUSES`);
+  `done` and `stale` are closed. `check` verifies the sections and Evidence of every open fix,
+  blocked included, and stays silent on closed ones.
+- **`status` counts blocked fixes** in `open_fixes` by severity and apart in `open_fixes_blocked`;
+  the text line reads ``blocked: N — <ID> until `<command>` passes, …``. A blocked critical or high
+  fix does not suggest `/rite:fix`: there is nothing to pick.
+- **Counting is not picking**: `next fix` and `batch-plan` leave blocked fixes out where they pick.
+- **`mark-stale` on a blocked fix** says why not: stale needs the symptom measured, so mark it
+  pending once `unblocked_by` passes and reproduce. `archive` still refuses a cycle holding one.
+
 ## [0.10.0] — 2026-09-25
 
 A fix the environment would not let finish — an emulator, a credential, hardware missing — had no
