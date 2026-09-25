@@ -254,6 +254,25 @@ class ReproduceTest(unittest.TestCase):
         fine = self.add_fix("```text\n$ python - <<'EOF'\nprint(4552)\nEOF\n4552\n```")
         self.assertEqual(self.evidence_warnings(fine), [])
 
+    def test_check_warns_on_evidence_that_reads_a_pinned_revision(self):
+        # its output is the same before and after the repair: the fix would reproduce forever
+        pinned = ["git show 42c23a32:src/app.py | wc -l",
+                  "for rev in 42c23a32 6a2c16fb; do git ls-tree -r --name-only $rev src \\\n"
+                  "    | while read f; do git show $rev:$f | wc -l; done; done",
+                  "git diff 42c23a32 6a2c16fb -- src/app.py",
+                  "git log --oneline 42c23a32..6a2c16fb"]
+        for command in pinned:
+            fix_id = self.add_fix(f"```text\n$ {command}\n7\n```")
+            warnings = self.evidence_warnings(fix_id)
+            self.assertEqual(len(warnings), 1, (command, warnings))
+            self.assertIn(f"runs `{command.splitlines()[0]}`, which reads a fixed git revision", warnings[0])
+            self.assertIn("documents, never verifies", warnings[0])
+        # the working tree, or a revision that moves with it
+        for command in ("git diff 42c23a32 -- src/app.py", "git log -3 --oneline", "git show HEAD:src/app.py",
+                        "grep -n 32405 src/app.py", "git log --grep deadbeef"):
+            fix_id = self.add_fix(f"```text\n$ {command}\n7\n```")
+            self.assertEqual(self.evidence_warnings(fix_id), [], command)
+
 
 class StaleRuleTest(unittest.TestCase):
     """`mark-stale` closes a fix unrepaired: the rule names what never authorizes it."""
@@ -266,6 +285,14 @@ class StaleRuleTest(unittest.TestCase):
             self.assertIn(term, " ".join(rule.split()), term)
         reproducer = (root / "agents" / "rite-reproducer.md").read_text(encoding="utf-8")
         self.assertIn("never `NOT REPRODUCED`", reproducer)
+
+    def test_evidence_must_be_able_to_turn_green(self):
+        root = Path(__file__).resolve().parent.parent
+        rule = " ".join((root / "parts" / "evidence.md").read_text(encoding="utf-8").split())
+        for term in ("Evidence to pass once fixed", "pinned git revision", "documents, never verifies"):
+            self.assertIn(term, rule, term)
+        review = " ".join((root / "commands" / "_review.body.md").read_text(encoding="utf-8").split())
+        self.assertIn("runs on the working tree", review)
 
 
 if __name__ == "__main__":

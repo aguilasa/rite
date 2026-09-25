@@ -22,12 +22,27 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SCRIPT_RE = re.compile(r"""(?:^|[;&|(]\s*|\s)(?:(?:python3?|py|sh|bash|node|ruby|perl)\s+(?:-\S+\s+)*"""
                         r"""([^\s;&|<>'"-][^\s;&|<>'"]*\.(?:py|sh|mjs|cjs|js|rb|pl))"""
                         r"""|\./([^\s;&|<>'"]+))""")
+# a commit named by its hash: hex with a letter and a digit, so neither `deadbeef` nor `1234567`
+_SHA = re.compile(r"(?<![\w/-])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![\w-])")
+_GIT_AT = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?(?:show|log|ls-tree|cat-file|blame|archive)\b")
+_GIT_DIFF = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?diff\b")
 _PY_HEREDOC = re.compile(r"""\bpython3?\s+-\s*<<-?\s*(['"]?)([A-Za-z_][\w-]*)\1""")
 
 
 def _dynamic(path: str) -> bool:
     """A path the shell builds (`$DIR/x.py`, `~/x`, `<placeholder>`), or an absolute one."""
     return not path or any(c in path for c in "$~<>{}*") or path.startswith(("/", "\\")) or ":" in path
+
+
+def _pinned(command: str) -> bool:
+    """A command that reads a commit named by its hash prints the same before and after a repair.
+    `git diff <sha>` alone compares with the working tree, so a diff needs two revisions."""
+    shas = _SHA.findall(command)
+    if not shas:
+        return False
+    if _GIT_AT.search(command):
+        return True
+    return bool(_GIT_DIFF.search(command)) and (len(shas) > 1 or ".." in command)
 
 
 def _python_heredoc(command: str) -> str | None:
@@ -326,7 +341,9 @@ class Checker:
     def check_evidence_runs(self, fix: Item) -> None:
         """Evidence must run from the repository as written. Two ways it was seen not to: a script
         that lived in a reviewer's scratch copy (`python run.py`), and a `python -` heredoc whose body
-        is the output it printed. Warnings: a script an earlier `$` line creates is not seen."""
+        is the output it printed. Warnings: a script an earlier `$` line creates is not seen.
+        Evidence must also be able to pass once fixed: a command over a pinned git revision prints
+        the same after the repair, so the fix would reproduce forever."""
         from . import compose  # compose imports this module
         try:
             root = self.p.git_root(fix)
@@ -345,6 +362,9 @@ class Checker:
                         if not _dynamic(script) and not (root / script).exists():
                             self.warn(fix.path, f"'{found[0]}' runs `{script}`, which is not in the repository: "
                                       "evidence must run from HEAD as written")
+                if _pinned(command):
+                    self.warn(fix.path, f"'{found[0]}' runs `{first}`, which reads a fixed git revision: "
+                              "it documents, never verifies — add a command over the working tree")
                 body = _python_heredoc(command)
                 if body is not None:
                     try:

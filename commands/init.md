@@ -53,7 +53,7 @@ Detected conclusions with their evidence · questions and answers (or `assumed:`
 
 ## The CLI
 
-Every state read and every state change goes through it: hand-written bookkeeping drifts.
+All state goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json
@@ -80,8 +80,8 @@ them down only.
 
 - **Message**: `[commit].style` `conventional` gives `<type>(<scope>): <summary>` (`feat`, `fix`,
   `refactor`, `test`, `docs`, `build`, `chore`), `free` a plain imperative one, in `commit_language`.
-  Put your subject into the `subject_template` from `rite begin` and end the body with its `trailers`,
-  which carry `Refs: <ID>` and the cycle's ticket so `git log --grep` finds an item's commits.
+  Put your subject into the `subject_template` from `rite begin` and end the body with its `trailers`
+  (`Refs: <ID>`, the ticket): `git log --grep` finds an item's commits.
 - **Staging**: explicit paths (`git add -- <paths>`), never `git add -A`, never a `never_stage` path.
   In a local cycle, never stage the cycle folder, its profile or its pitfalls file.
 - **Never** amend, rebase, force, skip hooks or push; push only when `[commit].push = "on-request"`

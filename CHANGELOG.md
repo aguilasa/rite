@@ -16,6 +16,16 @@ All notable changes to this project are documented here. Versions follow [SemVer
   `grep -n` prints it, shared a wave. `paths_in` now drops `:12`, `:12:7`, `#L12` and `#L12-L20` before
   it tests the path, and returns each file once.
 
+### Added
+
+- **`rite check` warns on Evidence that can never turn green.** A command that reads a commit named by
+  its hash (`git show <sha>`, `git log <sha>`, `git ls-tree <sha>`, `git diff <sha> <sha>`, a `for rev
+  in <sha> …` loop) prints the same before and after the repair, so the triage reads `REPRODUCED`
+  forever. The warning names the fix and the command; `git diff <sha>` alone compares with the working
+  tree and is not flagged. `parts/evidence.md` says Evidence must pass once fixed, and `/rite:review`
+  keeps a finding only when one of its commands runs on the working tree. To stay under the 8 KB per
+  command, `parts/cli.md`, `commit.md` and `state.md` say the same in fewer words.
+
 ## [0.8.0] — 2026-09-24
 
 The triage cannot close a fix by mistake. `mark-stale` is its one destructive outcome, and until now

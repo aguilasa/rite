@@ -20,7 +20,8 @@ blind spots, so the review happens in a separate context that **measures instead
    payload of `rite context <ID> --json`, the repository root (in a workspace, the task's `repo`), the
    CLI invocation, the task's `done_commit`, and the instruction "Review this task per your procedure
    and return findings in your format." Do not tell it what you think of the work.
-3. **Screen the findings.** Keep one only if it carries a runnable evidence command and its output. Do
+3. **Screen the findings.** Keep one only if it carries a runnable evidence command and its output, and
+   at least one of its commands runs on the working tree (a pinned revision cannot turn green). Do
    not re-review, soften or add findings of your own; list what you dropped, with the reason.
 4. **Open one fix per kept finding**: `rite new-fix --cycle <cycle> --origin <ID> --title "<title>"
    --severity <critical|high|medium|low> --json`, then fill the body sections (Problem, Evidence, Root
@@ -39,7 +40,7 @@ dropped findings with reasons · the commit SHA, or "local cycle" · what to run
 
 ## The CLI
 
-Every state read and every state change goes through it: hand-written bookkeeping drifts.
+All state goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json
@@ -63,8 +64,8 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
   own SHA). No work commit, only a document outside git: `--no-repo --reason "…"`, never borrow HEAD.
 - Others: `rite mark <ID> blocked|skipped --reason "…" --commit`, `mark-reviewed <ID> [--fixes …]`,
   `mark-stale <FIX> --reason "…"`, `rebind <ID> --sha <commit>` after a squash.
-- A **local cycle** writes the same fields and commits nothing (`"local": true`) — expected, not a
-  failure; never commit its documents yourself.
+- A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
+  commit its documents yourself.
 
 Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edit between
 `<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
@@ -73,14 +74,14 @@ Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edi
 
 - **Measure, do not read**: a claim counts only if you ran its command here; logs are leads.
 - **Every number has a tool**: quote its versioned command beside it.
-- **Control before test**: before trusting a checker, show it can fail.
+- **Control before test**: a checker must be seen to fail, Evidence to pass once fixed — a pinned git
+  revision or an old log documents, never verifies.
 - **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
   (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `shell_error`, missing path) → an agent or a
   person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
-- **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
-  output.
+- **Gates**: `rite gates [--id <ID>] --json`; red is not done — fix it, or stop and report it.
 
 ## Workspace
 

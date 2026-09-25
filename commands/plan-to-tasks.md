@@ -49,7 +49,7 @@ Plan file, sections used, sections without tasks and why · the task table · ch
 
 ## The CLI
 
-Every state read and every state change goes through it: hand-written bookkeeping drifts.
+All state goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json
@@ -73,8 +73,8 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
   own SHA). No work commit, only a document outside git: `--no-repo --reason "…"`, never borrow HEAD.
 - Others: `rite mark <ID> blocked|skipped --reason "…" --commit`, `mark-reviewed <ID> [--fixes …]`,
   `mark-stale <FIX> --reason "…"`, `rebind <ID> --sha <commit>` after a squash.
-- A **local cycle** writes the same fields and commits nothing (`"local": true`) — expected, not a
-  failure; never commit its documents yourself.
+- A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
+  commit its documents yourself.
 
 Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edit between
 `<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.

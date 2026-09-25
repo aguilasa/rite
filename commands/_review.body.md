@@ -19,7 +19,8 @@ blind spots, so the review happens in a separate context that **measures instead
    payload of `rite context <ID> --json`, the repository root (in a workspace, the task's `repo`), the
    CLI invocation, the task's `done_commit`, and the instruction "Review this task per your procedure
    and return findings in your format." Do not tell it what you think of the work.
-3. **Screen the findings.** Keep one only if it carries a runnable evidence command and its output. Do
+3. **Screen the findings.** Keep one only if it carries a runnable evidence command and its output, and
+   at least one of its commands runs on the working tree (a pinned revision cannot turn green). Do
    not re-review, soften or add findings of your own; list what you dropped, with the reason.
 4. **Open one fix per kept finding**: `rite new-fix --cycle <cycle> --origin <ID> --title "<title>"
    --severity <critical|high|medium|low> --json`, then fill the body sections (Problem, Evidence, Root
