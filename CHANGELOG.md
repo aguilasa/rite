@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+A fix the environment would not let finish — an emulator, a credential, hardware missing — had no
+state: `mark … blocked` was refused for a fix, so it stayed `in-progress` with nobody on it, or went
+back to `pending` and the next run tripped on the same block. A blocked fix now names the command
+that unblocks it, and Rite runs that command to re-evaluate the block.
+
+### Added
+
+- **`rite mark <FIX> blocked --reason "…" --unblocked-by "<command>"`.** The command goes to the
+  fix's `unblocked_by`; without it the mark is refused — a block with no exit test is a lost item.
+  Leaving `blocked` clears it.
+- **`next fix` skips a blocked fix** and names the command that unblocks it, with a pick or without.
+- **`reproduce --all` includes blocked fixes**: their `unblocked_by` runs in place of the evidence,
+  reported under `unblock`. `/rite:fix-all` triage marks a fix `pending` when it passes.
+- **`check`**: error on a blocked fix without `unblocked_by`; warning when the command runs a script
+  that is not in the repository. `status` lists blocked fixes; `archive` refuses a cycle holding one.
+
+### Changed
+
+- **Partial work is blocked, not pending** (`parts/state.md`): commit what is coherent, `mark blocked`
+  with the missing part and the partial SHA in the reason. `/rite:fix` and the batch rules pass
+  `--unblocked-by`, which they needed and the CLI refused.
+- **`migrate`** does not invent a command: a legacy blocked fix becomes `pending`, with a warning.
+
 ## [0.9.3] — 2026-09-25
 
 `rite tokens --check` compared a baseline of one measurement against every run a glob matched — 27
