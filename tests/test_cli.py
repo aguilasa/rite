@@ -632,6 +632,15 @@ class TokensTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("no invocation", err)
 
+    def test_suggest_limits_reaches_the_tool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            transcripts = Path(tmp) / "t"
+            write(transcripts / "s.jsonl", json.dumps(
+                {"type": "user", "message": {"content": "<command-name>/rite:review</command-name>"}}))
+            code, out, _ = rite(Path(tmp), "tokens", "--dir", str(transcripts), "--suggest-limits", "--json")
+        self.assertEqual(code, 2)  # a review is no fix-all: too little to suggest, and said so
+        self.assertIn("no /rite:fix-all invocation in the window", json.loads(out)["insufficient"])
+
 
 if __name__ == "__main__":
     unittest.main()

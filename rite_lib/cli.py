@@ -479,6 +479,7 @@ def cmd_tokens(args) -> int:
     argv += [x for c in args.command or [] for x in ("--command", c)]
     argv += ["--latest"] if args.latest else []
     argv += ["--json"] if args.json else []
+    argv += ["--suggest-limits"] if args.suggest_limits else []
     return token_report.main(argv)
 
 
@@ -701,6 +702,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--tolerance", type=float, default=15.0, help="percent a metric may grow")
     s.add_argument("--cache-weight", type=float, default=0.1,
                    help="weight of a cache read in effective tokens (a ratio of rates, not a price)")
+    s.add_argument("--suggest-limits", action="store_true",
+                   help="suggest [limits].inline_triage_max_output_kb from this window's /rite:fix-all runs")
     s.set_defaults(fn=cmd_tokens, needs_project=False)
 
     s = sub.add_parser("guard", parents=[common], help="is this path read-only or generated?")

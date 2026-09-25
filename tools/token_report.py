@@ -37,8 +37,14 @@ A pattern sums every project folder it matches — every run, of every version. 
 and records its scope (sessions, project folders); ``--check`` compares scope before numbers. To
 compare, measure one run: ``--dir`` of its folder, or ``--latest``.
 
-Exit codes: 0 ok · 1 a checked command regressed beyond the tolerance · 2 nothing measured ·
-3 the measurement spans more than the baseline did.
+``--suggest-limits`` answers one question instead of the report: what ``[limits].inline_triage_max_output_kb``
+the window's ``/rite:fix-all`` runs support — a reproducer against a main-thread turn, both measured
+in the same project, so the limit is the project's, not the plugin's:
+
+    python tools/token_report.py --project "*my-repo*" --suggest-limits
+
+Exit codes: 0 ok · 1 a checked command regressed beyond the tolerance · 2 nothing measured (or too
+little to suggest a limit) · 3 the measurement spans more than the baseline did.
 """
 from __future__ import annotations
 
@@ -795,6 +801,107 @@ def baseline_groups(baseline: dict) -> dict:
     return baseline.get("groups") or baseline.get("commands") or {}
 
 
+TRIAGE_COMMAND = "/rite:fix-all"
+REPRODUCER = "rite:rite-reproducer"
+BYTES_PER_TOKEN = 4  # rough, and said so next to every limit
+SUGGEST_SIZES = (1, 2, 4)
+MIN_AGENTS = 3  # fewer reproducers than this is an anecdote, not a sample
+
+
+def triage_limit_kb(agent_effective: float, turn_effective: float, n: int, turns_after: float,
+                    weight: float = CACHE_WEIGHT) -> float | None:
+    """What one fix may hold inline before its own reproducer would have been cheaper, in KB; ``None``
+    when the reproducer is cheaper than even the fix's share of the one inline turn. The inline turn
+    serves the whole batch, so its cost divides by ``n``; the output held is written once and read
+    back on every main-thread turn after it."""
+    budget = agent_effective - turn_effective / n
+    if budget <= 0:
+        return None
+    return budget / (1 + weight * turns_after) * BYTES_PER_TOKEN / 1024
+
+
+def _effective_of_medians(usages: list, weight: float) -> dict:
+    billed = statistics.median([u[0] for u in usages])
+    cache_read = statistics.median([u[1] for u in usages])
+    return {"billed": int(billed), "cache_read": int(cache_read),
+            "effective": int(effective(billed, cache_read, weight))}
+
+
+def suggest_limits(invocations: list[Invocation], weight: float = CACHE_WEIGHT) -> dict:
+    """The `[limits].inline_triage_max_output_kb` this history supports: a reproducer against the
+    main-thread turn of the same project, both measured here. Medians of billed and of cache reads,
+    then weighed: the effective of the medians."""
+    fix_all = [inv for inv in invocations if inv.command == TRIAGE_COMMAND and inv.turns]
+    of_kind = [run for inv in fix_all for run in inv.agents if run.agent_type == REPRODUCER]
+    runs = [run for run in of_kind if run.measured and run.result_turn is not None]
+    out = {"command": TRIAGE_COMMAND, "agent_type": REPRODUCER, "cache_weight": weight,
+           "bytes_per_token": BYTES_PER_TOKEN, "invocations": len(fix_all), "agents": len(runs),
+           "unmeasured": len(of_kind) - len(runs)}
+    missing = []
+    if not fix_all:
+        missing.append(f"no {TRIAGE_COMMAND} invocation in the window")
+    if len(runs) < MIN_AGENTS:
+        missing.append(f"{len(runs)} measured {REPRODUCER} run(s), {MIN_AGENTS} needed")
+    if missing:
+        return {**out, "insufficient": missing}
+    agent = _effective_of_medians([(r.billed, r.cache_read) for r in runs], weight)
+    turn = _effective_of_medians([(i.billed / i.turns, i.cache_read / i.turns) for i in fix_all], weight)
+    after = statistics.median([r.main_turns_after for r in runs])
+    limits = []
+    for n in SUGGEST_SIZES:
+        kb = triage_limit_kb(agent["effective"], turn["effective"], n, after, weight)
+        limits.append({"n": n, "kb": None if kb is None else round(kb, 1), "agent_always": kb is None})
+    pick = next((row for row in limits if row["kb"] is not None), None)
+    out.update(inputs={"agent": agent, "main_turn": turn, "turns_after": after}, limits=limits,
+               formula=["budget = agent_effective - main_turn_effective / N",
+                        f"limit_kb = budget / (1 + w * turns_after) * {BYTES_PER_TOKEN} / 1024"])
+    if pick is not None:
+        out["recommended"] = {"n": pick["n"], "inline_triage_max_output_kb": max(int(pick["kb"]), 1)}
+    return out
+
+
+def _scope_text(window: dict) -> str:
+    scope = [f"{k} {v}" for k, v in window.items() if v and k in ("project", "since", "until")]
+    if window.get("latest"):
+        scope.append("latest run")
+    if "sessions" in window:
+        scope.append(f"{window['sessions']} session(s) across {window['projects']} project folder(s)")
+    return ", ".join(scope) or "every transcript"
+
+
+def render_suggestion(data: dict) -> str:
+    lines = [f"inline triage limit, from {data['command']} and its {data['agent_type']} runs "
+             f"({_scope_text(data.get('window') or {})})", ""]
+    if "insufficient" in data:
+        return "\n".join(lines + [f"insufficient data: {why}" for why in data["insufficient"]]
+                         + ["no suggestion: [limits].inline_triage_max_output_kb stays as configured"])
+    agent, turn = data["inputs"]["agent"], data["inputs"]["main_turn"]
+    lines += [
+        f"reproducer: effective {agent['effective']:,} (billed {agent['billed']:,} + cache read "
+        f"{agent['cache_read']:,}; median of {data['agents']} run(s)"
+        + (f", {data['unmeasured']} left no transcript" if data["unmeasured"] else "") + ")",
+        f"main-thread turn: effective {turn['effective']:,} (billed {turn['billed']:,} + cache read "
+        f"{turn['cache_read']:,}; median of {data['invocations']} invocation(s))",
+        f"main-thread turns after a reproducer's result: {data['inputs']['turns_after']:g} (median)",
+        "",
+    ]
+    for row in data["limits"]:
+        value = "agent always wins" if row["agent_always"] else f"{row['kb']:,.1f} KB"
+        lines.append(f"  N = {row['n']}: {value}")
+    lines.append("")
+    if "recommended" in data:
+        rec = data["recommended"]
+        lines.append(f"recommended for rite.toml: [limits] inline_triage_max_output_kb = "
+                     f"{rec['inline_triage_max_output_kb']} (N = {rec['n']}"
+                     + ("; a larger batch allows more" if rec["n"] == SUGGEST_SIZES[0] else
+                        "; below it a reproducer is cheaper whatever the output") + ")")
+    else:
+        lines.append("recommended: none — a reproducer is cheaper at every N measured")
+    lines += [f"formula: {data['formula'][0]}; {data['formula'][1]}",
+              f"w = {data['cache_weight']:g}: {WEIGHT_NOTE}; {data['bytes_per_token']} bytes per token, rough"]
+    return "\n".join(lines)
+
+
 def _date(text: str) -> str:
     import datetime as dt
     try:
@@ -825,13 +932,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--version", default="", help="version stored in a written baseline")
     p.add_argument("--cache-weight", type=float, default=CACHE_WEIGHT,
                    help=f"weight of a cache read in effective tokens (default {CACHE_WEIGHT}; {WEIGHT_NOTE})")
+    p.add_argument("--suggest-limits", action="store_true",
+                   help=f"suggest [limits].inline_triage_max_output_kb from this window's {TRIAGE_COMMAND} runs")
     args = p.parse_args(argv)
     if (args.check or args.write_baseline) and args.by != "command":
         print("token_report: a baseline is per command: use --by command", file=sys.stderr)
         return 2
+    if args.suggest_limits and (args.check or args.write_baseline):
+        print("token_report: --suggest-limits is a report of its own: drop --check and --write-baseline",
+              file=sys.stderr)
+        return 2
 
     invocations = collect(Path(args.dir).expanduser(), args.project, args.latest)
-    if args.command:
+    if args.command and not args.suggest_limits:  # the suggestion always reads its own command
         wanted = set(args.command)
         invocations = [i for i in invocations if i.command in wanted]
     if args.since:
@@ -841,9 +954,14 @@ def main(argv: list[str] | None = None) -> int:
     if not invocations:
         print(f"token_report: no invocation found under {args.dir}", file=sys.stderr)
         return 2
+    window = {"project": args.project, "since": args.since, "until": args.until,
+              "latest": args.latest, **scope_of(invocations)}
+    if args.suggest_limits:
+        suggestion = {**suggest_limits(invocations, args.cache_weight), "window": window}
+        print(json.dumps(suggestion, indent=2) if args.json else render_suggestion(suggestion))
+        return 2 if "insufficient" in suggestion else 0
     data = summarize(invocations, args.cache_weight, args.by)
-    data["window"] = {"project": args.project, "since": args.since, "until": args.until,
-                      "latest": args.latest, **scope_of(invocations)}
+    data["window"] = window
     top = largest_results(invocations, args.top)
 
     if args.write_baseline:

@@ -590,6 +590,124 @@ class ScopeTest(unittest.TestCase):
         self.assertIn("SCOPE? baseline records no scope", out)
 
 
+def fix_all_run(folder: Path, session: str, day: str, agent_turns: list[dict]) -> None:
+    """One /rite:fix-all: a reproducer per entry of ``agent_turns`` (its usage per turn, 10 turns
+    each), started one main turn apart, then two more main turns. Main turns cost USAGE."""
+    when = f"{day}T10:00:00Z"
+    entries = [at(user("<command-name>/rite:fix-all</command-name>"), when, session, str(folder))]
+    for i, _ in enumerate(agent_turns):
+        entries += [at(agent_call(f"{session}-m{i}", f"{session}-c{i}", "rite:rite-reproducer"),
+                       when, session, str(folder)),
+                    at(agent_result(f"{session}-c{i}", f"{session}-a{i}"), when, session, str(folder))]
+    entries += [at(assistant(f"{session}-end{k}", usage=USAGE), when, session, str(folder)) for k in (1, 2)]
+    write_jsonl(folder / f"{session}.jsonl", entries)
+    for i, usage in enumerate(agent_turns):
+        agent_id = f"{session}-a{i}"
+        write_jsonl(folder / session / "subagents" / f"agent-{agent_id}.jsonl",
+                    [sidechain(assistant(f"{agent_id}-t{t}", usage=usage), agentId=agent_id) for t in range(10)])
+        (folder / session / "subagents" / f"agent-{agent_id}.meta.json").write_text(json.dumps(
+            {"agentType": "rite:rite-reproducer", "toolUseId": f"{session}-c{i}"}), encoding="utf-8")
+
+
+CHEAP = {"output_tokens": 15}  # 150 billed over 10 turns, no cache read
+
+
+class SuggestLimitsTest(unittest.TestCase):
+    """The inline-triage limit is measured from the project's own history, and says from what."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="rite-limits-")
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def run_cli(self, *args: str) -> tuple[int, str]:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = tr.main(["--dir", str(self.dir), "--suggest-limits", *args])
+        return code, out.getvalue()
+
+    def test_the_limit_is_the_formula_over_measured_inputs(self):
+        fix_all_run(self.dir / "repo", "s1", "2026-09-20", [AGENT_USAGE] * 3)
+        code, out = self.run_cli("--json")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        # by hand: a reproducer is 10 turns of 221 billed + 3,000 cache read -> 2,210 + 0.1 * 30,000 = 5,210;
+        # a main turn is 115 + 0.1 * 1,000 = 215; the fix-all has 5 turns, the results came back after
+        # turns 1, 2 and 3, so 4, 3 and 2 turns carried them: median 3, and 1 + 0.1 * 3 = 1.3
+        self.assertEqual(data["inputs"]["agent"], {"billed": 2210, "cache_read": 30000, "effective": 5210})
+        self.assertEqual(data["inputs"]["main_turn"], {"billed": 115, "cache_read": 1000, "effective": 215})
+        self.assertEqual(data["inputs"]["turns_after"], 3)
+        # N=1: (5,210 - 215) / 1.3 * 4 / 1024 = 15.01; N=2: (5,210 - 107.5) / 1.3 * 4 / 1024 = 15.33;
+        # N=4: (5,210 - 53.75) / 1.3 * 4 / 1024 = 15.49
+        self.assertEqual([(r["n"], r["kb"]) for r in data["limits"]], [(1, 15.0), (2, 15.3), (4, 15.5)])
+        self.assertEqual(data["recommended"], {"n": 1, "inline_triage_max_output_kb": 15})
+        self.assertEqual((data["invocations"], data["agents"], data["unmeasured"]), (1, 3, 0))
+        self.assertEqual(data["cache_weight"], 0.1)
+        self.assertEqual(len(data["formula"]), 2)
+
+    def test_the_text_names_inputs_limits_recommendation_and_formula(self):
+        fix_all_run(self.dir / "repo", "s1", "2026-09-20", [AGENT_USAGE] * 3)
+        code, out = self.run_cli()
+        self.assertEqual(code, 0, out)
+        self.assertIn("median of 3 run(s)", out)
+        self.assertIn("N = 4: 15.5 KB", out)
+        self.assertIn("inline_triage_max_output_kb = 15 (N = 1", out)
+        self.assertIn("formula: budget = agent_effective - main_turn_effective / N", out)
+        self.assertIn("w = 0.1", out)
+
+    def test_a_reproducer_cheaper_than_a_turn_moves_the_recommendation_up(self):
+        fix_all_run(self.dir / "repo", "s1", "2026-09-20", [CHEAP] * 3)
+        code, out = self.run_cli("--json")
+        self.assertEqual(code, 0, out)
+        data = json.loads(out)
+        # 150 < 215: at N=1 the agent always wins; N=2: (150 - 107.5) / 1.3 * 4 / 1024 = 0.13
+        self.assertEqual([(r["n"], r["kb"], r["agent_always"]) for r in data["limits"]],
+                         [(1, None, True), (2, 0.1, False), (4, 0.3, False)])
+        self.assertEqual(data["recommended"], {"n": 2, "inline_triage_max_output_kb": 1})
+        self.assertIn("N = 1: agent always wins", self.run_cli()[1])
+
+    def test_a_small_sample_suggests_nothing_and_says_what_is_missing(self):
+        fix_all_run(self.dir / "repo", "s1", "2026-09-20", [AGENT_USAGE] * 2)
+        code, out = self.run_cli()
+        self.assertEqual(code, 2)
+        self.assertIn("insufficient data: 2 measured rite:rite-reproducer run(s), 3 needed", out)
+        self.assertNotIn("recommended for", out)
+        code, out = self.run_cli("--json")
+        self.assertEqual(code, 2)
+        self.assertNotIn("limits", json.loads(out))
+
+    def test_no_fix_all_names_the_command(self):
+        write_jsonl(self.dir / "repo" / "s1.jsonl", TRANSCRIPT)
+        code, out = self.run_cli()
+        self.assertEqual(code, 2)
+        self.assertIn("no /rite:fix-all invocation in the window", out)
+
+    def test_the_window_decides_the_inputs_and_is_declared(self):
+        dear, cheap = self.dir / "run-a", self.dir / "run-b"
+        fix_all_run(dear, "sa", "2026-09-20", [AGENT_USAGE] * 3)
+        fix_all_run(cheap, "sb", "2026-09-22", [CHEAP] * 3)
+        for path in (dear / "sa.jsonl", *dear.rglob("*.jsonl")):
+            os.utime(path, (1_000_000_000, 1_000_000_000))
+        for args, agent_effective in ((("--project", "*run-a*"), 5210), (("--since", "2026-09-21"), 150),
+                                      (("--latest",), 150)):
+            code, out = self.run_cli(*args, "--json")
+            self.assertEqual(code, 0, out)
+            data = json.loads(out)
+            self.assertEqual(data["inputs"]["agent"]["effective"], agent_effective, args)
+            self.assertEqual((data["window"]["sessions"], data["window"]["projects"]), (1, 1), args)
+        self.assertEqual(json.loads(self.run_cli("--project", "*run-a*", "--json")[1])["window"]["project"],
+                         "*run-a*")
+        self.assertIn("(project *run-a*, 1 session(s) across 1 project folder(s))",
+                      self.run_cli("--project", "*run-a*")[1])
+        self.assertIn("latest run", self.run_cli("--latest")[1])
+
+    def test_it_is_no_baseline(self):
+        fix_all_run(self.dir / "repo", "s1", "2026-09-20", [AGENT_USAGE] * 3)
+        self.assertEqual(self.run_cli("--check", str(self.dir / "b.json"))[0], 2)
+
+
 BASELINES = [(example, script) for example in ("node-minimal", "python-minimal")
              for script in ("loop", "lifecycle")]
 
