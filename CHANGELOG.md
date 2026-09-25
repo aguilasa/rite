@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.12.0] — 2026-09-25
 
 Starting a cycle from a plan written elsewhere took a manual step: `mkdir docs/plans` and copy the
 plan there before `/rite:new-cycle --plan`. Skipping it failed in confusing ways: an absolute path
