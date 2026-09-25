@@ -252,6 +252,34 @@ def invocations(repo: Path, command: str) -> list:
     return [i for i in token_report.collect(transcripts_for(repo), None) if i.command == command]
 
 
+def token_check(repo: Path, example: str, script: str) -> int:
+    """Compare this run's transcripts with the baseline of ``example`` for ``script`` and print the
+    verdict. It reports, it does not fail the run: tokens vary between runs of the same model, and the
+    run's verdict is behaviour. The exit code of the check is returned for whoever wants it."""
+    baseline = ROOT / "tests" / "baselines" / f"{example}.{script}.json"
+    name = f"tests/baselines/{baseline.name}"
+    if not baseline.is_file():
+        print(f"TOKENS SKIP: no baseline {name}")
+        return 0
+    tools = str(ROOT / "tools")
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    import contextlib
+    import io
+    import token_report
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+        code = token_report.main(["--dir", str(transcripts_for(repo)), "--check", str(baseline)])
+    report = out.getvalue()
+    lines = report.split("\ncheck against", 1)[1].splitlines()[1:] if "\ncheck against" in report \
+        else report.strip().splitlines()
+    verdict = {0: "ok", 1: "WORSE", 2: "nothing measured", 3: "SCOPE"}.get(code, str(code))
+    print(f"TOKENS {verdict} against {name} (reported, not a failure)")
+    for line in lines:
+        print(f"TOKENS   {line}")
+    return code
+
+
 def agents_of(invocation, kind: str) -> int:
     """How many subagents of type ``kind`` an invocation started."""
     return sum(1 for run in invocation.agents if run.agent_type == kind)

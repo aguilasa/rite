@@ -31,7 +31,7 @@ targets, never the text of a transcript.
 
     python tools/token_report.py --dir ~/.claude/projects --project "*node-minimal*" --top 10
     python tools/token_report.py --by day --since 2026-09-01 --markdown usage.md
-    python tools/token_report.py --project "*rite-node-minimal-*" --latest --check tests/baselines/node-minimal.json
+    python tools/token_report.py --project "*rite-node-minimal-*" --latest --check tests/baselines/node-minimal.lifecycle.json
 
 A pattern sums every project folder it matches — every run, of every version. A baseline is one run
 and records its scope (sessions, project folders); ``--check`` compares scope before numbers. To

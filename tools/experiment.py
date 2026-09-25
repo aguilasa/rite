@@ -88,10 +88,14 @@ def reference(example: str, command: str, estimate_from: str | None) -> dict:
         data = tr.summarize([i for i in tr.collect(Path.home() / ".claude" / "projects", estimate_from)
                              if i.command == name])
         row, source = data["groups"].get(name), f"transcripts matching {estimate_from}"
-    else:
-        path = ROOT / "tests" / "baselines" / f"{example}.json"
-        row = tr.baseline_groups(json.loads(path.read_text(encoding="utf-8"))).get(name) if path.is_file() else None
-        source = str(path.relative_to(ROOT)).replace("\\", "/")
+    else:  # one baseline per e2e script: the first that ran the command
+        row, source = None, f"tests/baselines/{example}.{{loop,lifecycle}}.json"
+        for script in ("loop", "lifecycle"):
+            path = ROOT / "tests" / "baselines" / f"{example}.{script}.json"
+            row = tr.baseline_groups(json.loads(path.read_text(encoding="utf-8"))).get(name) if path.is_file() else None
+            if row:
+                source = str(path.relative_to(ROOT)).replace("\\", "/")
+                break
     if not row:
         raise SystemExit(f"no {name} in {source}: pass --estimate-from <glob of past runs>")
     agent = row.get("agent")

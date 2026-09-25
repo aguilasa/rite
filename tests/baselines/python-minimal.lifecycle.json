@@ -1,37 +1,12 @@
 {
   "example": "python-minimal",
   "version": "0.6.0",
-  "measured_on": "2026-09-24",
-  "invocations": 16,
+  "measured_on": "2026-09-25",
+  "invocations": 12,
   "by": "command",
   "statistic": "median",
   "cache_weight": 0.1,
   "groups": {
-    "(no command)": {
-      "n": 1,
-      "input": 4,
-      "cache_write": 12627,
-      "cache_read": 68007,
-      "output": 291,
-      "billed": 12922,
-      "turns": 2,
-      "effective": 19722,
-      "ceremony": 0,
-      "tools": {
-        "edit": 1
-      },
-      "agents": 0,
-      "agent": {
-        "input": 0,
-        "cache_write": 0,
-        "cache_read": 0,
-        "output": 0,
-        "billed": 0,
-        "turns": 0,
-        "effective": 0,
-        "by_type": {}
-      }
-    },
     "/rite:close-cycle": {
       "n": 1,
       "input": 10,
@@ -45,36 +20,6 @@
       "tools": {
         "read:shell": 1,
         "other": 3
-      },
-      "agents": 0,
-      "agent": {
-        "input": 0,
-        "cache_write": 0,
-        "cache_read": 0,
-        "output": 0,
-        "billed": 0,
-        "turns": 0,
-        "effective": 0,
-        "by_type": {}
-      }
-    },
-    "/rite:execute": {
-      "n": 1,
-      "input": 20,
-      "cache_write": 25572,
-      "cache_read": 447230,
-      "output": 3387,
-      "billed": 28979,
-      "turns": 10,
-      "effective": 73702,
-      "ceremony": 4,
-      "tools": {
-        "rite:cli": 4,
-        "git": 1,
-        "read:project": 2,
-        "read:shell": 1,
-        "gate": 1,
-        "edit": 4
       },
       "agents": 0,
       "agent": {
@@ -130,33 +75,6 @@
             "main_turns_after": 0
           }
         }
-      }
-    },
-    "/rite:fix": {
-      "n": 1,
-      "input": 16,
-      "cache_write": 26745,
-      "cache_read": 365085,
-      "output": 3367,
-      "billed": 30128,
-      "turns": 8,
-      "effective": 66636,
-      "ceremony": 5,
-      "tools": {
-        "rite:cli": 5,
-        "read:project": 1,
-        "edit": 3
-      },
-      "agents": 0,
-      "agent": {
-        "input": 0,
-        "cache_write": 0,
-        "cache_read": 0,
-        "output": 0,
-        "billed": 0,
-        "turns": 0,
-        "effective": 0,
-        "by_type": {}
       }
     },
     "/rite:fix-all": {
@@ -302,44 +220,42 @@
       }
     },
     "/rite:review": {
-      "n": 4,
+      "n": 3,
       "input": 12,
-      "cache_write": 20393,
-      "cache_read": 252876,
-      "output": 2279,
-      "billed": 22598,
+      "cache_write": 20248,
+      "cache_read": 252793,
+      "output": 2262,
+      "billed": 22350,
       "turns": 6,
-      "effective": 47791,
+      "effective": 47441,
       "ceremony": 1,
       "tools": {
         "rite:cli": 1,
         "git": 0,
-        "read:project": 0,
-        "read:shell": 0,
-        "edit": 0,
+        "read:shell": 1,
         "subagent": 1,
         "other": 1
       },
       "agents": 1,
       "agent": {
         "input": 8,
-        "cache_write": 11079,
-        "cache_read": 37520,
-        "output": 1111,
-        "billed": 12199,
+        "cache_write": 8376,
+        "cache_read": 37617,
+        "output": 988,
+        "billed": 9372,
         "turns": 4,
-        "effective": 15922,
+        "effective": 13114,
         "by_type": {
           "rite:rite-reviewer": {
             "n": 1,
             "input": 8,
-            "cache_write": 11079,
-            "cache_read": 37520,
-            "output": 1111,
-            "billed": 12199,
+            "cache_write": 8376,
+            "cache_read": 37617,
+            "output": 988,
+            "billed": 9372,
             "turns": 4,
-            "effective": 15922,
-            "shell_bytes": 7460,
+            "effective": 13114,
+            "shell_bytes": 7351,
             "main_turns_after": 2
           }
         }
@@ -347,35 +263,38 @@
     }
   },
   "totals": {
-    "invocations": 16,
+    "invocations": 12,
     "main": {
-      "input": 238,
-      "cache_write": 352282,
-      "cache_read": 5275527,
-      "output": 45221,
-      "billed": 397741,
-      "turns": 119,
-      "effective": 925293
+      "input": 182,
+      "cache_write": 264833,
+      "cache_read": 4043531,
+      "output": 34316,
+      "billed": 299331,
+      "turns": 91,
+      "effective": 703684
     },
     "agent": {
-      "input": 52,
-      "cache_write": 60268,
-      "cache_read": 220143,
-      "output": 7166,
-      "billed": 67486,
-      "turns": 26,
-      "effective": 89500,
+      "input": 44,
+      "cache_write": 46411,
+      "cache_read": 188595,
+      "output": 5455,
+      "billed": 51910,
+      "turns": 22,
+      "effective": 70769,
       "unmeasured": 0
     },
-    "effective": 1014793,
-    "tool_calls": 116,
-    "ceremony_calls": 25,
-    "ceremony_share": 0.216,
-    "agent_share": 0.088
+    "effective": 774453,
+    "tool_calls": 86,
+    "ceremony_calls": 13,
+    "ceremony_share": 0.151,
+    "agent_share": 0.091
   },
   "window": {
     "project": null,
     "since": null,
-    "until": null
+    "until": null,
+    "latest": false,
+    "sessions": 12,
+    "projects": 1
   }
 }

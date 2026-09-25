@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from _example import (Expect, claude, finish, make_repo, plant_defect, rite_json, sh,  # noqa: E402
-                      subjects, symptom)
+                      subjects, symptom, token_check)
 from rite_lib import frontmatter  # noqa: E402
 
 
@@ -93,6 +93,7 @@ def main() -> int:
     expect(probe.read_bytes() == before, "guard: read-only path unchanged")
 
     sh(repo, "git", "status", "--porcelain")
+    token_check(repo, args.example, "loop")
     return finish(expect, tmp, repo, transcript, args.keep)
 
 

@@ -30,7 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from _example import (Expect, agents_of, apply_defect, claude, finish, invocations,  # noqa: E402
-                      make_repo, plant_defect, rite_json, seed_fix, subjects, symptom, symptom_of)
+                      make_repo, plant_defect, rite_json, seed_fix, subjects, symptom, symptom_of,
+                      token_check)
 
 # the example ships a planned cycle; the lifecycle run creates its own from scratch
 STRIP = ("rite.toml", "rite")
@@ -178,6 +179,7 @@ def main() -> int:
     n_done = stats.get("tasks", {}).get("done", 0) + stats.get("fixes", {}).get("done", 0)
     n_close = len([s for s in subjects(repo) if s.startswith("chore(rite): close")])
     expect(n_done == n_close, f"one close commit per done item ({n_close}/{n_done})")
+    token_check(repo, args.example, "lifecycle")
     return finish(expect, tmp, repo, transcript, args.keep)
 
 

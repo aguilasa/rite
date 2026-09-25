@@ -590,15 +590,21 @@ class ScopeTest(unittest.TestCase):
         self.assertIn("SCOPE? baseline records no scope", out)
 
 
+BASELINES = [(example, script) for example in ("node-minimal", "python-minimal")
+             for script in ("loop", "lifecycle")]
+
+
 class BaselineFilesTest(unittest.TestCase):
     def test_baselines_are_present_and_shaped(self):
-        for name in ("node-minimal", "python-minimal"):
-            path = Path(__file__).resolve().parent / "baselines" / f"{name}.json"
+        for example, script in BASELINES:
+            path = Path(__file__).resolve().parent / "baselines" / f"{example}.{script}.json"
             data = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(data["example"], name)
+            self.assertEqual(data["example"], example)
             self.assertTrue(data["version"] and data["measured_on"])
-            self.assertIn("/rite:execute", tr.baseline_groups(data))
-            for command in tr.baseline_groups(data).values():
+            self.assertEqual(data["window"]["projects"], 1, f"{path.name} is one run")
+            groups = tr.baseline_groups(data)
+            self.assertIn("/rite:execute" if script == "loop" else "/rite:execute-batch", groups)
+            for command in groups.values():
                 self.assertTrue({"billed", "turns", "ceremony", "n"} <= set(command))
 
 

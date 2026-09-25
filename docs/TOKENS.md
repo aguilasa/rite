@@ -9,13 +9,14 @@ needs no `rite.toml`.
 rite tokens                                             # per command, medians per invocation
 rite tokens --by day --since 2026-09-01 --markdown usage.md
 rite tokens --project "*slugkit*" --top 10
-rite tokens --project "*rite-node-minimal-*" --latest --check tests/baselines/node-minimal.json
+rite tokens --project "*rite-node-minimal-*" --latest --check tests/baselines/node-minimal.lifecycle.json
 ```
 
 `--project` with a glob sums every run it matches — every run, of every version. To compare with a
 baseline, measure one run: `--dir` of its project folder, or `--latest`. A baseline records its scope
 (sessions, project folders), and `--check` on a measurement that spans more fails on scope (exit 3)
-before comparing a number.
+before comparing a number. There is one baseline per e2e script and example: `<example>.loop.json`,
+`<example>.lifecycle.json`.
 
 ## Invocations and rows
 
