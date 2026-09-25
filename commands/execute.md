@@ -43,7 +43,7 @@ and bookkeeping SHAs · the `next` from `finish`; the task awaits `/rite:review`
 
 ## The CLI
 
-All state goes through it: hand-written bookkeeping drifts.
+Every state read and every state change goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json
@@ -97,7 +97,8 @@ matching pitfalls entries. Read that instead of opening those files.
   (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `shell_error`, missing path) → an agent or a
   person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
-- **Gates**: `rite gates [--id <ID>] --json`; red is not done — fix it, or stop and report it.
+- **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
+  output.
 
 ## Guarded paths
 
@@ -124,8 +125,8 @@ searched and updated, or `sweep: none`.
 
 - **Message**: `[commit].style` `conventional` gives `<type>(<scope>): <summary>` (`feat`, `fix`,
   `refactor`, `test`, `docs`, `build`, `chore`), `free` a plain imperative one, in `commit_language`.
-  Put your subject into the `subject_template` from `rite begin` and end the body with its `trailers`
-  (`Refs: <ID>`, the ticket): `git log --grep` finds an item's commits.
+  Put your subject into the `subject_template` from `rite begin` and end the body with its `trailers`,
+  which carry `Refs: <ID>` and the cycle's ticket so `git log --grep` finds an item's commits.
 - **Staging**: explicit paths (`git add -- <paths>`), never `git add -A`, never a `never_stage` path.
   In a local cycle, never stage the cycle folder, its profile or its pitfalls file.
 - **Never** amend, rebase, force, skip hooks or push; push only when `[commit].push = "on-request"`

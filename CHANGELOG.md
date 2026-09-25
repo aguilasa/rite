@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **The command cap is 10 KB.** The 8 KB cap was a guess, not a measure, and it had started to decide
+  the wording: `fix-all.md` sat at 8191 bytes and 0.9.0 condensed the `cli`, `commit` and `evidence`
+  parts to fit. A command is read whole on every invocation; 10 KB is about 2.8k tokens, 0.6k more.
+  Past it, prose moves to a shared part or to `docs/CONCEPTS.md` — the cap does not go up again. The
+  condensed lines are restored where they had lost a rule: every state read and change goes through
+  the CLI, the trailers exist so `git log --grep` finds an item's commits, and a red gate is reported
+  with its output.
+
 ## [0.9.0] — 2026-09-25
 
 What the first real `/rite:fix-all --plan` exposed. A planning run marked its first fix `in-progress`

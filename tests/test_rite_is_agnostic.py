@@ -43,9 +43,13 @@ class AgnosticTest(unittest.TestCase):
 
     def test_command_size(self):
         """A command carries its rules, so the cap is what one turn may load, not what prose wants."""
+        # The whole command is read on every invocation: 10 KB is about 2.8k tokens, 0.6k above the
+        # first cap of 8 KB, which was a guess and started deciding the wording of rules. It protects
+        # the per-invocation cost. A command past it moves prose to a shared part or to
+        # docs/CONCEPTS.md; the cap does not go up again.
         big = [f"{f.relative_to(ROOT)}: {f.stat().st_size} B" for f in (ROOT / "commands").glob("*.md")
-               if f.stat().st_size > 8 * 1024]
-        self.assertEqual(big, [], "commands must stay <= 8 KB; condense a body or drop a part")
+               if f.stat().st_size > 10 * 1024]
+        self.assertEqual(big, [], "commands must stay <= 10 KB; move prose to parts/ or docs/CONCEPTS.md")
 
     def test_commands_do_not_send_the_reader_to_another_file(self):
         """Fragments read at runtime were a third of an invocation's cost; parts are inlined instead."""

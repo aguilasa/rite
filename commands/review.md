@@ -40,7 +40,7 @@ dropped findings with reasons · the commit SHA, or "local cycle" · what to run
 
 ## The CLI
 
-All state goes through it: hand-written bookkeeping drifts.
+Every state read and every state change goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json
@@ -81,7 +81,8 @@ Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edi
   (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `shell_error`, missing path) → an agent or a
   person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
-- **Gates**: `rite gates [--id <ID>] --json`; red is not done — fix it, or stop and report it.
+- **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
+  output.
 
 ## Workspace
 

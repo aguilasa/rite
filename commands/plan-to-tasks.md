@@ -49,7 +49,7 @@ Plan file, sections used, sections without tasks and why · the task table · ch
 
 ## The CLI
 
-All state goes through it: hand-written bookkeeping drifts.
+Every state read and every state change goes through it: hand-written bookkeeping drifts.
 
 ```sh
 sh "${CLAUDE_PLUGIN_ROOT}/bin/rite" <subcommand> [args] --json

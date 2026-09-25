@@ -68,7 +68,7 @@ def command_names() -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--check", action="store_true", help="only report differences")
-    p.add_argument("--max-kb", type=int, default=8, help="size limit per generated command")
+    p.add_argument("--max-kb", type=int, default=10, help="size limit per command (see test_command_size)")
     args = p.parse_args(argv)
 
     problems: list[str] = []
@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         wanted = build(name)
         if len(wanted.encode("utf-8")) > args.max_kb * 1024:
             problems.append(f"{name}.md is {len(wanted.encode('utf-8')) // 1024} KB "
-                            f"> {args.max_kb} KB; condense the body or drop a part")
+                            f"> {args.max_kb} KB; move prose to parts/ or docs/CONCEPTS.md")
         current = target.read_text(encoding="utf-8") if target.is_file() else ""
         if current == wanted:
             continue
