@@ -4,7 +4,13 @@
 Reads the JSONL transcripts Claude Code writes under ``~/.claude/projects`` and cuts them into
 invocations: a slash command (any plugin's, any skill's: `/rite:execute`, `/other:thing`) or a plain
 prompt, which is reported as ``(no command)``. Every assistant message after one belongs to it until
-the next. Rows group invocations by command (medians per invocation: one long invocation must not
+the next. A command has two doors: typed, it arrives as ``<command-name>``; pasted as an instruction,
+or invoked by the model, it arrives as a ``Skill`` tool call, reported under the same name
+(``rite:fix-all`` is ``/rite:fix-all``). A typed command followed by its own ``Skill`` call is one
+invocation. Through the ``Skill`` door the command starts at the turn of the call: the turns spent
+reading a pasted instruction before it belong to ``(no command)`` — which is why a fat
+``(no command)`` can sit next to a lean command. A skill that is no rite command is counted the same
+way, under its own name: it is usage too. Rows group invocations by command (medians per invocation: one long invocation must not
 decide the number a baseline is compared to), or by session, day, project or agent type (totals: a
 period is not a sample). A **Totals** block sums the whole window and says how much of it went to
 subagents and to ceremony. Tool calls are classified (fragment reads, CLI calls, git, gates, edits,
@@ -62,6 +68,7 @@ FRAGMENT_RE = re.compile(r"(plugins[\\/].*[\\/])?(shared|parts|commands|agents)[
 CATEGORIES = ("rite:fragment", "rite:cli", "git", "read:project", "read:shell", "gate", "edit",
               "subagent", "other")
 AGENT_TOOLS = ("Task", "Agent")
+SKILL_TOOL = "Skill"  # the other door into a command: a pasted instruction, a model-invoked skill
 CACHE_WEIGHT = 0.1  # a cache read against an input token: a ratio of rates, not a price
 WEIGHT_NOTE = "w is the rate of a cache read relative to an input token, not a price"
 COUNTS = ("input", "cache_write", "cache_read", "output")
@@ -99,6 +106,12 @@ def target_of(tool: str, tool_input: dict) -> str:
     return ""
 
 
+def skill_command(tool_input) -> str:
+    """The command a ``Skill`` call enters, named as the typed slash command is: ``/rite:fix-all``."""
+    skill = tool_input.get("skill") if isinstance(tool_input, dict) else None
+    return "/" + str(skill).strip().lstrip("/") if skill else ""
+
+
 class Usage:
     """Tokens of a run of assistant turns. ``billed`` is what is paid at the full input rate."""
 
@@ -112,6 +125,13 @@ class Usage:
         self.cache_write += usage.get("cache_creation_input_tokens", 0)
         self.cache_read += usage.get("cache_read_input_tokens", 0)
         self.output += usage.get("output_tokens", 0)
+
+    def remove_usage(self, usage: dict) -> None:
+        self.turns -= 1
+        self.input -= usage.get("input_tokens", 0)
+        self.cache_write -= usage.get("cache_creation_input_tokens", 0)
+        self.cache_read -= usage.get("cache_read_input_tokens", 0)
+        self.output -= usage.get("output_tokens", 0)
 
     def merge(self, other: Usage) -> None:
         for key in ("input", "cache_write", "cache_read", "output", "turns"):
@@ -260,7 +280,7 @@ def read_file(path: Path, sidechains: Sidechains | None = None) -> list[Invocati
     """Every invocation in one transcript, in order. Sidechain entries are set aside, not counted."""
     out: list[Invocation] = []
     current: Invocation | None = None
-    seen_messages: set[str] = set()
+    counted: dict[str, tuple[Invocation, dict]] = {}  # message id -> where its usage went, and it
     tool_calls: dict[str, tuple[str, str]] = {}  # tool_use id -> (tool, target)
     runs: dict[str, AgentRun] = {}               # tool_use id -> agent run
     owner: dict[str, AgentRun] = {}              # entry uuid -> the run its chain hangs from
@@ -303,12 +323,18 @@ def read_file(path: Path, sidechains: Sidechains | None = None) -> list[Invocati
                             if isinstance(meta, dict) and meta.get("agentId"):
                                 run.agent_id = str(meta["agentId"])
         elif kind == "assistant":
-            if current is None:  # a transcript that starts mid-conversation
-                current = start(NO_COMMAND, entry)
             usage = message.get("usage") or {}
             message_id = _message_id(entry)
-            if usage and message_id not in seen_messages:
-                seen_messages.add(message_id)
+            for block in message.get("content") or []:
+                if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == SKILL_TOOL:
+                    name = skill_command(block.get("input"))
+                    if name and (current is None or current.command != name):
+                        previous, current = current, start(name, entry)
+                        _move_turn(message_id, counted, previous, current, out)
+            if current is None:  # a transcript that starts mid-conversation
+                current = start(NO_COMMAND, entry)
+            if usage and message_id not in counted:
+                counted[message_id] = (current, usage)
                 current.add_usage(usage)
             for block in message.get("content") or []:
                 if isinstance(block, dict) and block.get("type") == "tool_use":
@@ -330,6 +356,21 @@ def read_file(path: Path, sidechains: Sidechains | None = None) -> list[Invocati
             if run.result_turn is not None:
                 run.main_turns_after = inv.turns - run.result_turn
     return out
+
+
+def _move_turn(message_id: str, counted: dict[str, tuple[Invocation, dict]], previous: Invocation | None,
+               opened: Invocation, out: list[Invocation]) -> None:
+    """A message arrives split in entries, and the one that carries the usage may come before the one
+    with the ``Skill`` call: the turn is the command's, so it moves. A prompt left with nothing of its
+    own was only the vehicle of the command, and is dropped."""
+    if message_id in counted and counted[message_id][0] is previous:
+        usage = counted[message_id][1]
+        previous.remove_usage(usage)
+        opened.add_usage(usage)
+        counted[message_id] = (opened, usage)
+    if previous is not None and previous.command == NO_COMMAND and not (
+            previous.turns or previous.tools or previous.results or previous.agents):
+        out.remove(previous)
 
 
 def _set_aside(entry: dict, owner: dict[str, AgentRun], open_runs: list[AgentRun],

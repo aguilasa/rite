@@ -17,6 +17,9 @@ rite tokens --project "*rite-node-minimal-*" --check tests/baselines/node-minima
 A transcript is cut into invocations: a slash command — any plugin's or skill's, under its own name —
 or a plain prompt, which is the row `(no command)`. Everything the model does after one belongs to it
 until the next. Text the harness injects (a command's own prose, a task notification) does not cut it.
+Both doors into a command count, under the same name: typed (`<command-name>`) and through the
+`Skill` tool (a pasted instruction, a model-invoked skill) — a typed command followed by its own
+`Skill` call is one invocation; through `Skill`, the turns before the call stay in `(no command)`.
 
 | Flag | What it does |
 | --- | --- |

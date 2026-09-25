@@ -391,6 +391,122 @@ class GeneralReportTest(unittest.TestCase):
         self.assertEqual(self.run_cli("--by", "day", "--check", str(self.dir / "none.json"))[0], 2)
 
 
+def skill(msg_id: str, tid: str, name: str) -> dict:
+    return assistant(msg_id, usage=USAGE, tool=("Skill", {"skill": name, "args": "looks"}, tid))
+
+
+def launched(tid: str, name: str) -> list[dict]:
+    """What follows a Skill call: its result, then the command's prose injected by the harness."""
+    return [result(tid, f"Launching skill: {name}"),
+            {**user(f"# /{name} — the command's own prose"), "isMeta": True}]
+
+
+class SkillInvocationTest(unittest.TestCase):
+    """A command entered through the Skill tool is an invocation too, under the same name."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="rite-skill-")
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def measure(self) -> dict:
+        return tr.summarize(tr.collect(self.dir, None))
+
+    def test_a_skill_call_alone_opens_the_command(self):
+        write_jsonl(self.dir / "s.jsonl", [
+            user("run /rite:fix-all on looks"),
+            assistant("m1", usage=USAGE, tool=("Bash", {"command": "ls"}, "t1")),
+            result("t1", "ok"),
+            skill("m2", "t2", "rite:fix-all"),
+            *launched("t2", "rite:fix-all"),
+            assistant("m3", usage=USAGE),
+            assistant("m4", usage=USAGE),
+        ])
+        data = self.measure()
+        self.assertEqual(sorted(data["groups"]), ["(no command)", "/rite:fix-all"])
+        self.assertEqual(data["groups"]["/rite:fix-all"]["turns"], 3)
+        self.assertEqual(data["groups"]["(no command)"]["turns"], 1)
+
+    def test_a_typed_command_and_its_skill_call_are_one_invocation(self):
+        write_jsonl(self.dir / "s.jsonl", [
+            user("<command-name>/rite:fix-all</command-name>"),
+            skill("m1", "t1", "rite:fix-all"),
+            *launched("t1", "rite:fix-all"),
+            assistant("m2", usage=USAGE),
+        ])
+        data = self.measure()
+        self.assertEqual(data["invocations"], 1)
+        self.assertEqual(list(data["groups"]), ["/rite:fix-all"])
+        self.assertEqual(data["groups"]["/rite:fix-all"]["turns"], 2)
+        self.assertEqual(data["groups"]["/rite:fix-all"]["billed"], 2 * 115)
+
+    def test_a_skill_of_another_name_opens_a_new_invocation(self):
+        write_jsonl(self.dir / "s.jsonl", [
+            user("<command-name>/rite:execute</command-name>"),
+            assistant("m1", usage=USAGE),
+            skill("m2", "t2", "caveman:caveman"),
+            *launched("t2", "caveman:caveman"),
+            assistant("m3", usage=USAGE),
+        ])
+        data = self.measure()
+        self.assertEqual(data["invocations"], 2)
+        self.assertEqual(data["groups"]["/rite:execute"]["turns"], 1)
+        self.assertEqual(data["groups"]["/caveman:caveman"]["turns"], 2)
+
+    def test_turns_before_the_skill_call_stay_without_command(self):
+        # the Skill call's message arrives split: its text entry carries the usage first
+        write_jsonl(self.dir / "s.jsonl", [
+            user("read this plan and run it"),
+            assistant("m1", usage=USAGE, tool=("Read", {"file_path": "plan.md"}, "t1")),
+            result("t1", "x" * 10),
+            assistant("m2", usage=USAGE),
+            assistant("m3", usage=USAGE),
+            skill("m3", "t3", "rite:fix-all"),
+            *launched("t3", "rite:fix-all"),
+            assistant("m4", usage=USAGE),
+        ])
+        groups = self.measure()["groups"]
+        self.assertEqual((groups["(no command)"]["turns"], groups["(no command)"]["billed"]), (2, 2 * 115))
+        self.assertEqual((groups["/rite:fix-all"]["turns"], groups["/rite:fix-all"]["billed"]), (2, 2 * 115))
+        self.assertEqual(groups["(no command)"]["tools"], {"read:project": 1})
+
+    def test_a_prompt_that_only_carried_the_skill_call_is_no_invocation(self):
+        write_jsonl(self.dir / "s.jsonl", [
+            user("run /rite:fix-all on looks"),
+            assistant("m1", usage=USAGE),
+            skill("m1", "t1", "rite:fix-all"),
+            *launched("t1", "rite:fix-all"),
+            assistant("m2", usage=USAGE),
+        ])
+        data = self.measure()
+        self.assertEqual((data["invocations"], list(data["groups"])), (1, ["/rite:fix-all"]))
+        self.assertEqual(data["groups"]["/rite:fix-all"]["turns"], 2)
+
+    def test_a_subagent_belongs_to_the_skill_invocation(self):
+        write_jsonl(self.dir / "s.jsonl", [
+            user("fix them"),
+            assistant("m1", usage=USAGE),
+            skill("m2", "t2", "rite:fix-all"),
+            *launched("t2", "rite:fix-all"),
+            agent_call("m3", "call-w", "rite:rite-worker"),
+            agent_result("call-w", "www"),
+            assistant("m4", usage=USAGE),
+        ])
+        subagents = self.dir / "s" / "subagents"
+        write_jsonl(subagents / "agent-www.jsonl", [
+            sidechain(assistant("w1", usage=AGENT_USAGE), agentId="www"),
+            sidechain(assistant("w2", usage=AGENT_USAGE), agentId="www"),
+        ])
+        (subagents / "agent-www.meta.json").write_text(json.dumps(
+            {"agentType": "rite:rite-worker", "toolUseId": "call-w"}), encoding="utf-8")
+        groups = self.measure()["groups"]
+        fix_all = groups["/rite:fix-all"]
+        self.assertEqual((fix_all["agents"], fix_all["agent"]["billed"]), (1, 2 * 221))
+        self.assertEqual(groups["(no command)"]["agents"], 0)
+
+
 class BaselineFilesTest(unittest.TestCase):
     def test_baselines_are_present_and_shaped(self):
         for name in ("node-minimal", "python-minimal"):
