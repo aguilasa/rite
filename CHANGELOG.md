@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`--plan` takes no item.** `/rite:fix-all --plan` and `/rite:execute-batch --plan` called `rite
+  begin` before they knew they would only plan, and `begin` marked the first item `in-progress` — a
+  read-only run then decided what the next run resumed first (`in-progress fix resumes first`).
+  `rite begin --no-claim` resolves cycle, item, paths and config without marking; both bodies pass it
+  under `--plan`.
+
 ## [0.8.0] — 2026-09-24
 
 The triage cannot close a fix by mistake. `mark-stale` is its one destructive outcome, and until now

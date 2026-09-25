@@ -73,7 +73,8 @@ def cmd_commit_refs(project: Project, args) -> int:
 
 
 def cmd_begin(project: Project, args) -> int:
-    data = compose.begin(project, kind=args.kind, cycle_name=args.cycle, item_id=args.id)
+    data = compose.begin(project, kind=args.kind, cycle_name=args.cycle, item_id=args.id,
+                         claim=not args.no_claim)
     item = data.get("item")
     if not item:
         _emit(args, data, f"no {args.kind} selectable in {data['cycle']}: {data['reason']}")
@@ -505,6 +506,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="resolve cycle and item, take it, and return everything the work needs")
     s.add_argument("kind", choices=["task", "fix", "review"])
     s.add_argument("--id", help="work on this item instead of the selected one")
+    s.add_argument("--no-claim", action="store_true",
+                   help="resolve without taking the item: for a run that only plans")
     s.set_defaults(fn=cmd_begin)
 
     s = sub.add_parser("context", parents=[common],

@@ -456,6 +456,26 @@ class ComposeTest(FixtureCase):
         self.assertFalse(again["taken"])
         self.assertEqual(self.fx.git("status", "--porcelain").count("01-harness"), 1)
 
+    def test_begin_no_claim_leaves_the_item_pending(self):
+        # a run that only plans must not decide what the next run picks: in-progress resumes first
+        fix_id = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T",
+                         "--severity", "low")["id"]
+        self.ok("commit-new", fix_id)
+        path = self.root / "docs/rite/cycles/alpha" / f"{fix_id}.md"
+        before = path.read_bytes()
+        data = self.js("begin", "fix", "--cycle", "alpha", "--no-claim")
+        self.assertEqual(data["item"]["id"], fix_id)
+        self.assertEqual(data["item"]["status"], "pending")
+        self.assertFalse(data["taken"])
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.fx.git("status", "--porcelain"), "")
+
+        taken = self.js("begin", "fix", "--cycle", "alpha")
+        self.assertEqual(taken["item"]["id"], fix_id)
+        self.assertTrue(taken["taken"])
+        self.assertEqual({k: v for k, v in data.items() if k not in ("item", "taken")},
+                         {k: v for k, v in taken.items() if k not in ("item", "taken")})
+
     def test_begin_named_item_and_refusals(self):
         data = self.js("begin", "task", "--cycle", "alpha", "--id", "ALP-TASK-01")
         self.assertEqual(data["reason"], "named explicitly")

@@ -11,10 +11,10 @@ Arguments: `$ARGUMENTS`
 
 ## Steps
 
-1. `rite begin fix --cycle <cycle> --json`. The batch is the fix IDs given,
-   or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle> --json`); fixes opened
-   during the run are not added: a batch whose end moves is never done.
-2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for the batch.
+1. `rite begin fix --cycle <cycle> --json` (`--no-claim` with `--plan`: it takes no item). The batch:
+   the fix IDs given, or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle>
+   --json`); fixes opened mid-run wait: a batch that grows never ends.
+2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for all.
    Compare each output with its `recorded` Evidence; write the verdict:
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
    - `REPRODUCED` → stays in the batch; paste the output into its Execution Log.
@@ -32,7 +32,7 @@ Arguments: `$ARGUMENTS`
 ## Report
 
 Triage, one line per fix: verdict, inline or agent · fixes without a command (ID, `why`, origin): a
-defect of the review that opened it · waves and conflict pairs · per item: result, work SHA,
+defect of their review · waves and conflict pairs · per item: result, work SHA,
 bookkeeping SHA · gates · new fixes opened · what to run next.
 
 ## The CLI

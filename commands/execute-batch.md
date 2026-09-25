@@ -11,8 +11,9 @@ Arguments: `$ARGUMENTS`
 
 ## Steps
 
-1. `rite begin task --cycle <cycle> --json` resolves the cycle and its config; its item is the first of
-   the batch. Parse the rest of the arguments:
+1. `rite begin task --cycle <cycle> [--no-claim] --json` resolves the cycle and its config; its item is
+   the first of the batch. With `--plan`, pass `--no-claim`: **`--plan` takes no item** — nothing
+   becomes `in-progress`. Parse the rest of the arguments:
    - a number `N` → the next `N` selectable tasks; nothing given → `N = 2`;
    - task IDs → exactly those;
    - "all", "everything" or a number above 8 → refuse and ask for a number: review must keep pace;
