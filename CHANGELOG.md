@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.13.0] — 2026-09-30
 
 Every finished item stayed local until someone remembered to push, so a long batch could sit on one
 machine for hours.
