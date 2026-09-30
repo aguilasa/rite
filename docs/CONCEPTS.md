@@ -57,7 +57,8 @@ keep their history (`git mv`).
 The work commit (`feat: …`, `fix: …`) carries code, docs and the item's prose. Then `rite close <ID>`
 reads that commit and writes `done_on` (the commit's date), `done_commit`, and the file list from git,
 and commits that as `chore(rite): close <ID>`. A commit cannot contain its own SHA, so the record is
-a second commit — and it is always consistent with the first.
+a second commit — and it is always consistent with the first. With
+`[commit].push = "after-each-item"`, `rite finish` pushes both right after.
 
 Work commits name what they belong to with trailers from `rite commit-refs <ID>`: `Refs: <ID>`, and
 the cycle's `ticket` if it has one (see `[commit].ticket_format`).

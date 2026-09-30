@@ -161,6 +161,8 @@ def cmd_finish(project: Project, args) -> int:
     lines += [f"    {e}" for e in data["check"]["errors"]]
     nxt = data["next"]
     lines.append(f"  next {nxt['kind']}: {nxt['id'] or '— ' + nxt['reason']}")
+    lines += [f"  pushed: {p['repo']}" if p["ok"] else f"  push failed: {p['repo']}: {p['error']}"
+              for p in data["pushed"]]
     _emit(args, data, "\n".join(lines))
     return EXIT_FAIL if data["check"]["errors"] else EXIT_OK
 

@@ -566,6 +566,37 @@ global = ["test \"$(echo 'a  b')\" = \"a  b\""]
         self.assertEqual(data["check"]["errors"], [])
         self.assertEqual((data["next"]["kind"], data["next"]["id"]), ("review", "ALP-TASK-01"))
         self.assertEqual(self.log(1), ["chore(rite): close ALP-TASK-01"])
+        self.assertEqual(data["pushed"], [])
+
+    def push_after_each_item(self) -> None:
+        cfg = self.root / "rite.toml"
+        cfg.write_text(cfg.read_text(encoding="utf-8") + '\n[commit]\npush = "after-each-item"\n',
+                       encoding="utf-8")
+
+    def test_finish_pushes_when_configured(self):
+        with tempfile.TemporaryDirectory() as bare:
+            subprocess.run(["git", "init", "-q", "--bare", bare], check=True)
+            self.fx.git("remote", "add", "origin", bare)
+            self.fx.git("push", "-q", "-u", "origin", "HEAD")
+            self.push_after_each_item()
+            self.js("begin", "task", "--cycle", "alpha")
+            self.fx.work_commit("src/a.py", "a\n", "feat: harness")
+            data = self.js("finish", "ALP-TASK-01", "--cycle", "alpha")
+            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None}])
+            remote = subprocess.run(["git", "-C", bare, "log", "-2", "--format=%s"], check=True,
+                                    capture_output=True, text=True).stdout.splitlines()
+            self.assertEqual(remote, ["chore(rite): close ALP-TASK-01", "feat: harness"])
+
+    def test_failed_push_is_reported_not_fatal(self):
+        self.push_after_each_item()  # no remote at all
+        self.js("begin", "task", "--cycle", "alpha")
+        self.fx.work_commit("src/a.py", "a\n", "feat: harness")
+        data = self.js("finish", "ALP-TASK-01", "--cycle", "alpha")
+        self.assertEqual(data["closed"]["id"], "ALP-TASK-01")
+        [push] = data["pushed"]
+        self.assertFalse(push["ok"])
+        self.assertIn("git push", push["error"])
+        self.assertEqual(self.log(1), ["chore(rite): close ALP-TASK-01"])
 
 
 class NoConfigTest(unittest.TestCase):

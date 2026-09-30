@@ -80,7 +80,7 @@ ENUMS = {
     ("paths", "link_style"): {"root-absolute", "relative"},
     ("commit", "style"): {"conventional", "free"},
     ("commit", "bookkeeping"): {"separate-commit"},
-    ("commit", "push"): {"never", "on-request"},
+    ("commit", "push"): {"never", "on-request", "after-each-item"},
 }
 
 TASK_STATUSES = ("pending", "in-progress", "done", "blocked", "skipped")

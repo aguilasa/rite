@@ -43,6 +43,7 @@ def _cycle_digest(project: Project, cycle: Cycle) -> dict:
                       for g in cfg["guards"]["generated"]],
         "gates": list(cfg["gates"]["global"]),
         "never_stage": list(cfg["commit"]["never_stage"]),
+        "push": cfg["commit"]["push"],
         "serialized_resources": [r.get("name") for r in cfg["resources"]["serialized"]],
         "limits": dict(cfg["limits"]),
         "context_kb": cfg["output"]["context_kb"],
@@ -613,6 +614,7 @@ def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str |
     """Close the item, verify the cycle and say what comes next — the three calls that ended every run."""
     cycle, item = project.find_item(item_id, project.resolve_cycle(cycle_name) if cycle_name else None)
     closed = ops.close(project, cycle, item, sha=sha, commit=commit, no_repo=no_repo, reason=reason)
+    pushed = _push_after_close(project, item, no_repo) if closed.get("commit") else []
     cycle = project.load_cycle(cycle.path, archived=cycle.archived)
     findings = checkmod.run(project, [cycle], quick=True)
     errors = [str(f) for f in findings if f.level == "error"]
@@ -624,4 +626,26 @@ def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str |
     return {"closed": closed, "check": {"errors": errors, "warnings":
                                         [str(f) for f in findings if f.level == "warn"]},
             "next": {"kind": kind, **pick.as_dict(project.root)},
-            "synced": [display(project.root, p) for p in views.sync(project, cycle)]}
+            "synced": [display(project.root, p) for p in views.sync(project, cycle)],
+            "pushed": pushed}
+
+
+def _push_after_close(project: Project, item: Item, no_repo: bool) -> list[dict]:
+    """`[commit].push = "after-each-item"`: push the work repository and the bookkeeping one.
+
+    A failed push is reported, never fatal: the item is already closed in the local history.
+    """
+    if project.cfg["commit"]["push"] != "after-each-item":
+        return []
+    roots = [project.root] if no_repo else [project.git_root(item), project.root]
+    result = []
+    for root in dict.fromkeys(r.resolve() for r in roots):
+        if not gitutil.is_repo(root):
+            continue
+        entry = {"repo": display(project.root, root) or ".", "ok": True, "error": None}
+        try:
+            gitutil.push(root)
+        except gitutil.GitError as e:
+            entry.update(ok=False, error=str(e))
+        result.append(entry)
+    return result

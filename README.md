@@ -95,7 +95,8 @@ Faster: `/rite:execute-batch my-cycle 2` (tasks in different repositories never 
 
 ### 4. Push
 
-13. Push each repository yourself (`git -C api push`); Rite never pushes.
+13. Push each repository yourself (`git -C api push`); Rite never pushes unless
+    `[commit].push = "after-each-item"`, where `rite finish` pushes after every task or fix.
 14. Squashed or rebased before merging? `rite check` warns that `done_commit` left HEAD's history;
     repoint it with `rite rebind MY-TASK-03 --sha <new sha>`.
 

@@ -26,6 +26,11 @@ def is_repo(root: Path) -> bool:
         return False
 
 
+def push(root: Path) -> None:
+    """Plain `git push`: the branch's configured upstream, never forced."""
+    run(root, "push", "--quiet")
+
+
 def resolve(root: Path, rev: str) -> str | None:
     out = run(root, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}", check=False).strip()
     return out or None

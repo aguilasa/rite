@@ -126,7 +126,7 @@ no evidence or verification title, and about a live profile with no gates title.
 | `style` | `"conventional"` | `conventional` (`feat: …`, bookkeeping `chore(rite): …`) or `free` (bookkeeping `rite: …`). |
 | `co_author_footer` | `true` | Commands add the agent's co-author footer to work commits. |
 | `bookkeeping` | `"separate-commit"` | Only mode in v1: the work commit first, then `rite.py close` records it in its own commit. |
-| `push` | `"on-request"` | `never` or `on-request`. Commands never push on their own. |
+| `push` | `"on-request"` | `never`: commands never push. `on-request`: only when you ask in the conversation. `after-each-item`: `rite finish` runs a plain `git push` (the branch's upstream, never forced) in the work repository and the bookkeeping one after every task or fix; a failure is reported in its `pushed` field and does not fail the command — the item stays closed locally. Once pushed, squashing or rebasing (then `rite rebind`) needs a force push, which is yours to do. |
 | `never_stage` | `[]` | Globs never added to a commit. |
 | `ticket_format` | `"Refs: {ticket}"` | Where a cycle's `ticket` goes in its commits. With `{subject}` it is the subject (`"{ticket} {subject}"` gives `PROJ-1 feat: …`, as many JIRA commit-msg hooks want); without, it is a trailer line. Must contain `{ticket}`. Applies to work commits (through `rite commit-refs`) and bookkeeping commits alike. |
 

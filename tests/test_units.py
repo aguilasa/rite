@@ -143,6 +143,15 @@ class SectionsConfigTest(unittest.TestCase):
                 config.parse(Path("."), "[sections]\n" + bad + "\n")
 
 
+class CommitConfigTest(unittest.TestCase):
+    def test_push_values(self):
+        self.assertEqual(config.parse(Path("."), "")["commit"]["push"], "on-request")
+        cfg = config.parse(Path("."), '[commit]\npush = "after-each-item"\n')
+        self.assertEqual(cfg["commit"]["push"], "after-each-item")
+        with self.assertRaisesRegex(config.ConfigError, r"push"):
+            config.parse(Path("."), '[commit]\npush = "always"\n')
+
+
 class SectionParsersTest(unittest.TestCase):
     def test_bare_paths_count_only_when_they_exist(self):
         from rite_lib.batch import _section_paths

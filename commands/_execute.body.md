@@ -38,6 +38,6 @@ truth): commit useful partial work, `rite mark <ID> blocked --reason "<cause, co
 ## Report
 
 Task · each done criterion `[x]`/`[ ]` with its command and decisive output · gates · sweep · work
-and bookkeeping SHAs · the `next` from `finish`; the task awaits `/rite:review`.
+and bookkeeping SHAs · `pushed`, if any · the `next` from `finish`; the task awaits `/rite:review`.
 
 <!-- rite:parts -->

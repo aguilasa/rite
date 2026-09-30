@@ -89,8 +89,9 @@ Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edi
   which carry `Refs: <ID>` and the cycle's ticket so `git log --grep` finds an item's commits.
 - **Staging**: explicit paths (`git add -- <paths>`), never `git add -A`, never a `never_stage` path.
   In a local cycle, never stage the cycle folder, its profile or its pitfalls file.
-- **Never** amend, rebase, force, skip hooks or push; push only when `[commit].push = "on-request"`
-  and the user asked in this conversation. A hook that refuses is reported, never bypassed.
+- **Never** amend, rebase, force, skip hooks or push by hand; push only when `[commit].push = "on-request"`
+  and the user asked in this conversation. With `after-each-item`, `rite finish` pushes: report a
+  failed entry of its `pushed`, never retry it with force. A hook that refuses is reported, never bypassed.
 - Every run ends with a commit, except in a local cycle, where a run touching only item files does not.
 
 ## Batches — waves, workers, serial commits

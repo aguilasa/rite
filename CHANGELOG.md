@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Every finished item stayed local until someone remembered to push, so a long batch could sit on one
+machine for hours.
+
+### Added
+
+- **`[commit].push = "after-each-item"`**: `rite finish` runs a plain `git push` (the branch's
+  upstream, never forced) in the work repository and the bookkeeping one after closing a task or a
+  fix. `--json` reports `pushed: [{repo, ok, error}]`; a failed push is reported and does not fail
+  the command. `rite begin` now lists `push` in its config digest. The default stays `on-request`.
+
 ## [0.12.0] — 2026-09-25
 
 Starting a cycle from a plan written elsewhere took a manual step: `mkdir docs/plans` and copy the
