@@ -35,11 +35,12 @@ Arguments: `$ARGUMENTS`
    graph and the checks. `--dry-run` → stop here. Otherwise confirm and apply the corrections first.
 5. **Write**, in dependency order: each task with `rite new-task --cycle <cycle> --title … --type …
    --phase … --depends-on … --source-of-truth … [--repo <repo>] --json`, then its body (Goal, Scope,
-   Done criteria, Notes) and its `files:` planning field — never the state fields; the graph into the
-   progress file's "Dependency graph" section; the checks into the profile's phase-checks section, one
-   sub-heading per phase.
+   Done criteria, Notes) and its predicted paths with `rite set <ID> --files …` — never another field;
+   a task that must run before lower IDs goes in `rite set-cycle --cycle <cycle> --order …`; the graph
+   into the progress file's "Dependency graph" section; the checks into the profile's phase-checks
+   section, one sub-heading per phase.
 6. **Validate**: `rite sync --cycle <cycle>`, then `rite check --cycle <cycle>` must be clean.
-7. **Commit** the task files, the views and the profile, staged explicitly:
+7. **Commit** the task files, `progress.json`, the views and the profile, staged explicitly:
    `docs(rite): plan <cycle> from <plan file name>`.
 
 ## Report
@@ -64,7 +65,8 @@ asked) · `3` no `rite.toml` — stop and tell the user to run `/rite:init`.
 
 ## State
 
-Item frontmatter is the only state; the tables are views the CLI regenerates.
+The cycle's `progress.json` (meta + tasks) and `fixes.json` are the only state; item files hold prose
+and their `id`; the tables in the progress and fixes files are views the CLI renders from the JSON.
 
 - `rite begin <kind> [--cycle C] [--id ID] --json` resolves the cycle, takes the item and returns its
   paths, the config digest and the commit template. Idempotent.
@@ -79,8 +81,11 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
 - A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
   commit its documents yourself.
 
-Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edit between
-`<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
+- Planning fields: `rite set <ID> --files a,b --resources r`; the cycle's `order`, `ticket`, `plan`:
+  `rite set-cycle --cycle C --order <IDs>`. The only fields you write, and only through these.
+
+Never edit `progress.json` / `fixes.json` (the guard refuses it), never put fields back into an item's
+frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
 
 ## Asking the user
 

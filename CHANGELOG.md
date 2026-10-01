@@ -2,6 +2,39 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+State lived in every item's frontmatter and in the progress file's: one field to read meant opening
+every file of a cycle, a hand edit anywhere could change an item's fate, and nothing guarded it.
+
+### Changed
+
+- **The state moves to JSON**: each cycle holds `progress.json` (its meta and one entry per task) and
+  `fixes.json` (one entry per fix). Item files keep their prose and their `id`; the progress and fixes
+  files keep their prose and a view rendered from the JSON. Every reader (`next`, `status`, `check`,
+  `batch-plan`, `context`, …) reads the JSON; every transition writes it under a lock, atomically.
+  New `[naming].progress_state` / `fixes_state` name the files. **Breaking**: a cycle from before
+  stops every command until `rite migrate --from frontmatter`.
+- `check` reports an item file no entry lists, an entry whose file is gone, a field written back into
+  an item's frontmatter, and a JSON array out of execution order.
+
+### Added
+
+- **`rite migrate --from frontmatter [--write] [--commit]`**: moves every cycle (archived and nested
+  ones included) to the JSON state, keeping keys of your own (`category`, …) and every body byte for
+  byte. Before writing it reads each cycle back from the JSON and compares it, field by field, with
+  the cycle read from frontmatter; one difference and nothing is written. `--from we2002` ends there.
+- **`rite set <ID> --files … --resources …`** and **`rite set-cycle --order … --ticket … --plan …`**:
+  the fields a model or a person still writes, now through the CLI.
+- **`rite_lib/render_md.py`** (and `bin/rite-render`): renders the views from the JSON, standalone,
+  stdlib only; `--check` reports a stale view. `rite sync` uses it.
+- The guard hook refuses an Edit/Write of `progress.json` / `fixes.json`.
+
+### Fixed
+
+- A frontmatter list followed by a comment (`files: []  # …`, as the task template writes it) was read
+  as `null`.
+
 ## [0.13.0] — 2026-09-30
 
 Every finished item stayed local until someone remembered to push, so a long batch could sit on one

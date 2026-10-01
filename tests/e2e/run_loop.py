@@ -3,7 +3,7 @@
     python tests/e2e/run_loop.py [--example python-minimal] [--model sonnet] [--keep]
 
 Copies an example (with its cycle already planned) to a temp git repo and asserts, on git log,
-frontmatter and the CLI:
+the JSON state and the CLI:
   1. /rite:execute closes one task with a work commit + a bookkeeping commit;
   2. after the manifest's defect is planted, /rite:review opens a fix and records the review in one commit;
   3. /rite:fix closes that fix and the symptom command prints the good output again;
@@ -23,11 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from _example import (Expect, claude, finish, make_repo, plant_defect, rite_json, sh,  # noqa: E402
                       subjects, symptom, token_check)
-from rite_lib import frontmatter  # noqa: E402
-
-
-def fields(path: Path) -> dict:
-    return frontmatter.parse(path.read_text(encoding="utf-8"))[0]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fixtures import fields  # noqa: E402,F401  (an item's fields, from its cycle's JSON state)
 
 
 def main() -> int:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import subprocess
 import sys
@@ -32,6 +33,77 @@ def rite(root: Path, *args: str) -> tuple[int, str, str]:
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         code = cli.main([*args, "--root", str(root)])
     return code, out.getvalue(), err.getvalue()
+
+
+# --- the JSON state, read and written the way a hand edit would ---------------------
+def _locate(path: Path) -> tuple[Path, dict, dict | None]:
+    """(JSON file, its document, the entry) holding the fields of ``path``: an item's markdown file
+    (its entry), or a progress file (entry None: the cycle's meta)."""
+    path = path.resolve()
+    for base in path.parents:
+        for name in ("progress.json", "fixes.json"):
+            state_file = base / name
+            if not state_file.is_file():
+                continue
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            for key in ("tasks", "fixes"):
+                for entry in data.get(key) or []:
+                    if (base / entry["file"]).resolve() == path:
+                        return state_file, data, entry
+        if (base / "progress.json").is_file() and base == path.parent:
+            state_file = base / "progress.json"
+            return state_file, json.loads(state_file.read_text(encoding="utf-8")), None
+    raise AssertionError(f"no JSON state holds {path}")
+
+
+def fields(path: Path) -> dict:
+    """The fields of an item (by its markdown file) or of a cycle (by its progress file)."""
+    _, data, entry = _locate(path)
+    if entry is None:
+        return {k: v for k, v in data.items() if k not in ("schema", "tasks")}
+    return {k: v for k, v in entry.items() if k != "file"}
+
+
+def set_fields(path: Path, updates: dict) -> None:
+    """Edit the JSON by hand — what the guard refuses a model, used to put a repository in a state."""
+    from rite_lib import state
+    state_file, data, entry = _locate(path)
+    if entry is None:
+        tasks = data.pop("tasks", [])
+        data.update(updates)
+        data["tasks"] = tasks
+    else:
+        entry.update(updates)
+    state_file.write_text(state.dumps(data), encoding="utf-8", newline="\n")
+
+
+def add_item(path: Path, text: str) -> Path:
+    """Write an item the pre-JSON way (``text`` with its frontmatter) into a JSON cycle: the frontmatter
+    becomes the item's entry and the file keeps its id — as if `new-task`/`new-fix` had made it."""
+    from rite_lib import frontmatter, state
+    text = textwrap.dedent(text).lstrip("\n")
+    meta, body = frontmatter.parse(text)
+    base = next(b for b in path.resolve().parents if (b / "progress.json").is_file())
+    kind = "fixes" if "origin" in meta else "tasks"
+    state_file = base / ("fixes.json" if kind == "fixes" else "progress.json")
+    data = json.loads(state_file.read_text(encoding="utf-8")) if state_file.is_file() \
+        else {"schema": 1, "fixes": []}
+    entry = {"id": meta["id"], "file": path.resolve().relative_to(base).as_posix(),
+             **{k: v for k, v in meta.items() if k != "id"}}
+    data.setdefault(kind, []).append(entry)
+    state_file.write_text(state.dumps(data), encoding="utf-8", newline="\n")
+    return write(path, f"---\nid: {meta['id']}\n---\n{body}")
+
+
+def remove_item(path: Path) -> None:
+    """Delete an item: its markdown file and its JSON entry."""
+    from rite_lib import state
+    state_file, data, entry = _locate(path)
+    for key in ("tasks", "fixes"):
+        if key in data:
+            data[key] = [e for e in data[key] if e is not entry]
+    state_file.write_text(state.dumps(data), encoding="utf-8", newline="\n")
+    path.unlink()
 
 
 def task(item_id: str, title: str, *, phase=1, depends_on="[]", sot: str, type_="feature",
@@ -336,5 +408,9 @@ Consertar `{target}`.
         self._sync()
 
     def _sync(self) -> None:
+        # layouts are written the way Rite <= 0.13 kept them (state in frontmatter); the migration
+        # brings them to the JSON state, so every fixture also exercises it
+        code, out, err = rite(self.root, "migrate", "--from", "frontmatter", "--write")
+        assert code == 0, err
         code, out, err = rite(self.root, "sync", "--all")
         assert code == 0, err

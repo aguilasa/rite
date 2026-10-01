@@ -173,12 +173,12 @@ def seed_done(repo: Path, manifest: dict, example: str) -> list[str]:
     return closed
 
 
-def fill_fix(path: Path, defect: dict, seen: str) -> None:
+def fill_fix(repo: Path, item_id: str, path: Path, defect: dict, seen: str) -> None:
     """Write what a reviewer would: the observable, its evidence as run, the files, the check."""
-    if str(ROOT) not in sys.path:
-        sys.path.insert(0, str(ROOT))
-    from rite_lib import frontmatter
-    text = frontmatter.set_fields(path.read_text(encoding="utf-8"), {"files": defect["files"]})
+    code, out = rite(repo, "set", item_id, "--files", ",".join(defect["files"]))
+    if code:
+        raise AssertionError(f"rite set {item_id}: {out}")
+    text = path.read_text(encoding="utf-8")
     command, good = defect["symptom_command"], defect["good_output"]
     swaps = [
         ("<!-- What is wrong, stated as an observable fact. -->",
@@ -206,7 +206,7 @@ def seed_fixes(repo: Path, manifest: dict, defects: list[dict]) -> list[str]:
                         "--severity", defect["severity"])
         if new.get("_code"):
             raise AssertionError(f"rite new-fix: {new}")
-        fill_fix(repo / new["path"].lstrip("/"), defect, seen)
+        fill_fix(repo, new["id"], repo / new["path"].lstrip("/"), defect, seen)
         opened[defect["origin"]].append(new["id"])
     for item_id, fixes in opened.items():
         args = ["mark-reviewed", item_id] + (["--fixes", ",".join(fixes)] if fixes else [])
@@ -226,7 +226,7 @@ def seed_fix(repo: Path, defect: dict, origin: str, planted: Path) -> str:
     if new.get("_code"):
         raise AssertionError(f"rite new-fix: {new}")
     files = [str(planted.relative_to(repo)).replace("\\", "/")]
-    fill_fix(repo / new["path"].lstrip("/"), {**defect, "files": files}, seen)
+    fill_fix(repo, new["id"], repo / new["path"].lstrip("/"), {**defect, "files": files}, seen)
     code, out = rite(repo, "commit-new", new["id"])
     if code:
         raise AssertionError(f"rite commit-new {new['id']}: {out}")

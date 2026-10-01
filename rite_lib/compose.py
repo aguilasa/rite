@@ -113,6 +113,8 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
             "cycle": display(project.root, cycle.path),
             "progress": display(project.root, cycle.progress_path),
             "fixes": display(project.root, cycle.fixes_path),
+            "progress_state": display(project.root, cycle.progress_state_path),
+            "fixes_state": display(project.root, cycle.fixes_state_path),
             "profile": display(project.root, cycle.profile_path),
             "profile_exists": cycle.profile_path.is_file(),
             "pitfalls": display(project.root, cycle.pitfalls_path),
@@ -563,6 +565,7 @@ def sweep_targets(project: Project, cycle: Cycle) -> list[Path]:
     for base in (cycle.path, project.cfg.path("plans_dir")):
         if base.is_dir():
             targets += [p for p in sorted(base.rglob("*.md"))]
+    targets += [p for p in (cycle.progress_state_path, cycle.fixes_state_path) if p.is_file()]
     for single in (cycle.profile_path, cycle.pitfalls_path, project.root / "rite.toml"):
         if single.is_file():
             targets.append(single)

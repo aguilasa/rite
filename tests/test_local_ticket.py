@@ -3,17 +3,17 @@
 import json
 import unittest
 
-from fixtures import write
+from fixtures import set_fields, write
 
 from test_cli import FixtureCase, fields
 
 
 def set_progress_field(case: FixtureCase, cycle: str, line: str) -> None:
-    """Add a frontmatter line to a fixture cycle's progress file and commit it."""
+    """Set a field (``key: value``) of a fixture cycle in its progress.json and commit it."""
+    key, _, value = line.partition(":")
     path = case.root / f"docs/rite/cycles/{cycle}/progress.md"
-    text = path.read_text(encoding="utf-8")
-    path.write_text(text.replace("---\n", f"---\n{line}\n", 1), encoding="utf-8", newline="\n")
-    case.fx.git("add", str(path.relative_to(case.root)))
+    set_fields(path, {key.strip(): value.strip()})
+    case.fx.git("add", str(path.with_name("progress.json").relative_to(case.root)))
     case.fx.git("commit", "-q", "-m", f"docs: {line}")
 
 

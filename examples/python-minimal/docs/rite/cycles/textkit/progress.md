@@ -1,9 +1,3 @@
----
-cycle: textkit
-prefix: TXT
-plan: /docs/plans/PLAN-textkit.md
----
-
 # Progress — textkit
 
 ## Scope

@@ -8,7 +8,7 @@ code_language   = "en-US"   # identifiers and code comments
 commit_language = "en-US"   # commit messages
 
 [paths]
-cycles_root   = "docs/rite/cycles"          # a cycle is any folder here holding progress_file
+cycles_root   = "docs/rite/cycles"          # a cycle is any folder here holding progress_state
 archive_dir   = "docs/rite/cycles/archive"  # closed cycles
 profiles_dir  = "docs/rite/profiles"
 plans_dir     = "docs/plans"
@@ -22,7 +22,9 @@ fix_id        = "FIX-{prefix}-{n:03}"
 task_file     = "{n:02}-{slug}.md"          # relative to the cycle folder
 fix_file      = "{id}.md"
 progress_file = "progress.md"
-fixes_file    = "fixes.md"
+fixes_file    = "fixes.md"                  # progress_file and fixes_file are views of:
+progress_state = "progress.json"            # the cycle's meta and its tasks
+fixes_state   = "fixes.json"                # the cycle's fixes
 profile_file  = "{cycle}.md"                # inside profiles_dir
 pitfalls_file = "{cycle}.pitfalls.md"
 

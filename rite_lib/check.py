@@ -134,26 +134,30 @@ class Checker:
         return self.findings
 
     def check_cycle(self, cycle: Cycle, owner: dict[str, Cycle]) -> None:
+        meta = cycle.progress_state_path
         if not cycle.prefix:
-            self.err(cycle.progress_path, "frontmatter lacks 'prefix'")
+            self.err(meta, "lacks 'prefix'")
         if "order" in cycle.meta and not isinstance(cycle.meta["order"], list):
-            self.err(cycle.progress_path, "'order' must be a list of task IDs")
+            self.err(meta, "'order' must be a list of task IDs")
         if cycle.meta.get("local") not in (None, True, False):
-            self.err(cycle.progress_path, f"'local' must be true or false, not {cycle.meta['local']!r}")
+            self.err(meta, f"'local' must be true or false, not {cycle.meta['local']!r}")
         if cycle.meta.get("ticket") is not None and not isinstance(cycle.meta["ticket"], str):
-            self.err(cycle.progress_path, f"'ticket' must be a string, not {cycle.meta['ticket']!r}")
+            self.err(meta, f"'ticket' must be a string, not {cycle.meta['ticket']!r}")
+        if not cycle.fixes_state_path.is_file():
+            self.err(cycle.fixes_state_path, "missing (an empty one: {\"schema\": 1, \"fixes\": []})")
+        self.check_item_files(cycle)
         if self.git:
             self.check_tracking(cycle)
         task_ids = {t.id for t in cycle.tasks}
         seen_order: set[str] = set()
         for item_id in cycle.order:
             if item_id in seen_order:
-                self.err(cycle.progress_path, f"'order' lists {item_id} twice")
+                self.err(meta, f"'order' lists {item_id} twice")
             elif item_id not in task_ids:
-                self.err(cycle.progress_path, f"'order' lists {item_id}, which is not a task of this cycle")
+                self.err(meta, f"'order' lists {item_id}, which is not a task of this cycle")
             seen_order.add(item_id)
         for path in views.out_of_sync(self.p, cycle):
-            self.err(path, "generated table out of sync with item frontmatter (run: rite.py sync)")
+            self.err(path, "generated view out of sync with the JSON state (run: rite.py sync)")
         index = cycle.by_id()
         for item in cycle.items:
             self.check_item(cycle, item, index, owner)
@@ -165,13 +169,36 @@ class Checker:
                 if f.is_file():
                     self.check_links(f)
 
+    def check_item_files(self, cycle: Cycle) -> None:
+        """Every item file is in the JSON, and every JSON entry has its file."""
+        listed = {i.path.resolve() for i in cycle.items}
+        for kind, path, _ in self.p.item_files(cycle.path):
+            if path.resolve() not in listed:
+                state_path = cycle.progress_state_path if kind == "task" else cycle.fixes_state_path
+                self.err(path, f"{kind} file not listed in {state_path.name}: create items with "
+                         f"rite new-{kind}, never by hand")
+
+    def check_markdown(self, item: Item) -> None:
+        """The item's markdown holds its prose and its `id` — nothing the JSON holds."""
+        fields, _, error = item.read_md()
+        if error:
+            self.err(item.path, f"{error}" if error == "file not found" else f"frontmatter: {error}")
+            return
+        if fields.get("id") is not None and str(fields["id"]) != item.id:
+            self.err(item.path, f"id {fields['id']!r} differs from {item.id} in {item.state_path.name}")
+        extra = [k for k in fields if k != "id"]
+        if extra:
+            self.err(item.path, f"frontmatter holds {', '.join(extra)}: fields live in {item.state_path.name} "
+                     "(rite set / mark / close write them; a cycle not yet migrated: rite migrate --from frontmatter)")
+
     def check_item(self, cycle: Cycle, item: Item, index: dict[str, Item], owner: dict[str, Cycle]) -> None:
         if item.parse_error:
-            self.err(item.path, f"frontmatter: {item.parse_error}")
+            self.err(item.state_path or item.path, f"{item.id}: {item.parse_error}")
             return
+        self.check_markdown(item)
         f = item.fields
         if not f:
-            self.err(item.path, "missing frontmatter")
+            self.err(item.state_path, "empty entry")
             return
         for key in REQUIRED[item.kind]:
             if key not in f:

@@ -24,7 +24,7 @@ One task per invocation, then stop: small runs stay reviewable and resumable. Ba
    you notice for another item goes in that item's Notes; a done criterion that is not verifiable is
    made verifiable in the task file first.
 4. **Do the work**, then **verify every done criterion by running it**. Tick `- [x]` only after seeing
-   the output; paste the command and the decisive line under Notes. With `files:` declared and
+   the output; paste the command and the decisive line under Notes. With `files` declared and
    `repo_kb` above `[limits].delegate_above_kb`, hand the implementation to one `rite:rite-worker`
    (payload of `rite context`, allowed files, gates) and verify its report.
 5. `rite gates --id <ID> --json`. Red → fix and rerun; if you cannot, go to *Blocked*.

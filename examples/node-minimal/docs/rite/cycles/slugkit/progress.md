@@ -1,9 +1,3 @@
----
-cycle: slugkit
-prefix: SLG
-plan: /docs/plans/PLAN-slugkit.md
----
-
 # Progress — slugkit
 
 ## Scope

@@ -8,13 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import PROFILE, ROOT, Fixture, rite, task, write
-
-from rite_lib import frontmatter
-
-
-def fields(path: Path) -> dict:
-    return frontmatter.parse(path.read_text(encoding="utf-8"))[0]
+from fixtures import (PROFILE, ROOT, Fixture, add_item, fields, remove_item, rite, set_fields,  # noqa: F401
+                      task, write)
 
 
 class FixtureCase(unittest.TestCase):
@@ -150,15 +145,16 @@ class LoopTest(FixtureCase):
 
     def test_order_overrides_id_order(self):
         # a task split late (04) must run before 02 and 03, without renumbering them
-        write(self.root / "docs/rite/cycles/alpha/04-split.md",
-              task("ALP-TASK-04", "Split", sot="/docs/plans/PLAN-alpha.md#1"))
+        self.js("new-task", "--cycle", "alpha", "--title", "Split", "--type", "feature", "--phase", "1",
+                "--source-of-truth", "/docs/plans/PLAN-alpha.md#1")
         progress = self.root / "docs/rite/cycles/alpha/progress.md"
-        progress.write_text(frontmatter.set_fields(progress.read_text(encoding="utf-8"),
-                            {"order": ["ALP-TASK-01", "ALP-TASK-04", "ALP-TASK-02", "ALP-TASK-03"]}),
-                            encoding="utf-8")
-        self.ok("sync", "--all")
+        self.ok("set-cycle", "--cycle", "alpha", "--order", "ALP-TASK-01,ALP-TASK-04,ALP-TASK-02,ALP-TASK-03")
         table = progress.read_text(encoding="utf-8")
         self.assertLess(table.index("[ALP-TASK-04]"), table.index("[ALP-TASK-02]"))
+        # the JSON reads in execution order too
+        state = json.loads(progress.with_name("progress.json").read_text(encoding="utf-8"))
+        self.assertEqual([t["id"] for t in state["tasks"]], ["ALP-TASK-01", "ALP-TASK-04", "ALP-TASK-02", "ALP-TASK-03"])
+        self.assertEqual(self.fx.rite("set-cycle", "--cycle", "alpha", "--order", "ALP-TASK-09")[0], 1)
         self.fx.work_commit("src/a.py", "a\n", "feat: a")
         self.ok("close", "ALP-TASK-01")
         self.assertEqual(self.js("next", "task", "--cycle", "alpha")["id"], "ALP-TASK-04")
@@ -168,8 +164,7 @@ class LoopTest(FixtureCase):
 
     def test_order_with_an_unknown_id_is_red(self):
         progress = self.root / "docs/rite/cycles/alpha/progress.md"
-        progress.write_text(frontmatter.set_fields(progress.read_text(encoding="utf-8"),
-                            {"order": ["ALP-TASK-02", "ALP-TASK-09", "ALP-TASK-02"]}), encoding="utf-8")
+        set_fields(progress, {"order": ["ALP-TASK-02", "ALP-TASK-09", "ALP-TASK-02"]})
         errors = self.check_errors("--all")
         self.assertTrue(any("ALP-TASK-09, which is not a task" in e for e in errors), errors)
         self.assertTrue(any("lists ALP-TASK-02 twice" in e for e in errors), errors)
@@ -194,7 +189,9 @@ class LoopTest(FixtureCase):
 
     def test_fix_ids_are_per_prefix_across_archive(self):
         arch = self.root / "docs/rite/cycles/archive/old"
-        write(arch / "progress.md", "---\ncycle: old\nprefix: ALP\n---\n")
+        write(arch / "progress.json", '{"schema": 1, "cycle": "old", "prefix": "ALP", "tasks": []}')
+        write(arch / "fixes.json", '{"schema": 1, "cycle": "old", "fixes": [{"id": "FIX-ALP-007", '
+                                   '"file": "FIX-ALP-007.md"}]}')
         write(arch / "FIX-ALP-007.md", "---\nid: FIX-ALP-007\n---\n")
         res = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "t", "--severity", "low")
         self.assertEqual(res["id"], "FIX-ALP-008")
@@ -238,48 +235,47 @@ class CheckRedTest(FixtureCase):
         self.assert_red("must be root-absolute")
 
     def test_missing_anchor(self):
-        write(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", sot="/docs/plans/PLAN-alpha.md#9.9"))
+        add_item(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", sot="/docs/plans/PLAN-alpha.md#9.9"))
         self.ok("sync", "--all")
         self.assert_red("no heading/anchor '#9.9'")
 
     def test_depends_on_crosses_cycle(self):
-        write(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", depends_on="[BET-TASK-01]",
+        add_item(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", depends_on="[BET-TASK-01]",
                                            sot="/docs/plans/PLAN-alpha.md#1"))
         self.ok("sync", "--all")
         self.assert_red("crosses into cycle beta")
 
     def test_view_out_of_sync(self):
         p = self.cyc() / "01-harness.md"
-        p.write_text(frontmatter.set_fields(p.read_text(encoding="utf-8"), {"title": "Renamed"}), encoding="utf-8")
+        set_fields(p, {"title": "Renamed"})
         self.assert_red("out of sync")
 
     def test_duplicate_id(self):
-        write(self.cyc() / "04-dup.md", task("ALP-TASK-01", "Dup", sot="/docs/plans/PLAN-alpha.md#1"))
+        add_item(self.cyc() / "04-dup.md", task("ALP-TASK-01", "Dup", sot="/docs/plans/PLAN-alpha.md#1"))
         self.ok("sync", "--all")
         self.assert_red("duplicate ID ALP-TASK-01")
 
     def test_done_by_hand(self):
         p = self.cyc() / "01-harness.md"
-        p.write_text(frontmatter.set_fields(p.read_text(encoding="utf-8"), {"status": "done"}), encoding="utf-8")
+        set_fields(p, {"status": "done"})
         self.ok("sync", "--all")
         self.assert_red("done without done_commit")
 
     def test_unknown_commit(self):
         p = self.cyc() / "01-harness.md"
-        p.write_text(frontmatter.set_fields(p.read_text(encoding="utf-8"), {
-            "status": "done", "done_on": "2026-01-01", "done_commit": "deadbee", "reviewed_on": "pending"}),
-            encoding="utf-8")
+        set_fields(p, {
+            "status": "done", "done_on": "2026-01-01", "done_commit": "deadbee", "reviewed_on": "pending"})
         self.ok("sync", "--all")
         self.assert_red("is not a commit")
 
     def test_bad_vocabulary(self):
         p = self.cyc() / "01-harness.md"
-        p.write_text(frontmatter.set_fields(p.read_text(encoding="utf-8"), {"status": "finished"}), encoding="utf-8")
+        set_fields(p, {"status": "finished"})
         self.ok("sync", "--all")
         self.assert_red("status 'finished' not in")
 
     def test_phase_without_profile_entry(self):
-        write(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", phase=7, sot="/docs/plans/PLAN-alpha.md#1"))
+        add_item(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", phase=7, sot="/docs/plans/PLAN-alpha.md#1"))
         self.ok("sync", "--all")
         self.assert_red("no entry for phase 7")
 
@@ -288,8 +284,8 @@ class CheckRedTest(FixtureCase):
         prof = self.root / "docs/rite/profiles/alpha.md"
         prof.write_text(prof.read_text(encoding="utf-8") + "\n### Phase 6-8 — late\n- same checks\n",
                         encoding="utf-8")
-        write(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", phase=7, sot="/docs/plans/PLAN-alpha.md#1"))
-        write(self.cyc() / "05-y.md", task("ALP-TASK-05", "Y", phase=9, sot="/docs/plans/PLAN-alpha.md#1"))
+        add_item(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", phase=7, sot="/docs/plans/PLAN-alpha.md#1"))
+        add_item(self.cyc() / "05-y.md", task("ALP-TASK-05", "Y", phase=9, sot="/docs/plans/PLAN-alpha.md#1"))
         self.ok("sync", "--all")
         errors = self.check_errors("--all")
         self.assertFalse([e for e in errors if "phase 7" in e], errors)
@@ -302,8 +298,7 @@ class CheckRedTest(FixtureCase):
 
     def test_dependency_cycle(self):
         p = self.cyc() / "01-harness.md"
-        p.write_text(frontmatter.set_fields(p.read_text(encoding="utf-8"), {"depends_on": ["ALP-TASK-03"]}),
-                     encoding="utf-8")
+        set_fields(p, {"depends_on": ["ALP-TASK-03"]})
         self.ok("sync", "--all")
         self.assert_red("dependency cycle")
 
@@ -345,9 +340,9 @@ class LegacyLayoutTest(FixtureCase):
 class BatchPlanTest(FixtureCase):
     def add(self, n: int, *, files: str, resources: str = "[]", deps: str = "[]", type_: str = "feature") -> str:
         item_id = f"BET-TASK-{n:02}"
-        write(self.root / f"docs/rite/cycles/beta/{n:02}-t{n}.md",
-              task(item_id, f"T{n}", depends_on=deps, type_=type_, sot="/docs/plans/PLAN-alpha.md#1",
-                   extra=f"files: {files}\nresources: {resources}\n"))
+        add_item(self.root / f"docs/rite/cycles/beta/{n:02}-t{n}.md",
+                 task(item_id, f"T{n}", depends_on=deps, type_=type_, sot="/docs/plans/PLAN-alpha.md#1",
+                      extra=f"files: {files}\nresources: {resources}\n"))
         return item_id
 
     def setUp(self):
@@ -355,7 +350,7 @@ class BatchPlanTest(FixtureCase):
         cfg = self.root / "rite.toml"
         cfg.write_text(cfg.read_text(encoding="utf-8")
                        + '\n[resources]\nserialized = [{ name = "display", why = "one screen" }]\n', encoding="utf-8")
-        self.fx.git("rm", "-q", "docs/rite/cycles/beta/01-other.md")
+        remove_item(self.root / "docs/rite/cycles/beta/01-other.md")
 
     def plan(self, *targets: str, kind: str = "task") -> dict:
         return self.js("batch-plan", *targets, "--kind", kind, "--cycle", "beta")
@@ -437,7 +432,7 @@ class HookTest(FixtureCase):
 
     def test_stop_check_warns_only_when_enabled(self):
         p = self.root / "docs/rite/cycles/alpha/01-harness.md"
-        p.write_text(frontmatter.set_fields(p.read_text(encoding="utf-8"), {"title": "Drift"}), encoding="utf-8")
+        set_fields(p, {"title": "Drift"})
         ev = {"cwd": str(self.root)}
         self.assertEqual(self.hook("stop_check.py", ev).stdout, "")
         cfg = self.root / "rite.toml"
@@ -471,7 +466,7 @@ class ComposeTest(FixtureCase):
         again = self.js("begin", "task", "--cycle", "alpha")  # idempotent
         self.assertEqual(again["item"]["id"], "ALP-TASK-01")
         self.assertFalse(again["taken"])
-        self.assertEqual(self.fx.git("status", "--porcelain").count("01-harness"), 1)
+        self.assertEqual(self.fx.git("status", "--porcelain").count("progress.json"), 1)
 
     def test_begin_no_claim_leaves_the_item_pending(self):
         # a run that only plans must not decide what the next run picks: in-progress resumes first

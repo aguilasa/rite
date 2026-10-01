@@ -37,11 +37,24 @@ keep their history (`git mv`).
 
 ## State
 
-- **Frontmatter is the only state.** `status`, `done_on`, `done_commit`, `reviewed_on`,
-  `review_commit` are written by the CLI only.
+- **The JSON is the only state.** Each cycle holds `progress.json` — its meta (`cycle`, `prefix`,
+  `plan`, `ticket`, `local`, `order`, …) and one entry per task — and `fixes.json`, one entry per fix.
+  An entry holds the item's fields (`title`, `type`, `phase`, `depends_on`, `source_of_truth`,
+  `files`, `resources`, `repo`, `status`, `done_on`, `done_commit`, `reviewed_on`, `review_commit`,
+  `origin`, `severity`, `unblocked_by`, and any key of your own) and `file`, its markdown file relative
+  to the cycle. The arrays are kept in execution order.
+- **Item files are prose.** A task or fix file keeps its body and `id:` in its frontmatter, nothing
+  else; `check` reports a field written back into it, an item file no entry lists, an entry whose
+  file is gone.
+- **Only the CLI writes the JSON.** `status`, dates and SHAs through `close`, `mark*`, `rebind`; the
+  planning fields through `rite set <ID> --files … --resources …`; the cycle's `order`, `ticket`,
+  `plan` through `rite set-cycle`. The guard hook refuses an edit of the JSON by hand.
 - **Tables are views.** `progress.md` and `fixes.md` contain a generated region between
   `<!-- rite:begin … -->` and `<!-- rite:end -->`; the rest is free text. `rite sync` regenerates the
-  region; `rite check` fails when it is stale.
+  region; `rite check` fails when it is stale. The rendering is `rite_lib/render_md.py`, standalone
+  (stdlib only): `python render_md.py <cycle folder> [--check]` rebuilds the views without Rite.
+- **Links in the JSON resolve as they did in frontmatter**: a cycle's `plan`, `profile`, `pitfalls`
+  from its progress file, an item's `source_of_truth` from its own file.
 - **Vocabulary is closed**: task status `pending | in-progress | done | blocked | skipped`; fix status
   `pending | in-progress | done | blocked | stale`; severity `critical | high | medium | low`;
   `reviewed_on` is `null` (not reviewable), `pending`, or a date.
@@ -76,9 +89,9 @@ later, `rebind` attaches it.
 ## Local cycles
 
 Some work is planned only for yourself: the code goes to the repository, the tasks never do.
-`local: true` in the progress file's frontmatter (`rite new-cycle --local`) makes such a cycle:
+`"local": true` in the cycle's `progress.json` (`rite new-cycle --local`) makes such a cycle:
 
-- **State is unchanged.** Status, dates and `done_commit` are in the item files as always, and
+- **State is unchanged.** Status, dates and `done_commit` are in the JSON state as always, and
   `next`, `status`, review and fix selection read them the same way. The CLI never took state from git.
 - **No bookkeeping commits.** `close`, `mark-reviewed`, `mark-stale`, `mark --commit`, `commit-new`,
   `new-cycle --commit` and `archive` write the files and commit nothing (`"commit": null,

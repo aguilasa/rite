@@ -1,4 +1,4 @@
-"""State-changing operations. The only code path allowed to write item status."""
+"""State-changing operations. The only code path allowed to write item status (the cycle's JSON)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 import re
 from pathlib import Path
 
-from . import frontmatter, gitutil, views
+from . import frontmatter, gitutil, state, views
 from .config import FIX_STATUSES, NO_COMMIT, SEVERITIES, TASK_STATUSES
 from .markdown import append_to_section
 from .model import Cycle, Item, Project, RiteError, display, make_link
@@ -78,12 +78,35 @@ def render(project: Project, name: str, values: dict) -> str:
 
 
 def _write_item(item: Item, updates: dict, log_line: str | None, log_titles: list[str]) -> None:
-    text = item.path.read_text(encoding="utf-8")
-    text = frontmatter.set_fields(text, updates)
+    """Set fields in the item's JSON entry; the Execution Log line goes in its markdown body."""
+    try:
+        state.update_item(item.state_path, item.kind, item.id, updates)
+    except state.StateError as exc:
+        raise RiteError(str(exc)) from exc
     if log_line:
-        text = append_to_section(text, log_titles, log_line)
-    item.path.write_text(text, encoding="utf-8", newline="\n")
+        text = item.path.read_text(encoding="utf-8")
+        item.path.write_text(append_to_section(text, log_titles, log_line), encoding="utf-8", newline="\n")
+        item._md = None
     item.fields.update(updates)
+
+
+# planning fields: what the model fills in after creating an item; every other field is the CLI's
+PLANNING_FIELDS = ("files", "resources")
+CYCLE_FIELDS = ("order", "ticket", "plan")
+
+
+def seed(text: str, item_id: str) -> tuple[dict, str]:
+    """Split a rendered item template into (its frontmatter, the markdown to write).
+
+    The template's frontmatter seeds the item's JSON entry — so a local template override may add its
+    own keys — and the file keeps only its `id`: the JSON is the one place fields live.
+    """
+    fields, body = frontmatter.parse(text)
+    return fields, f"---\nid: {frontmatter.dump_value(item_id)}\n---\n{body}"
+
+
+def _entry(item_id: str, rel: str, fields: dict) -> dict:
+    return {"id": item_id, "file": rel, **{k: v for k, v in fields.items() if k not in ("id", "file")}}
 
 
 def _head(project: Project, item: Item) -> str | None:
@@ -117,7 +140,7 @@ def _commit(project: Project, cycle: Cycle, paths: list[Path], message: str) -> 
 def _finish(project: Project, cycle: Cycle, item_paths: list[Path], message: str, commit: bool) -> dict:
     cycle = _reload(project, cycle)
     views.sync(project, cycle)
-    paths = [*item_paths, cycle.progress_path, cycle.fixes_path]
+    paths = [*item_paths, cycle.progress_state_path, cycle.fixes_state_path, cycle.progress_path, cycle.fixes_path]
     # a local cycle's documents are not in git (usually ignored, where `git add` would fail):
     # the state is written to the files and that is the whole record
     commit = commit and not cycle.local
@@ -163,18 +186,13 @@ def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, d
     naming = project.naming
     n, path, fd = _allocate(lambda k: cycle.path / naming.task_file(cycle.prefix, k, slug), _max_n(cycle.tasks) + 1)
     item_id = naming.task_id(cycle.prefix, n)
-    text = render(project, "task.md", {
+    rendered = render(project, "task.md", {
         "id": item_id, "title": frontmatter.dump_value(title), "title_text": title,
         "type": frontmatter.dump_value(type_), "phase": frontmatter.dump_value(phase),
         "depends_on": frontmatter.dump_value(depends_on),
         "source_of_truth": frontmatter.dump_value(source_of_truth),
     })
-    if repo:
-        text = frontmatter.set_fields(text, {"repo": repo})
-    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(text)
-    views.sync(project, _reload(project, cycle))
-    return project._load_item("task", path, n)
+    return _create(project, cycle, "task", item_id, path, fd, rendered, repo)
 
 
 def new_fix(project: Project, cycle: Cycle, *, origin: str, title: str, severity: str,
@@ -195,18 +213,38 @@ def new_fix(project: Project, cycle: Cycle, *, origin: str, title: str, severity
     n, path, fd = _allocate(lambda k: cycle.path / naming.fix_file(cycle.prefix, k, slug), _max_n(same_prefix) + 1)
     item_id = naming.fix_id(cycle.prefix, n)
     origin_item = cycle.by_id()[origin]
-    text = render(project, "fix.md", {
+    rendered = render(project, "fix.md", {
         "id": item_id, "title": frontmatter.dump_value(title), "title_text": title,
         "origin": origin, "severity": severity,
         "depends_on": frontmatter.dump_value(depends_on or []),
         "origin_link": make_link(project.root, path, origin_item.path, project.cfg.link_style),
     })
+    return _create(project, cycle, "fix", item_id, path, fd, rendered, repo)
+
+
+def _create(project: Project, cycle: Cycle, kind: str, item_id: str, path: Path, fd: int, rendered: str,
+            repo: str | None) -> Item:
+    """Write the item's markdown (taken by `_allocate`) and add its entry to the cycle's JSON."""
+    try:
+        fields, text = seed(rendered, item_id)
+    except frontmatter.FrontmatterError as exc:
+        os.close(fd)
+        path.unlink()
+        raise RiteError(f"template for a {kind}: {exc}") from exc
     if repo:
-        text = frontmatter.set_fields(text, {"repo": repo})
+        fields["repo"] = repo
     with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
-    views.sync(project, _reload(project, cycle))
-    return project._load_item("fix", path, n)
+    state_path = cycle.progress_state_path if kind == "task" else cycle.fixes_state_path
+    default = state.new_progress(cycle.meta) if kind == "task" else state.new_fixes(cycle.name)
+    try:
+        state.add_item(state_path, kind, _entry(item_id, path.relative_to(cycle.path).as_posix(), fields), default)
+    except state.StateError as exc:
+        path.unlink()
+        raise RiteError(str(exc)) from exc
+    cycle = _reload(project, cycle)
+    views.sync(project, cycle)
+    return cycle.by_id()[item_id]
 
 
 def commit_new(project: Project, cycle: Cycle, item: Item) -> dict:
@@ -215,6 +253,41 @@ def commit_new(project: Project, cycle: Cycle, item: Item) -> dict:
         raise RiteError(f"{item.id} has status {item.status!r}; commit-new is for newly created items")
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "open", item.id, cycle=cycle), True)
     return {"id": item.id, **result}
+
+
+def set_fields(project: Project, cycle: Cycle, item: Item, updates: dict) -> dict:
+    """Set an item's planning fields (`files`, `resources`) — the only fields the model writes."""
+    bad = [k for k in updates if k not in PLANNING_FIELDS]
+    if bad:
+        raise RiteError(f"rite set writes {list(PLANNING_FIELDS)} only; {', '.join(bad)} "
+                        "belongs to the CLI (close, mark, mark-reviewed, mark-stale, rebind)")
+    for key, value in updates.items():
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise RiteError(f"{key} must be a list of strings")
+    _write_item(item, updates, None, [])
+    views.sync(project, _reload(project, cycle))
+    return {"id": item.id, **updates, "file": display(project.root, item.state_path)}
+
+
+def set_cycle(project: Project, cycle: Cycle, updates: dict) -> dict:
+    """Set the cycle's `order`, `ticket` or `plan`."""
+    bad = [k for k in updates if k not in CYCLE_FIELDS]
+    if bad:
+        raise RiteError(f"rite set-cycle writes {list(CYCLE_FIELDS)} only, not {', '.join(bad)}")
+    if "order" in updates:
+        tasks = {t.id for t in cycle.tasks}
+        order = updates["order"]
+        unknown = [i for i in order if i not in tasks]
+        if unknown:
+            raise RiteError(f"order lists {', '.join(unknown)}, not tasks of cycle {cycle.name}")
+        if len(set(order)) != len(order):
+            raise RiteError("order lists a task twice")
+    try:
+        state.update_meta(cycle.progress_state_path, updates)
+    except state.StateError as exc:
+        raise RiteError(str(exc)) from exc
+    views.sync(project, _reload(project, cycle))
+    return {"cycle": cycle.name, **updates, "file": display(project.root, cycle.progress_state_path)}
 
 
 # --- status transitions ------------------------------------------------------

@@ -7,12 +7,15 @@ import re
 import shutil
 from pathlib import Path
 
-from . import frontmatter, gitutil, markdown, views
+from . import frontmatter, gitutil, markdown, state, views
 from .config import OPEN_FIX_STATUSES
 from .model import Cycle, Project, RiteError, display, make_link, resolve_link
 from .ops import bookkeeping_message, render
 
 LINK_FIELDS = ("source_of_truth", "plan", "profile", "pitfalls")
+# a link field in the JSON resolves from the markdown it describes: the progress file for the cycle's
+# meta, the item's own file for an item — the same anchors it had as frontmatter
+META_LINK_FIELDS = ("plan", "profile", "pitfalls")
 _PREFIX_RE = re.compile(r"^[A-Za-z0-9]+$")
 
 
@@ -75,8 +78,16 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
             # a local template override may predate the {{phase_checks}} placeholder
             text = text.replace("## Phase-specific checks", "## " + project.section_title("phase_checks"))
         if tpl == "progress.md":
-            # set, not templated: a local template override may predate these keys
-            text = frontmatter.set_fields(text, {"ticket": ticket or None, "local": bool(local)})
+            # the template's frontmatter seeds progress.json; ticket and local are set, not templated:
+            # a local template override may predate these keys
+            meta, body = frontmatter.parse(text)
+            meta = {**meta, "ticket": ticket or None, "local": bool(local)}
+            state.write(path / project.progress_state, state.new_progress(meta))
+            created.append(path / project.progress_state)
+            text = body.lstrip("\n")
+        elif tpl == "fixes.md":
+            state.write(path / project.fixes_state, state.new_fixes(name))
+            created.append(path / project.fixes_state)
         dest.write_text(text, encoding="utf-8", newline="\n")
         created.append(dest)
     cycle = project.load_cycle(path)
@@ -131,8 +142,7 @@ def publish(project: Project, cycle: Cycle) -> dict:
                         + "; remove the matching lines from .gitignore first (git check-ignore -v <path>)")
     if gitutil.run(project.root, "diff", "--cached", "--name-only").strip():
         raise RiteError("the index has staged changes; commit or unstage them first")
-    text = cycle.progress_path.read_text(encoding="utf-8")
-    cycle.progress_path.write_text(frontmatter.set_fields(text, {"local": False}), encoding="utf-8", newline="\n")
+    state.update_meta(cycle.progress_state_path, {"local": False})
     cycle = project.load_cycle(cycle.path, archived=cycle.archived)
     views.sync(project, cycle)
     sha = gitutil.commit_paths(project.root, paths,
@@ -178,29 +188,28 @@ def _md_files(root: Path) -> list[Path]:
     return files
 
 
+def _rewrite_target(project: Project, target: str, old_file: Path, new_file: Path, old_dir: Path,
+                    new_dir: Path) -> str:
+    """A link target written in ``old_file``, as it must read from ``new_file`` once ``old_dir`` moved."""
+    if markdown.is_external(target) or target.startswith("#"):
+        return target
+    path, anchor = resolve_link(project.root, old_file, target)
+    try:
+        new_target_path = new_dir / path.relative_to(old_dir)
+    except ValueError:
+        new_target_path = path
+    if new_target_path == path and new_file == old_file:
+        return target
+    if target.startswith("/") and new_target_path == path:
+        return target  # root-absolute link to something that did not move
+    link = make_link(project.root, new_file, new_target_path,
+                     "root-absolute" if target.startswith("/") else "relative")
+    return link + (f"#{anchor}" if anchor else "")
+
+
 def _rewrite(project: Project, text: str, old_file: Path, new_file: Path, old_dir: Path, new_dir: Path) -> str:
     """Rewrite link targets (prose links and link fields) so they resolve after the move."""
-
-    def moved(p: Path) -> Path:
-        try:
-            return new_dir / p.relative_to(old_dir)
-        except ValueError:
-            return p
-
-    def fix_target(target: str) -> str:
-        if markdown.is_external(target) or target.startswith("#"):
-            return target
-        path, anchor = resolve_link(project.root, old_file, target)
-        new_target_path = moved(path)
-        if new_target_path == path and new_file == old_file:
-            return target
-        if target.startswith("/") and new_target_path == path:
-            return target  # root-absolute link to something that did not move
-        link = make_link(project.root, new_file, new_target_path,
-                         "root-absolute" if target.startswith("/") else "relative")
-        return link + (f"#{anchor}" if anchor else "")
-
-    return _map_links(text, fix_target)
+    return _map_links(text, lambda t: _rewrite_target(project, t, old_file, new_file, old_dir, new_dir))
 
 
 def _map_links(text: str, fix_target) -> str:
@@ -253,7 +262,53 @@ def relink(project: Project, cycles: list[Cycle], *, write: bool) -> list[dict]:
             changes.append({"file": display(project.root, f), "links": count})
             if write:
                 f.write_text(new_text, encoding="utf-8", newline="\n")
+    for c in cycles:
+        for path in (c.progress_state_path, c.fixes_state_path):
+            if not path.is_file():
+                continue
+            count = 0
+
+            def fix_field(target: str, md: Path) -> str:
+                nonlocal count
+                if markdown.is_external(target) or target.startswith("#"):
+                    return target
+                resolved, anchor = resolve_link(project.root, md, target)
+                if not resolved.exists():
+                    return target
+                new = make_link(project.root, md, resolved, style) + (f"#{anchor}" if anchor else "")
+                count += new != target
+                return new
+
+            data = state.read(path)
+            if _map_state_links(project, data, c.path, c.path, fix_field):
+                changes.append({"file": display(project.root, path), "links": count})
+                if write:
+                    state.write(path, data)
     return changes
+
+
+def _map_state_links(project: Project, data: dict, old_dir: Path, new_dir: Path, fix_field) -> bool:
+    """Apply ``fix_field(target, markdown_file)`` to the link fields of a cycle's JSON document, where
+    the markdown file is the one the field describes, as it was before a move (``old_dir``). Returns
+    True when a field changed."""
+    changed = False
+
+    def apply(holder: dict, keys, md: Path) -> None:
+        nonlocal changed
+        for k in keys:
+            value = holder.get(k)
+            if isinstance(value, str) and value:
+                new = fix_field(value, md)
+                if new != value:
+                    holder[k] = new
+                    changed = True
+
+    apply(data, META_LINK_FIELDS, old_dir / project.progress_name)
+    for key in (state.TASKS, state.FIXES):
+        for entry in data.get(key) or []:
+            if isinstance(entry, dict) and entry.get("file"):
+                apply(entry, LINK_FIELDS, old_dir / str(entry["file"]))
+    return changed
 
 
 def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: bool = False) -> dict:
@@ -283,6 +338,19 @@ def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: boo
         new_text = _rewrite(project, text, f, new_f, old_dir, new_dir)
         if new_text != text:
             rewrites[new_f] = new_text
+    for c in project.all_cycles():
+        for path in (c.progress_state_path, c.fixes_state_path):
+            if not path.is_file():
+                continue
+            data = state.read(path)
+            here = new_dir / c.path.relative_to(old_dir) if c.path == old_dir or old_dir in c.path.parents else c.path
+
+            def fix_field(target: str, md: Path, here=here, there=c.path) -> str:
+                new_md = here / md.relative_to(there)
+                return _rewrite_target(project, target, md, new_md, old_dir, new_dir)
+
+            if _map_state_links(project, data, c.path, here, fix_field):
+                rewrites[here / path.name] = state.dumps(data)
     new_dir.parent.mkdir(parents=True, exist_ok=True)
     if local:
         shutil.move(old_dir, new_dir)  # nothing of a local cycle is in git to move

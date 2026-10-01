@@ -6,9 +6,9 @@ import sys
 import unittest
 from pathlib import Path
 
-from fixtures import Fixture
+from fixtures import Fixture, set_fields
 
-from rite_lib import compose
+from rite_lib import compose, frontmatter
 
 PY = f'"{sys.executable}"'
 
@@ -17,15 +17,6 @@ def fix_body(evidence: str, verification: str = "") -> str:
     return f"""\
 ---
 id: {{id}}
-title: t
-origin: ALP-TASK-01
-severity: low
-files: []
-resources: {{resources}}
-status: pending
-depends_on: []
-done_on: null
-done_commit: null
 ---
 
 # {{id}} — t
@@ -119,8 +110,8 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         fix_id = json.loads(out)["id"]
         path = self.cycle / f"{fix_id}.md"
-        path.write_text(fix_body(evidence, verification).replace("{id}", fix_id)
-                        .replace("{resources}", resources), encoding="utf-8")
+        path.write_text(fix_body(evidence, verification).replace("{id}", fix_id), encoding="utf-8")
+        set_fields(path, {"resources": frontmatter._parse_value(resources)})
         return fix_id
 
     def reproduce(self, *args: str) -> dict:
@@ -144,12 +135,12 @@ class ReproduceTest(unittest.TestCase):
     def test_reproduce_all_writes_nothing(self):
         # `/rite:fix-all --plan` triages with it: a fix that no longer reproduces must stay open
         gone = self.add_fix(f"```text\n$ {PY} -c \"print('GOOD')\"\nBAD\n```")
-        path = self.cycle / f"{gone}.md"
-        before, status = path.read_bytes(), self.fx.git("status", "--porcelain")
+        path, state = self.cycle / f"{gone}.md", self.cycle / "fixes.json"
+        before, status = (path.read_bytes(), state.read_bytes()), self.fx.git("status", "--porcelain")
         run = self.reproduce("--all")["fixes"][0]
         self.assertEqual((run["commands"][0]["output"].strip(), run["recorded"]), ("GOOD", ["BAD"]))
-        self.assertEqual(path.read_bytes(), before)
-        self.assertIn(b"status: pending", before)
+        self.assertEqual((path.read_bytes(), state.read_bytes()), before)
+        self.assertIn(b'"status": "pending"', before[1])
         self.assertEqual(self.fx.git("status", "--porcelain"), status)
 
     def test_quotes_mean_what_they_mean_in_bash(self):
@@ -322,7 +313,7 @@ class PlanWritesNothingTest(unittest.TestCase):
     def test_the_batch_rule_names_what_a_plan_may_write(self):
         text = self.read("parts/batch.md")
         rule = next(s for s in text.split(". ") if "With `--plan`, only planning fields" in s)
-        for term in ("`files:`", "status", "dates", "SHAs", "Execution Log", "never"):
+        for term in ("`files`", "status", "dates", "SHAs", "Execution Log", "never"):
             self.assertIn(term, rule, term)
 
     def test_fix_all_plan_triage_is_dry(self):

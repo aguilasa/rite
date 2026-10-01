@@ -1,17 +1,5 @@
 ---
 id: SLG-TASK-01
-title: "slugify"
-type: feature
-phase: 1
-depends_on: []
-source_of_truth: "/docs/plans/PLAN-slugkit.md#2.1"
-files: []
-resources: []
-status: pending
-done_on: null
-done_commit: null
-reviewed_on: null
-review_commit: null
 ---
 
 # SLG-TASK-01 — slugify

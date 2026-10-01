@@ -1,4 +1,4 @@
-"""Cycles and items (tasks, fixes) as read from disk. Frontmatter is the only state."""
+"""Cycles and items (tasks, fixes) as read from disk. The cycle's JSON files are the only state."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import frontmatter, gitutil
+from . import frontmatter, gitutil, state
 from .config import Config, SEVERITIES
 from .naming import Naming, as_list
 
@@ -21,8 +21,26 @@ class Item:
     path: Path
     n: int
     fields: dict = field(default_factory=dict)
-    body: str = ""
     parse_error: str | None = None
+    state_path: Path | None = None  # the JSON file holding this item's fields
+    file: str = ""  # path of the markdown file, relative to the cycle folder, as the JSON names it
+    _md: tuple | None = field(default=None, repr=False)
+
+    def read_md(self) -> tuple[dict, str, str | None]:
+        """(frontmatter, body, error) of the item's markdown file, read once."""
+        if self._md is None:
+            try:
+                fields, body = frontmatter.parse(self.path.read_text(encoding="utf-8"))
+                self._md = (fields, body, None)
+            except FileNotFoundError:
+                self._md = ({}, "", "file not found")
+            except (frontmatter.FrontmatterError, UnicodeDecodeError) as exc:
+                self._md = ({}, "", str(exc))
+        return self._md
+
+    @property
+    def body(self) -> str:
+        return self.read_md()[1]
 
     @property
     def id(self) -> str:
@@ -59,6 +77,8 @@ class Cycle:
     path: Path
     progress_path: Path
     fixes_path: Path
+    progress_state_path: Path
+    fixes_state_path: Path
     meta: dict
     archived: bool
     profile_path: Path
@@ -136,6 +156,8 @@ class Project:
         self.archive_dir = cfg.path("archive_dir")
         self.progress_name = cfg["naming"]["progress_file"]
         self.fixes_name = cfg["naming"]["fixes_file"]
+        self.progress_state = cfg["naming"]["progress_state"]
+        self.fixes_state = cfg["naming"]["fixes_state"]
         # a workspace: rite.toml in a plain folder whose sub-folders are git repositories
         self.workspace = not gitutil.is_repo(self.root)
         self._git_ok: dict[Path, bool] = {}
@@ -176,7 +198,12 @@ class Project:
 
     # --- discovery -------------------------------------------------------
     def is_cycle_dir(self, path: Path) -> bool:
-        return (path / self.progress_name).is_file()
+        """A cycle is a folder holding its JSON state — or, not yet migrated, its progress markdown."""
+        return (path / self.progress_state).is_file() or (path / self.progress_name).is_file()
+
+    def is_legacy_dir(self, path: Path) -> bool:
+        """A cycle from before the JSON state: progress markdown with frontmatter, no progress JSON."""
+        return (path / self.progress_name).is_file() and not (path / self.progress_state).is_file()
 
     def _cycle_dirs(self, base: Path) -> list[Path]:
         if not base.is_dir():
@@ -192,46 +219,92 @@ class Project:
     def live_cycles(self) -> list[Cycle]:
         return [self.load_cycle(p) for p in self._cycle_dirs(self.cycles_root)]
 
-    def archived_cycles(self) -> list[Cycle]:
+    def archived_dirs(self) -> list[Path]:
         if not self.archive_dir.is_dir():
             return []
         # a legacy archive folder may itself be one closed cycle
         dirs = [self.archive_dir] if self.is_cycle_dir(self.archive_dir) else []
-        dirs += [p for p in sorted(self.archive_dir.iterdir()) if p.is_dir() and self.is_cycle_dir(p)]
-        return [self.load_cycle(p, archived=True) for p in dirs]
+        return dirs + [p for p in sorted(self.archive_dir.iterdir()) if p.is_dir() and self.is_cycle_dir(p)]
+
+    def archived_cycles(self) -> list[Cycle]:
+        return [self.load_cycle(p, archived=True) for p in self.archived_dirs()]
 
     def all_cycles(self) -> list[Cycle]:
         return self.live_cycles() + self.archived_cycles()
 
-    def load_cycle(self, path: Path, archived: bool | None = None) -> Cycle:
-        path = path.resolve()
+    def cycle_paths(self, path: Path, meta: dict) -> tuple[Path, Path]:
+        """(profile, pitfalls) of the cycle in ``path``: named by its meta, else by [naming]."""
         progress = path / self.progress_name
-        meta, _ = frontmatter.parse(progress.read_text(encoding="utf-8"))
         name = str(meta.get("cycle") or path.name)
-        if archived is None:
-            archived = self.archive_dir in path.parents
-        profiles_dir = self.cfg.path("profiles_dir")
         naming = self.cfg["naming"]
         if meta.get("profile"):
             profile, _ = resolve_link(self.root, progress, str(meta["profile"]))
         else:
-            profile = profiles_dir / naming["profile_file"].format(cycle=name)
+            profile = self.cfg.path("profiles_dir") / naming["profile_file"].format(cycle=name)
         pitfalls = profile.with_name(naming["pitfalls_file"].format(cycle=name)) \
             if not meta.get("pitfalls") else resolve_link(self.root, progress, str(meta["pitfalls"]))[0]
+        return profile, pitfalls
+
+    def load_cycle(self, path: Path, archived: bool | None = None) -> Cycle:
+        path = path.resolve()
+        if self.is_legacy_dir(path):
+            raise RiteError(f"{display(self.root, path)} is a cycle from before the JSON state (no "
+                            f"{self.progress_state}): run `rite migrate --from frontmatter`, then again with --write")
+        try:
+            progress = state.read(path / self.progress_state)
+        except state.StateError as exc:
+            raise RiteError(str(exc)) from exc
+        try:
+            fixes = state.read(path / self.fixes_state)
+        except FileNotFoundError:
+            fixes = state.new_fixes(str(progress.get("cycle") or path.name))
+        except state.StateError as exc:
+            raise RiteError(str(exc)) from exc
+        return self.cycle_from_state(path, progress, fixes, archived=archived)
+
+    def cycle_from_state(self, path: Path, progress: dict, fixes: dict, archived: bool | None = None) -> Cycle:
+        """A cycle built from its two JSON documents (read from disk, or about to be written)."""
+        path = path.resolve()
+        meta = state.meta_of(progress)
+        if archived is None:
+            archived = self.archive_dir in path.parents
+        profile, pitfalls = self.cycle_paths(path, meta)
         cycle = Cycle(
-            name=name, path=path, progress_path=progress, fixes_path=path / self.fixes_name,
+            name=str(meta.get("cycle") or path.name), path=path,
+            progress_path=path / self.progress_name, fixes_path=path / self.fixes_name,
+            progress_state_path=path / self.progress_state, fixes_state_path=path / self.fixes_state,
             meta=meta, archived=archived, profile_path=profile, pitfalls_path=pitfalls,
             workspace=self.workspace,
         )
-        cycle.items = self._load_items(path)
+        cycle.items = [self._item_from_entry(cycle, "task", e) for e in progress.get(state.TASKS) or []] \
+            + [self._item_from_entry(cycle, "fix", e) for e in fixes.get(state.FIXES) or []]
         return cycle
 
-    def _load_items(self, cycle_dir: Path) -> list[Item]:
-        items = []
+    def _item_from_entry(self, cycle: Cycle, kind: str, entry) -> Item:
+        state_path = cycle.progress_state_path if kind == "task" else cycle.fixes_state_path
+        if not isinstance(entry, dict):
+            return Item(kind=kind, path=state_path, n=0, parse_error=f"entry {entry!r} is not an object",
+                        state_path=state_path)
+        rel = str(entry.get("file") or "")
+        fields = {k: v for k, v in entry.items() if k != "file"}
+        item = Item(kind=kind, path=cycle.path / rel if rel else state_path, n=0, fields=fields,
+                    state_path=state_path, file=rel)
+        m = self.naming.match_file(kind, rel) if rel else None
+        if not rel:
+            item.parse_error = "entry has no 'file'"
+        elif not m:
+            item.parse_error = f"file {rel!r} does not match [naming].{kind}_file"
+        else:
+            item.n = int(m.group("n"))
+        return item
+
+    def item_files(self, cycle_dir: Path) -> list[tuple[str, Path, int]]:
+        """Markdown files under ``cycle_dir`` that [naming] recognizes as items: [(kind, path, n)].
+        Nested cycles (and the archive) are not part of this cycle."""
+        found = []
         skip = {self.progress_name, self.fixes_name}
         for dirpath, dirnames, filenames in os.walk(cycle_dir):
             current = Path(dirpath)
-            # nested cycles (and the archive) are not part of this cycle
             dirnames[:] = sorted(
                 d for d in dirnames
                 if (current / d).resolve() != self.archive_dir and not self.is_cycle_dir(current / d)
@@ -244,17 +317,23 @@ class Project:
                 for kind in ("fix", "task"):
                     m = self.naming.match_file(kind, rel)
                     if m:
-                        items.append(self._load_item(kind, file, int(m.group("n"))))
+                        found.append((kind, file, int(m.group("n"))))
                         break
-        return items
+        return found
 
-    def _load_item(self, kind: str, file: Path, n: int) -> Item:
-        item = Item(kind=kind, path=file, n=n)
-        try:
-            item.fields, item.body = frontmatter.parse(file.read_text(encoding="utf-8"))
-        except (frontmatter.FrontmatterError, UnicodeDecodeError) as exc:
-            item.parse_error = str(exc)
-        return item
+    def entry_n(self, kind: str, entry: dict) -> int:
+        m = self.naming.match_file(kind, str(entry.get("file") or ""))
+        return int(m.group("n")) if m else 0
+
+    def execution_key(self, order: list[str]):
+        """Sort key of task entries: the IDs `order:` lists first, in that order; the rest by number.
+        The same rule as `Cycle.tasks`, applied to the JSON array so it reads in execution order."""
+        pos = {item_id: k for k, item_id in enumerate(order)}
+
+        def key(entry: dict):
+            item_id = entry.get("id")
+            return (0, pos[item_id]) if item_id in pos else (1, self.entry_n("task", entry))
+        return key
 
     # --- resolution ------------------------------------------------------
     def resolve_cycle(self, arg: str | None = None) -> Cycle:

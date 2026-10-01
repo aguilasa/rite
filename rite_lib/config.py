@@ -32,6 +32,9 @@ DEFAULTS: dict = {
         "fix_file": "{id}.md",
         "progress_file": "progress.md",
         "fixes_file": "fixes.md",
+        # the state: the markdown files above are views rendered from these
+        "progress_state": "progress.json",
+        "fixes_state": "fixes.json",
         "profile_file": "{cycle}.md",
         "pitfalls_file": "{cycle}.pitfalls.md",
     },

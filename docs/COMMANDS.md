@@ -52,13 +52,18 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `close ID [--sha S \| --no-repo --reason R]` | record a finished item from its work commit; `--no-repo` when it has none (`done_commit: none`) |
 | `rebind ID --sha S` | repoint `done_commit` after a squash or rebase rewrote the work commit |
 | `mark ID STATUS [--reason R]`, `mark FIX blocked --reason R --unblocked-by CMD`, `mark-reviewed ID [--fixes …]`, `mark-stale FIX --reason …` | other transitions; a blocked fix names the command that unblocks it (`unblocked_by`), and leaving `blocked` clears it |
-| `sync`, `check [--quick]`, `status` | views, validation, summary; `sync`/`check`/`relink` take `--include-archived` |
+| `set ID [--files a,b] [--resources r]`, `set-cycle [--order IDs] [--ticket K] [--plan P]` | the planning fields of an item, the cycle's order, ticket and plan — the only fields written outside a transition; `''` empties one |
+| `sync`, `check [--quick]`, `status` | views (rendered from `progress.json` / `fixes.json`, arrays put in execution order), validation, summary; `sync`/`check`/`relink` take `--include-archived` |
 | `batch-plan N\|IDs\|all [--kind task\|fix]` | inventory, conflict matrix, waves |
 | `new-cycle NAME --prefix X [--plan P] [--copy-plan] [--ticket K] [--local]`, `archive NAME [--dry-run]`, `publish NAME` | lifecycle; `publish` makes a local cycle tracked |
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth`; retro numbers |
 | `sections [--all] [--write]` | propose `[sections]` from the titles the items and profiles use, recognised by what each section holds (fenced `$ ` lines, lists of paths, command lines, the item's last section, phases named) and never by the words of the title; each guess with its evidence, a key nothing matches reliably commented with its candidates. `--all` reads every cycle, archived too; `--write` merges only the matched keys into `rite.toml`, keeping comments, other keys and their order |
-| `relink [--write]`, `migrate --from we2002 [--write]` | normalize link style; convert a legacy backlog (see [MIGRATING.md](MIGRATING.md)) |
+| `relink [--write]`, `migrate --from frontmatter\|we2002 [--write] [--commit]` | normalize link style; move cycles from Rite ≤ 0.13 to the JSON state, or convert a legacy backlog (see [MIGRATING.md](MIGRATING.md)) |
 | `guard PATH` | read-only / generated verdict (the hook uses it) |
 | `tokens [--by command\|session\|day\|project\|agent] [--since D] [--until D] [--project G] [--command C]… [--top N] [--markdown F] [--check BASELINE --tolerance P] [--cache-weight W] [--suggest-limits]` | where the tokens went — all of Claude Code, main thread and subagents apart, with totals; `--suggest-limits` measures this repository's `[limits].inline_triage_max_output_kb` instead; runs without `rite.toml` (see [TOKENS.md](TOKENS.md)) |
 
 Exit codes: `0` ok · `1` failure or nothing selected · `3` no `rite.toml`.
+
+The views alone, without Rite: `python rite_lib/render_md.py <cycle folder>… [--check]` (stdlib only;
+also `sh "${CLAUDE_PLUGIN_ROOT}/bin/rite-render"`). It reads `rite.toml` for the link style and file
+names when it finds one above the cycle; `--check` writes nothing and exits 1 when a view is stale.

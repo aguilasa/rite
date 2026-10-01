@@ -4,11 +4,46 @@ Two ways in:
 
 - **Map, do not convert** — `/rite:init` detects your folders and names and writes a `rite.toml` that
   describes them (`[paths]`, `[naming]`, `[sections]`). Nothing is renamed. Works when your items already
-  keep state in frontmatter with Rite's vocabulary.
-- **Convert in place** — `rite.py migrate --from <format>` rewrites a known legacy format so frontmatter
-  becomes the single source of state. Today: `we2002`.
+  keep state in frontmatter with Rite's vocabulary — then `migrate --from frontmatter` moves it to JSON.
+- **Convert in place** — `rite.py migrate --from <format>` rewrites a known legacy format so the cycle's
+  JSON becomes the single source of state. Today: `frontmatter` (Rite ≤ 0.13) and `we2002`.
 
 Always convert **on a branch**, and review the diff before merging.
+
+## `migrate --from frontmatter`
+
+Up to 0.13 Rite kept the state in frontmatter: the cycle's in its progress file, each item's in its
+own file. Since then it lives in two JSON files per cycle, `progress.json` (meta and tasks) and
+`fixes.json`, and every command run on an older cycle stops with
+`… is a cycle from before the JSON state: run rite migrate --from frontmatter`.
+
+```sh
+git switch -c rite-json-state
+rite check --all --include-archived                          # with the old Rite: start green
+rite migrate --from frontmatter                              # dry run: cycles, items, what is kept
+rite migrate --from frontmatter --write --commit             # one commit: chore(rite): move cycle state to JSON
+rite check --all --include-archived
+rite status --all                                            # the same as before
+```
+
+What it does, for every cycle — live, archived, an archive folder that is itself a cycle, cycles
+nested in it:
+
+| Before | After |
+| --- | --- |
+| progress file's frontmatter (`cycle`, `prefix`, `plan`, `profile`, `order`, `ticket`, `local`, …) | `progress.json`, same keys, same order; the progress file keeps its prose and its view |
+| an item's frontmatter, every key — Rite's and your own (`category`, `projeto`, …) | its entry in `progress.json` / `fixes.json`, plus `file`; tasks in execution order, fixes by number |
+| the item file | `---\nid: <ID>\n---` and the body, byte for byte (accents, a NUL, line endings) |
+| a frontmatter comment (`files: []  # …`) | dropped — JSON has none; the dry run counts them |
+| a view out of date | regenerated, with a warning |
+
+It checks its own work before writing a byte: each cycle is read back from the JSON it would write and
+compared with the same cycle read from frontmatter — the same items in the same order, the same fields
+item by item, the same meta, profile and pitfalls. One difference and nothing is written, in any
+cycle. After writing it reads the files back once more. It refuses when a file it rewrites has
+uncommitted changes (an untracked file has no committed version, so it does not count), and is
+idempotent: a cycle already on JSON is listed as skipped. A local cycle's files are written, never
+committed.
 
 ## `migrate --from we2002`
 
@@ -25,7 +60,8 @@ python3 <plugin>/bin/rite.py check --all --include-archived
 python3 <plugin>/bin/rite.py status --all                                    # compare with the old tables
 ```
 
-What it does:
+What it does — first into frontmatter, as below; then, with `--write`, `--from frontmatter` moves that
+state into the JSON files (see above):
 
 | Legacy | Rite |
 | --- | --- |

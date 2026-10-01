@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from fixtures import write
+from fixtures import fields, set_fields, write
 
 from test_cli import FixtureCase
 
@@ -55,8 +55,7 @@ class ContextTest(FixtureCase):
         self.assertIn("2.2 Report", plan["text"])
 
         path = self.root / "docs/rite/cycles/alpha/01-harness.md"
-        text = path.read_text(encoding="utf-8").replace("#2.1", "#nowhere")
-        path.write_text(text, encoding="utf-8", newline="\n")
+        set_fields(path, {"source_of_truth": fields(path)["source_of_truth"].replace("#2.1", "#nowhere")})
         plan = next(p for p in self.context("ALP-TASK-01")["parts"] if "PLAN-alpha.md" in p["name"])
         self.assertIn("not found", plan["note"])
         self.assertIn("sed -n", plan["note"])  # says how to read the rest
@@ -122,8 +121,7 @@ class ContextTest(FixtureCase):
             Nothing to do with this item.
             """)
         path = self.root / "docs/rite/cycles/alpha/01-harness.md"
-        text = path.read_text(encoding="utf-8").replace("status: pending", "files: [src/app.py]\nstatus: pending")
-        path.write_text(text, encoding="utf-8", newline="\n")
+        set_fields(path, {"files": ["src/app.py"]})
 
         names = {p["name"]: p["text"] for p in self.context("ALP-TASK-01")["parts"]}
         gates = next(v for k, v in names.items() if k.endswith("§ Gates"))

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import PLAN, git, rite, write
+from fixtures import PLAN, add_item, git, rite, write
 
 from test_cli import fields
 
@@ -126,7 +126,7 @@ class WorkspaceTest(WorkspaceCase):
 
         # a hand-written task without repo: check names the repositories to choose from
         path = self.root / "docs/rite/cycles/demo/01-manual.md"
-        write(path, "---\nid: DEMO-TASK-01\ntitle: Manual\ntype: feature\nphase: 1\ndepends_on: []\n"
+        add_item(path, "---\nid: DEMO-TASK-01\ntitle: Manual\ntype: feature\nphase: 1\ndepends_on: []\n"
                     "source_of_truth: /docs/plans/plan-name.md#1\nstatus: pending\ndone_on: null\n"
                     "done_commit: null\nreviewed_on: null\n---\n\n# DEMO-TASK-01 — Manual\n")
         self.rite("sync", "--cycle", "demo")
@@ -136,9 +136,7 @@ class WorkspaceTest(WorkspaceCase):
     def test_batch_plan_ignores_same_paths_in_different_repositories(self):
         self.new_cycle()
         for n in (1, 2):
-            path = next((self.root / "docs/rite/cycles/demo").glob(f"0{n}-*.md"))
-            text = path.read_text(encoding="utf-8").replace("files: []", "files: [src/main.py]")
-            path.write_text(text, encoding="utf-8", newline="\n")
+            self.js("set", f"DEMO-TASK-0{n}", "--files", "src/main.py")
         plan = self.js("batch-plan", "--cycle", "demo", "2")
         self.assertEqual(plan["waves"], [["DEMO-TASK-01", "DEMO-TASK-02"]])
         self.assertEqual([i["repo"] for i in plan["items"]], ["api", "web"])

@@ -24,7 +24,7 @@ blind spots, so the review happens in a separate context that **measures instead
    not re-review, soften or add findings of your own; list what you dropped, with the reason.
 4. **Open one fix per kept finding**: `rite new-fix --cycle <cycle> --origin <ID> --title "<title>"
    --severity <critical|high|medium|low> --json`, then fill the body sections (Problem, Evidence, Root
-   cause, Fix, Files, Verification) — never its frontmatter. A finding about a phase with no entry in
+   cause, Fix, Files, Verification) — never its frontmatter or the JSON state. A finding about a phase with no entry in
    the profile's phase checks is itself a `medium` fix: the reviewer could not apply that phase's checks.
 5. `rite mark-reviewed <ID> [--fixes <FIX-ID>,…] --json`. This single commit carries the new fix files,
    `reviewed_on` and the views — also when there is no finding, because a review without a record

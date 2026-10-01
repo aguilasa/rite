@@ -8,11 +8,10 @@ import unittest
 from pathlib import Path
 
 from fixtures import git, rite, write
-from test_cli import FixtureCase, fields
+from test_cli import FixtureCase, fields, set_fields
 from test_migrate import FIXES, PLAN, PROGRESS, legacy_fix, legacy_task
 from test_reproduce import fix_body
 
-from rite_lib import frontmatter
 
 PY = f'"{sys.executable}"'
 PASSES = f"{PY} -c \"print('emulator up')\""
@@ -87,8 +86,7 @@ class BlockedFixTest(FixtureCase):
 
     def test_check_errors_without_unblocked_by_and_warns_on_unversioned_script(self):
         self.block()
-        self.path.write_text(frontmatter.set_fields(self.path.read_text(encoding="utf-8"), {"unblocked_by": None}),
-                             encoding="utf-8")
+        set_fields(self.path, {"unblocked_by": None})
         self.assertEqual(fields(self.path)["unblocked_by"], None)
         errors = self.check_errors("--all")
         self.assertTrue(any("blocked without unblocked_by" in e for e in errors), errors)
@@ -143,16 +141,14 @@ class BlockedFixIsOpenTest(FixtureCase):
         fix_id = self.new_fix("low")
         path = self.root / "docs/rite/cycles/alpha" / f"{fix_id}.md"
         body = fix_body("```text\n$ python run.py\n316 of 520\n```").replace("{id}", fix_id)
-        path.write_text(body.replace("{resources}", "[]"), encoding="utf-8")
+        path.write_text(body, encoding="utf-8")
         self.assertEqual(len(self.run_py_warnings()), 1)
         self.block(fix_id)
         warnings = self.run_py_warnings()
         self.assertEqual(len(warnings), 1, warnings)
         self.assertIn(fix_id, warnings[0])
         for closed in ("done", "stale"):
-            text = frontmatter.set_fields(path.read_text(encoding="utf-8"),
-                                          {"status": closed, "unblocked_by": None})
-            path.write_text(text, encoding="utf-8")
+            set_fields(path, {"status": closed, "unblocked_by": None})
             self.assertEqual(self.run_py_warnings(), [], closed)
 
     def test_status_counts_blocked_fixes_by_severity_and_apart(self):
@@ -224,7 +220,7 @@ class MigrateBlockedFixTest(unittest.TestCase):
             report = json.loads(out)
             self.assertTrue(any("CORR-LEG-002" in w and "unblocked-by" in w for w in report["warnings"]),
                             report["warnings"])
-            c2 = frontmatter.parse((t / "CORR-LEG-002.md").read_text(encoding="utf-8"))[0]
+            c2 = fields(t / "CORR-LEG-002.md")
             self.assertEqual(c2["status"], "pending")
             code, out, _ = rite(r, "check", "--json")
             self.assertEqual(json.loads(out)["errors"], 0, out)

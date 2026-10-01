@@ -141,7 +141,7 @@ def _has_inline_brackets(fm: list[str], key: str) -> bool:
     for line in fm:
         m = _KEY_RE.match(line)
         if m and m.group(1) == key:
-            return _strip_comment(m.group(2))[0].startswith("[")
+            return _strip_comment(m.group(2))[0].strip().startswith("[")
     return False
 
 

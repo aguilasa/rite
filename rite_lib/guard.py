@@ -50,6 +50,18 @@ def relative(root: Path, path: Path) -> str | None:
         return None
 
 
+def _is_state(cfg: Config, rel: str) -> bool:
+    """A cycle's JSON state: the state file names under cycles_root (the archive is inside it or not)."""
+    name = rel.rsplit("/", 1)[-1]
+    if name not in (cfg["naming"]["progress_state"], cfg["naming"]["fixes_state"]):
+        return False
+    for key in ("cycles_root", "archive_dir"):
+        base = relative(cfg.root, cfg.path(key))
+        if base is not None and (base in ("", ".") or rel.startswith(base.rstrip("/") + "/")):
+            return True
+    return False
+
+
 def classify(cfg: Config, path: Path) -> dict:
     rel = relative(cfg.root, path)
     verdict = {"path": rel or str(path), "blocked": False, "kind": None, "pattern": None,
@@ -57,6 +69,11 @@ def classify(cfg: Config, path: Path) -> dict:
     if rel is None:
         return verdict
     guards = cfg["guards"]
+    if _is_state(cfg, rel):
+        verdict.update(blocked=True, kind="state", pattern=Path(rel).name,
+                       message=f"rite guard: {rel} is Rite's state; only the CLI writes it (rite set, set-cycle, "
+                               "mark, close, mark-reviewed, mark-stale, rebind) — never edit it by hand.")
+        return verdict
     pat = matches(rel, guards["read_only"])
     if pat:
         reason = guards.get("read_only_reason") or "declared read-only in rite.toml [guards].read_only"

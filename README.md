@@ -126,9 +126,10 @@ Concepts behind these choices: [local cycles](docs/CONCEPTS.md#local-cycles),
 | **Cycle profile** | `<profiles_dir>/<cycle>.md` | confirmed decisions, gates, hot files, phase-specific checks |
 | **Item** | task / fix file | scope, `source_of_truth`, done criteria, execution log |
 
-- A **cycle** is a folder with a `progress.md`. Tasks and fixes are one file each; their
-  **frontmatter is the only state**. `progress.md` / `fixes.md` hold a generated table (between
-  `<!-- rite:begin … -->` and `<!-- rite:end -->`) plus free notes.
+- A **cycle** is a folder with a `progress.json`. Tasks and fixes are one markdown file each (prose
+  and `id`); **`progress.json` and `fixes.json` are the only state**, written by the CLI alone.
+  `progress.md` / `fixes.md` hold a table rendered from the JSON (between `<!-- rite:begin … -->` and
+  `<!-- rite:end -->`) plus free notes; `rite_lib/render_md.py` rebuilds them standalone.
 - Finishing an item takes **two commits**: the work (`feat: …`), then `rite.py close <ID>`, which reads
   that commit and records status, date, SHA and file list in `chore(rite): close <ID>`.
 

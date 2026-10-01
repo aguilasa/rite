@@ -14,7 +14,7 @@ Where things are decided:
 | Rite | the plugin (`commands/`, built from `parts/`) | plugin version |
 | Repo config | `rite.toml` | rarely |
 | Cycle profile | `<profiles_dir>/<profile_file>` (+ pitfalls file) | every cycle |
-| Item | task / fix file frontmatter | every item |
+| Item | its entry in the cycle's `progress.json` / `fixes.json`, its prose in the task / fix file | every item |
 
 ## `[project]`
 
@@ -31,11 +31,11 @@ All paths are relative to the repository root.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `cycles_root` | `"docs/rite/cycles"` | Where cycles live. A **cycle** is any folder holding `progress_file`. If `cycles_root` itself holds one, the repository uses the flat layout (one cycle, no sub-folders). |
+| `cycles_root` | `"docs/rite/cycles"` | Where cycles live. A **cycle** is any folder holding `progress_state` (a folder holding only `progress_file` is a cycle from before the JSON state: every command asks for `rite migrate --from frontmatter`). If `cycles_root` itself holds one, the repository uses the flat layout (one cycle, no sub-folders). |
 | `archive_dir` | `"docs/rite/cycles/archive"` | Closed cycles. Never scanned for live work; still scanned for ID uniqueness. |
 | `profiles_dir` | `"docs/rite/profiles"` | Cycle profiles and pitfalls files. |
 | `plans_dir` | `"docs/plans"` | Plans (sources of truth). `new-cycle --copy-plan` copies an outside plan here. |
-| `templates_dir` | `""` | Optional folder with local overrides of the plugin templates (`task.md`, `fix.md`, …). |
+| `templates_dir` | `""` | Optional folder with local overrides of the plugin templates (`task.md`, `fix.md`, …). A template's frontmatter seeds the new item's JSON entry (a key of your own included); the file itself keeps only `id`. |
 | `link_style` | `"root-absolute"` | `root-absolute` (`/docs/x.md`) or `relative` (`../x.md`). `check` enforces it on every link and `source_of_truth`. |
 | `default_cycle` | `""` | Cycle used when a command gets none. Empty = flat layout if present, else the only live cycle, else ask. |
 
@@ -50,8 +50,10 @@ Templates use Python format syntax. Fields: `{prefix}`, `{n}` (number, e.g. `{n:
 | `fix_id` | `"FIX-{prefix}-{n:03}"` |
 | `task_file` | `"{n:02}-{slug}.md"` (relative to the cycle folder; may contain `/`) |
 | `fix_file` | `"{id}.md"` |
-| `progress_file` | `"progress.md"` |
-| `fixes_file` | `"fixes.md"` |
+| `progress_file` | `"progress.md"` (a view) |
+| `fixes_file` | `"fixes.md"` (a view) |
+| `progress_state` | `"progress.json"` (the cycle's meta and its tasks) |
+| `fixes_state` | `"fixes.json"` (the cycle's fixes) |
 | `profile_file` | `"{cycle}.md"` |
 | `pitfalls_file` | `"{cycle}.pitfalls.md"` |
 
@@ -72,16 +74,16 @@ prefix.
 Task numbers are per cycle. Fix numbers are per prefix across all cycles, archived ones included.
 IDs are always allocated by `rite.py new-task` / `new-fix`, which create the file atomically.
 
-A cycle's `prefix` (and optionally `cycle`, `plan`, `profile`, `pitfalls`, `order`) comes from the
-frontmatter of its `progress_file`.
+A cycle's `prefix` (and optionally `cycle`, `plan`, `profile`, `pitfalls`, `ticket`, `local`, `order`)
+comes from its `progress_state` file.
 
-**Execution order.** Tasks run in ID order unless the progress file lists `order:` — task IDs that
+**Execution order.** Tasks run in ID order unless the cycle's `order` lists task IDs that
 come first, in that order; unlisted tasks follow by number. It is how a task split late (new, higher
 ID) runs before tasks numbered below it without renumbering them and breaking their links. Selection
 (`next`, `batch-plan`) and the generated table both follow it; `check` rejects unknown or repeated IDs.
 
-```yaml
-order: [LOOKS-TASK-31, LOOKS-TASK-36, LOOKS-TASK-37, LOOKS-TASK-32]
+```sh
+rite set-cycle --cycle looks --order LOOKS-TASK-31,LOOKS-TASK-36,LOOKS-TASK-37,LOOKS-TASK-32
 ```
 
 ## `[sections]`
@@ -130,8 +132,9 @@ no evidence or verification title, and about a live profile with no gates title.
 | `never_stage` | `[]` | Globs never added to a commit. |
 | `ticket_format` | `"Refs: {ticket}"` | Where a cycle's `ticket` goes in its commits. With `{subject}` it is the subject (`"{ticket} {subject}"` gives `PROJ-1 feat: …`, as many JIRA commit-msg hooks want); without, it is a trailer line. Must contain `{ticket}`. Applies to work commits (through `rite commit-refs`) and bookkeeping commits alike. |
 
-The ticket itself is per cycle, not per repository: `ticket: PROJ-123` in the progress file's
-frontmatter (`rite new-cycle --ticket`). A cycle without one gets no ticket reference.
+The ticket itself is per cycle, not per repository: `"ticket": "PROJ-123"` in the cycle's
+`progress.json` (`rite new-cycle --ticket`, or later `rite set-cycle --ticket`). A cycle without one
+gets no ticket reference.
 
 ## `[guards]`
 

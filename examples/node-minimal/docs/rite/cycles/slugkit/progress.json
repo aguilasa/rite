@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "cycle": "slugkit",
+  "prefix": "SLG",
+  "plan": "/docs/plans/PLAN-slugkit.md",
+  "tasks": [
+    {
+      "id": "SLG-TASK-01",
+      "file": "01-slugify.md",
+      "title": "slugify",
+      "type": "feature",
+      "phase": 1,
+      "depends_on": [],
+      "source_of_truth": "/docs/plans/PLAN-slugkit.md#2.1",
+      "files": [],
+      "resources": [],
+      "status": "pending",
+      "done_on": null,
+      "done_commit": null,
+      "reviewed_on": null,
+      "review_commit": null
+    },
+    {
+      "id": "SLG-TASK-02",
+      "file": "02-word-count.md",
+      "title": "word count CLI",
+      "type": "feature",
+      "phase": 1,
+      "depends_on": ["SLG-TASK-01"],
+      "source_of_truth": "/docs/plans/PLAN-slugkit.md#2.2",
+      "files": [],
+      "resources": [],
+      "status": "pending",
+      "done_on": null,
+      "done_commit": null,
+      "reviewed_on": null,
+      "review_commit": null
+    }
+  ]
+}

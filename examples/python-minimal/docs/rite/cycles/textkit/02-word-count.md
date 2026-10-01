@@ -1,15 +1,5 @@
 ---
 id: TXT-TASK-02
-title: "word count CLI"
-type: feature
-phase: 1
-depends_on: [TXT-TASK-01]
-source_of_truth: "/docs/plans/PLAN-textkit.md#2.2"
-status: pending
-done_on: null
-done_commit: null
-reviewed_on: null
-review_commit: null
 ---
 
 # TXT-TASK-02 — word count CLI

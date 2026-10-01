@@ -14,7 +14,8 @@ history or its links. This command writes `rite.toml` and a short block in `CLAU
 ## Steps
 
 1. **Already adopted?** `rite.toml` at the root → run `rite check --all` and `rite status --all`,
-   report both, stop.
+   report both, stop. One stops with "a cycle from before the JSON state" → report it and offer
+   `rite migrate --from frontmatter` (dry run first; `--write --commit` on a branch, if the user agrees).
 2. **Detect** (read-only), noting the evidence for each conclusion:
    - **Workspace**: this folder is not inside a git repository but sub-folders are. Then `rite.toml`
      goes here, every cycle is local and every item names its `repo` (see the Workspace section of the
@@ -37,7 +38,9 @@ history or its links. This command writes `rite.toml` and a short block in `CLAU
    leaves commented is a question for step 3, never a guess.
 5. **Validate**: `rite status --all --json` must not fail; with mapped cycles, run `rite check --all`
    and report its findings — do not repair legacy items here. Offer `rite sync --all` when only the
-   generated tables are missing.
+   generated tables are missing. A mapped backlog keeping its state in frontmatter stops every command
+   until `rite migrate --from frontmatter` moves it to JSON: show its dry run and leave the `--write`
+   to the user — it rewrites their files, which this command never does.
 6. **CLAUDE.md**: append (or create) at most 8 lines between `<!-- rite:begin -->` and
    `<!-- rite:end -->`: this repository uses Rite, config in `rite.toml`, item state changes only
    through the CLI, and the commands to use.

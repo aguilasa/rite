@@ -25,7 +25,7 @@ blind spots, so the review happens in a separate context that **measures instead
    not re-review, soften or add findings of your own; list what you dropped, with the reason.
 4. **Open one fix per kept finding**: `rite new-fix --cycle <cycle> --origin <ID> --title "<title>"
    --severity <critical|high|medium|low> --json`, then fill the body sections (Problem, Evidence, Root
-   cause, Fix, Files, Verification) — never its frontmatter. A finding about a phase with no entry in
+   cause, Fix, Files, Verification) — never its frontmatter or the JSON state. A finding about a phase with no entry in
    the profile's phase checks is itself a `medium` fix: the reviewer could not apply that phase's checks.
 5. `rite mark-reviewed <ID> [--fixes <FIX-ID>,…] --json`. This single commit carries the new fix files,
    `reviewed_on` and the views — also when there is no finding, because a review without a record
@@ -55,7 +55,8 @@ asked) · `3` no `rite.toml` — stop and tell the user to run `/rite:init`.
 
 ## State
 
-Item frontmatter is the only state; the tables are views the CLI regenerates.
+The cycle's `progress.json` (meta + tasks) and `fixes.json` are the only state; item files hold prose
+and their `id`; the tables in the progress and fixes files are views the CLI renders from the JSON.
 
 - `rite begin <kind> [--cycle C] [--id ID] --json` resolves the cycle, takes the item and returns its
   paths, the config digest and the commit template. Idempotent.
@@ -70,8 +71,11 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
 - A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
   commit its documents yourself.
 
-Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edit between
-`<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
+- Planning fields: `rite set <ID> --files a,b --resources r`; the cycle's `order`, `ticket`, `plan`:
+  `rite set-cycle --cycle C --order <IDs>`. The only fields you write, and only through these.
+
+Never edit `progress.json` / `fixes.json` (the guard refuses it), never put fields back into an item's
+frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
 
 ## Evidence
 

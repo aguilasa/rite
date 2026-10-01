@@ -1,0 +1,5 @@
+#!/bin/sh
+# Render a cycle's markdown views from its JSON state, without the rest of Rite:
+#   sh "${CLAUDE_PLUGIN_ROOT}/bin/rite-render" <cycle folder>... [--check]
+here=$(dirname "$0")
+exec sh "$here/pyrun" "$here/../rite_lib/render_md.py" "$@"

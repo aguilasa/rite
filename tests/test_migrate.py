@@ -5,9 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import git, rite, write
-
-from rite_lib import frontmatter
+from fixtures import fields, git, rite, write
 
 PLAN = "# Plano\n\n## 1. Contexto\n\n## 4. Harness\n\n### 4.2 Cartão\n"
 
@@ -94,7 +92,7 @@ class MigrateTest(unittest.TestCase):
         self._tmp.cleanup()
 
     def fields(self, name):
-        return frontmatter.parse((self.root / "docs/tasks" / name).read_text(encoding="utf-8"))[0]
+        return fields(self.root / "docs/tasks" / name)
 
     def test_dry_run_writes_nothing(self):
         code, out, err = rite(self.root, "migrate", "--from", "we2002", "--json")
@@ -126,7 +124,7 @@ class MigrateTest(unittest.TestCase):
         self.assertIn("<!-- rite:begin tasks -->", progress)
         self.assertIn("Notas humanas ficam.", progress)
         self.assertNotIn("✅", progress)
-        meta = frontmatter.parse(progress)[0]
+        meta = fields(self.root / "docs/tasks/progresso.md")
         self.assertEqual((meta["prefix"], meta["cycle"]), ("LEG", "leg"))
 
         code, out, _ = rite(self.root, "check", "--json")
@@ -151,7 +149,7 @@ class MigrateTest(unittest.TestCase):
         progress = (self.root / "docs/tasks/progresso.md").read_text(encoding="utf-8")
         self.assertEqual(progress.count("<!-- rite:begin tasks -->"), 1)
         self.assertIn("# Anexo — paridade", progress)          # the appendix prose stays
-        self.assertIn("now lives in their frontmatter", progress)  # its state table does not
+        self.assertIn("now lives in the cycle's JSON state", progress)  # its state table does not
         self.assertNotIn("✅", progress)
         # new items are still named by the canonical (first) template
         code, out, err = rite(self.root, "new-task", "--title", "Nova", "--type", "closing", "--phase", "1",
@@ -193,7 +191,7 @@ class MigrateTest(unittest.TestCase):
         code, out, err = rite(self.root, "migrate", "--from", "we2002", "--write", "--json")
         self.assertEqual(code, 0, err)
         progress = (self.root / "docs/tasks/progresso.md").read_text(encoding="utf-8")
-        self.assertEqual(frontmatter.parse(progress)[0]["order"],
+        self.assertEqual(fields(self.root / "docs/tasks/progresso.md")["order"],
                          ["LEG-TASK-01", "LEG-TASK-02", "LEG-TASK-03", "PAR-TASK-01"])
         region = progress.split("<!-- rite:begin tasks -->", 1)[1]
         self.assertLess(region.index("[LEG-TASK-03]"), region.index("[PAR-TASK-01]"))
@@ -221,7 +219,7 @@ class PrefixRuleTest(unittest.TestCase):
         write(r / "cycles/a/OLD-TASK-01.md",
               '---\nid: OLD-TASK-01\ntitle: t\ntype: x\nphase: 1\ndepends_on: []\nsource_of_truth: "/plan.md#1"\n'
               "status: pending\ndone_on: null\ndone_commit: null\nreviewed_on: null\n---\n")
-        rite(r, "sync", "--all")
+        self.assertEqual(rite(r, "migrate", "--from", "frontmatter", "--write")[0], 0)
         return r
 
     def findings(self, root: Path) -> list[tuple[str, str]]:

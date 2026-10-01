@@ -1,15 +1,5 @@
 ---
 id: TXT-TASK-01
-title: "slugify"
-type: feature
-phase: 1
-depends_on: []
-source_of_truth: "/docs/plans/PLAN-textkit.md#2.1"
-status: pending
-done_on: null
-done_commit: null
-reviewed_on: null
-review_commit: null
 ---
 
 # TXT-TASK-01 — slugify

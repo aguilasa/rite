@@ -1,6 +1,7 @@
 ## State
 
-Item frontmatter is the only state; the tables are views the CLI regenerates.
+The cycle's `progress.json` (meta + tasks) and `fixes.json` are the only state; item files hold prose
+and their `id`; the tables in the progress and fixes files are views the CLI renders from the JSON.
 
 - `rite begin <kind> [--cycle C] [--id ID] --json` resolves the cycle, takes the item and returns its
   paths, the config digest and the commit template. Idempotent.
@@ -15,5 +16,8 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
 - A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
   commit its documents yourself.
 
-Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edit between
-`<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
+- Planning fields: `rite set <ID> --files a,b --resources r`; the cycle's `order`, `ticket`, `plan`:
+  `rite set-cycle --cycle C --order <IDs>`. The only fields you write, and only through these.
+
+Never edit `progress.json` / `fixes.json` (the guard refuses it), never put fields back into an item's
+frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.

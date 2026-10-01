@@ -11,8 +11,8 @@ the serialized resources you may use. Other workers may be editing other files a
 
 - **No git state changes**: never `git add`, `commit`, `stash`, `checkout`, `reset`, `restore`,
   `rebase`, `merge`, `push`. Why: parallel workers share one index; the main thread commits in order.
-- **No bookkeeping**: never run `rite close`, `mark*`, `sync`, `new-*`; never edit item frontmatter or
-  the generated tables. The main thread does it after your report.
+- **No bookkeeping**: never run `rite close`, `mark*`, `sync`, `new-*`; never edit item frontmatter,
+  `progress.json` / `fixes.json` or the generated tables. The main thread does it after your report.
 - **Stay inside your file list.** If the item needs a file outside it, stop and report; do not edit it.
   Why: the batch's conflict matrix was built from that list.
 - **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run

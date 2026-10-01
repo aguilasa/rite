@@ -25,7 +25,7 @@ One task per invocation, then stop: small runs stay reviewable and resumable. Ba
    you notice for another item goes in that item's Notes; a done criterion that is not verifiable is
    made verifiable in the task file first.
 4. **Do the work**, then **verify every done criterion by running it**. Tick `- [x]` only after seeing
-   the output; paste the command and the decisive line under Notes. With `files:` declared and
+   the output; paste the command and the decisive line under Notes. With `files` declared and
    `repo_kb` above `[limits].delegate_above_kb`, hand the implementation to one `rite:rite-worker`
    (payload of `rite context`, allowed files, gates) and verify its report.
 5. `rite gates --id <ID> --json`. Red → fix and rerun; if you cannot, go to *Blocked*.
@@ -58,7 +58,8 @@ asked) · `3` no `rite.toml` — stop and tell the user to run `/rite:init`.
 
 ## State
 
-Item frontmatter is the only state; the tables are views the CLI regenerates.
+The cycle's `progress.json` (meta + tasks) and `fixes.json` are the only state; item files hold prose
+and their `id`; the tables in the progress and fixes files are views the CLI renders from the JSON.
 
 - `rite begin <kind> [--cycle C] [--id ID] --json` resolves the cycle, takes the item and returns its
   paths, the config digest and the commit template. Idempotent.
@@ -73,8 +74,11 @@ Item frontmatter is the only state; the tables are views the CLI regenerates.
 - A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
   commit its documents yourself.
 
-Never write `status`, `done_on`, `done_commit`, `reviewed_on` by hand, never edit between
-`<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
+- Planning fields: `rite set <ID> --files a,b --resources r`; the cycle's `order`, `ticket`, `plan`:
+  `rite set-cycle --cycle C --order <IDs>`. The only fields you write, and only through these.
+
+Never edit `progress.json` / `fixes.json` (the guard refuses it), never put fields back into an item's
+frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.
 
 ## What to read
 

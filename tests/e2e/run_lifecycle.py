@@ -14,7 +14,7 @@ Starts from an example stripped of its rite.toml and cycle (only code, tests and
      sends exactly that fix to one reproducer agent
   6. /rite:close-cycle <cycle> --yes   -> archived, links rewritten
   7. /rite:retro <cycle> --yes         -> retro.md
-and asserts on git log, frontmatter and `rite check` after every step.
+and asserts on git log, the JSON state and `rite check` after every step.
 
 Everything specific to the example comes from its e2e.json; this file names no project, path or tool.
 """

@@ -1,110 +1,53 @@
-"""Generated regions of progress.md / fixes.md. Data lives in item frontmatter; tables are views."""
+"""Generated regions of progress.md / fixes.md. Data lives in the cycle's JSON; tables are views.
+
+The rendering is ``render_md`` (standalone, stdlib only). This module adds what only Rite knows: the
+JSON arrays are kept in execution order before rendering, so the rows read in the order work runs.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from .model import Cycle, Project, make_link
-
-TASKS_REGION = "tasks"
-FIXES_REGION = "fixes"
-
-
-def begin_marker(region: str) -> str:
-    return f"<!-- rite:begin {region} -->"
+from . import render_md, state
+from .model import Cycle, Project
+from .render_md import END_MARKER, FIXES_REGION, TASKS_REGION, begin_marker, extract_region, replace_region  # noqa: F401
 
 
-END_MARKER = "<!-- rite:end -->"
+def names(project: Project) -> dict:
+    return {"progress_file": project.progress_name, "fixes_file": project.fixes_name,
+            "progress_state": project.progress_state, "fixes_state": project.fixes_state}
 
 
-def _cell(value) -> str:
-    if value is None or value == "" or value == []:
-        return "—"
-    if isinstance(value, list):
-        value = ", ".join(str(v) for v in value)
-    return str(value).replace("|", "\\|").replace("\n", " ")
+def _opts(project: Project) -> dict:
+    return {"root": project.root, "link_style": project.cfg.link_style, "names": names(project)}
 
 
-def tasks_table(project: Project, cycle: Cycle) -> str:
-    style = project.cfg.link_style
-    rows = ["| ID | Title | Phase | Type | Depends on | Status | Done on | Reviewed on |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- |"]
-    for t in cycle.tasks:
-        link = make_link(project.root, cycle.progress_path, t.path, style)
-        f = t.fields
-        rows.append(f"| [{t.id}]({link}) | {_cell(t.title)} | {_cell(f.get('phase'))} | {_cell(f.get('type'))} "
-                    f"| {_cell(t.depends_on)} | {_cell(t.status)} | {_cell(f.get('done_on'))} "
-                    f"| {_cell(f.get('reviewed_on'))} |")
-    if not cycle.tasks:
-        rows.append("| — | *(no tasks yet)* | | | | | | |")
-    return "\n".join(rows)
-
-
-def fixes_table(project: Project, cycle: Cycle) -> str:
-    style = project.cfg.link_style
-    rows = ["| ID | Title | Origin | Severity | Status | Done on |",
-            "| --- | --- | --- | --- | --- | --- |"]
-    for fx in cycle.fixes:
-        link = make_link(project.root, cycle.fixes_path, fx.path, style)
-        f = fx.fields
-        rows.append(f"| [{fx.id}]({link}) | {_cell(fx.title)} | {_cell(f.get('origin'))} "
-                    f"| {_cell(f.get('severity'))} | {_cell(fx.status)} | {_cell(f.get('done_on'))} |")
-    if not cycle.fixes:
-        rows.append("| — | *(no fixes)* | | | | |")
-    return "\n".join(rows)
-
-
-def replace_region(text: str, region: str, content: str) -> str:
-    begin = begin_marker(region)
-    block = f"{begin}\n{content}\n{END_MARKER}"
-    start = text.find(begin)
-    if start == -1:
-        sep = "" if text.endswith("\n\n") or not text else ("\n" if text.endswith("\n") else "\n\n")
-        return f"{text}{sep}{block}\n"
-    end = text.find(END_MARKER, start)
-    if end == -1:
-        raise ValueError(f"'{begin}' without '{END_MARKER}'")
-    return text[:start] + block + text[end + len(END_MARKER):]
-
-
-def extract_region(text: str, region: str) -> str | None:
-    begin = begin_marker(region)
-    start = text.find(begin)
-    if start == -1:
-        return None
-    end = text.find(END_MARKER, start)
-    if end == -1:
-        return None
-    return text[start + len(begin):end].strip("\n")
+def unordered(project: Project, cycle: Cycle) -> list[Path]:
+    """State files whose item array is not in execution order (rows would render out of order)."""
+    out = []
+    for path, kind, key in ((cycle.progress_state_path, "task", project.execution_key(cycle.order)),
+                            (cycle.fixes_state_path, "fix", lambda e: project.entry_n("fix", e))):
+        entries = [i.fields | {"file": i.file} for i in cycle.items if i.kind == kind]
+        if [e.get("id") for e in entries] != [e.get("id") for e in sorted(entries, key=key)]:
+            out.append(path)
+    return out
 
 
 def expected(project: Project, cycle: Cycle) -> dict[Path, tuple[str, str]]:
     """{file: (region, generated content)}"""
-    return {
-        cycle.progress_path: (TASKS_REGION, tasks_table(project, cycle)),
-        cycle.fixes_path: (FIXES_REGION, fixes_table(project, cycle)),
-    }
+    return render_md.views(cycle.path, **_opts(project))
 
 
 def out_of_sync(project: Project, cycle: Cycle) -> list[Path]:
-    stale = []
-    for path, (region, content) in expected(project, cycle).items():
-        current = path.read_text(encoding="utf-8") if path.is_file() else ""
-        if extract_region(current, region) != content:
-            stale.append(path)
-    return stale
+    return unordered(project, cycle) + render_md.out_of_sync(cycle.path, **_opts(project))
 
 
 def sync(project: Project, cycle: Cycle) -> list[Path]:
-    """Rewrite only the generated regions. Idempotent. Returns files that changed."""
+    """Put the JSON arrays in execution order, then rewrite only the generated regions. Idempotent.
+    Returns files that changed."""
     changed = []
-    for path, (region, content) in expected(project, cycle).items():
-        current = path.read_text(encoding="utf-8") if path.is_file() else ""
-        if not current:
-            title = "Fixes" if region == FIXES_REGION else "Progress"
-            current = f"# {title} — {cycle.name}\n"
-        new = replace_region(current, region, content)
-        if new != current:
-            path.write_text(new, encoding="utf-8", newline="\n")
-            changed.append(path)
-    return changed
+    if state.reorder(cycle.progress_state_path, "task", project.execution_key(cycle.order)):
+        changed.append(cycle.progress_state_path)
+    if state.reorder(cycle.fixes_state_path, "fix", lambda e: project.entry_n("fix", e)):
+        changed.append(cycle.fixes_state_path)
+    return changed + render_md.render(cycle.path, **_opts(project))

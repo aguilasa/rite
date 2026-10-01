@@ -52,6 +52,8 @@ def cmd_resolve_cycle(project: Project, args) -> int:
     data = {
         "cycle": c.name, "path": display(project.root, c.path), "prefix": c.prefix,
         "progress": display(project.root, c.progress_path), "fixes": display(project.root, c.fixes_path),
+        "progress_state": display(project.root, c.progress_state_path),
+        "fixes_state": display(project.root, c.fixes_state_path),
         "profile": display(project.root, c.profile_path), "profile_exists": c.profile_path.is_file(),
         "pitfalls": display(project.root, c.pitfalls_path), "pitfalls_exists": c.pitfalls_path.is_file(),
         "plan": c.meta.get("plan"), "archived": c.archived, "ticket": c.ticket, "local": c.local,
@@ -194,6 +196,44 @@ def cmd_new_fix(project: Project, args) -> int:
     data = {"id": item.id, "path": display(project.root, item.path)}
     _emit(args, data, f"created {item.id}: {data['path']}")
     return EXIT_OK
+
+
+def cmd_set(project: Project, args) -> int:
+    cycle, item = _item(project, args, args.id)
+    updates = {}
+    if args.files is not None:
+        updates["files"] = _paths(args.files)
+    if args.resources is not None:
+        updates["resources"] = _paths(args.resources)
+    if not updates:
+        raise RiteError("rite set needs --files and/or --resources")
+    res = ops.set_fields(project, cycle, item, updates)
+    _emit(args, res, f"set {', '.join(updates)} of {item.id} in {res['file']}")
+    return EXIT_OK
+
+
+def cmd_set_cycle(project: Project, args) -> int:
+    cycle = project.resolve_cycle(args.cycle)
+    updates: dict = {}
+    if args.order is not None:
+        updates["order"] = _ids(args.order)
+    if args.ticket is not None:
+        updates["ticket"] = args.ticket.strip() or None
+    if args.plan is not None:
+        updates["plan"] = args.plan.strip() or None
+    if not updates:
+        raise RiteError("rite set-cycle needs --order, --ticket and/or --plan")
+    res = ops.set_cycle(project, cycle, updates)
+    _emit(args, res, f"set {', '.join(updates)} of cycle {cycle.name} in {res['file']}")
+    return EXIT_OK
+
+
+def _paths(values: list[str]) -> list[str]:
+    """`--files a b --files c,d` and `--files ""` (an empty list)."""
+    out: list[str] = []
+    for v in values:
+        out += [x.strip() for x in v.split(",") if x.strip()]
+    return out
 
 
 def cmd_commit_new(project: Project, args) -> int:
@@ -444,8 +484,10 @@ def cmd_sections(project: Project, args) -> int:
 
 def cmd_migrate(args) -> int:
     from . import migrate
-    if args.source != "we2002":
-        raise RiteError(f"unknown source {args.source!r}; supported: we2002")
+    if args.source not in ("we2002", "frontmatter"):
+        raise RiteError(f"unknown source {args.source!r}; supported: frontmatter, we2002")
+    if args.source == "frontmatter":
+        return _migrate_frontmatter(args)
     root = Path(args.root).resolve() if args.root else Path.cwd()
     report = migrate.migrate_we2002(root, write=args.write)
     r = report.as_dict()
@@ -464,6 +506,33 @@ def cmd_migrate(args) -> int:
         lines += [f"  {a['item']} ({a['file']}): {a['action']}" for a in r["actions"]]
     if not args.write:
         lines.append("dry run: nothing written (pass --write, on a branch)")
+    _emit(args, r, "\n".join(lines))
+    return EXIT_OK
+
+
+def _migrate_frontmatter(args) -> int:
+    from . import migrate
+    root = config.find_root(Path(args.root) if args.root else Path.cwd())
+    report = migrate.to_json(root, write=args.write, commit=args.commit)
+    r = report.as_dict()
+    verb = "moved" if args.write else "would move"
+    lines = [f"{verb} the state of {r['items']} items in {len(r['cycles'])} cycle(s) to JSON:"]
+    lines += [f"  {c}" for c in r["cycles"]]
+    if r["skipped"]:
+        lines.append(f"already on JSON, left as is: {', '.join(r['skipped'])}")
+    lines.append(f"files {'written' if args.write else 'to write'}: {len(r['changed'])}")
+    if r["extra_keys"]:
+        lines.append("fields outside Rite's vocabulary, kept in the JSON: "
+                     + ", ".join(f"{k} ({n})" for k, n in sorted(r["extra_keys"].items())))
+    if r["comments"]:
+        lines.append(f"frontmatter comments dropped (JSON has none): {r['comments']} line(s)")
+    lines += [f"warning: {w}" for w in r["warnings"]]
+    if r["commit"]:
+        lines.append(f"committed {r['commit']}")
+    if not args.write:
+        lines.append("dry run: nothing written (pass --write, optionally --commit)")
+    elif r["cycles"]:
+        lines.append("next: rite check --all --include-archived")
     _emit(args, r, "\n".join(lines))
     return EXIT_OK
 
@@ -623,7 +692,19 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-commit", action="store_true")
     s.set_defaults(fn=cmd_mark_stale)
 
-    s = sub.add_parser("sync", parents=[common], help="regenerate progress/fixes tables from frontmatter")
+    s = sub.add_parser("set", parents=[common], help="set an item's planning fields (files, resources)")
+    s.add_argument("id")
+    s.add_argument("--files", action="append", help="predicted paths/globs (repeat or comma-separate; '' empties)")
+    s.add_argument("--resources", action="append", help="serialized resources the item needs")
+    s.set_defaults(fn=cmd_set)
+
+    s = sub.add_parser("set-cycle", parents=[common], help="set a cycle's order, ticket or plan")
+    s.add_argument("--order", action="append", help="task IDs in execution order (repeat or comma-separate)")
+    s.add_argument("--ticket", help="external tracker key ('' clears it)")
+    s.add_argument("--plan", help="plan link, in [paths].link_style ('' clears it)")
+    s.set_defaults(fn=cmd_set_cycle)
+
+    s = sub.add_parser("sync", parents=[common], help="regenerate progress/fixes tables from the JSON state")
     s.add_argument("--all", action="store_true")
     s.add_argument("--include-archived", action="store_true", help="also archived cycles")
     s.set_defaults(fn=cmd_sync)
@@ -684,8 +765,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(fn=cmd_sections)
 
     s = sub.add_parser("migrate", parents=[common], help="adopt a legacy backlog in place (run on a branch)")
-    s.add_argument("--from", dest="source", required=True, help="legacy format: we2002")
+    s.add_argument("--from", dest="source", required=True,
+                   help="frontmatter (Rite <= 0.13: state in frontmatter, moved to JSON) or we2002")
     s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
+    s.add_argument("--commit", action="store_true", help="--from frontmatter: commit the result")
     s.set_defaults(fn=cmd_migrate, needs_project=False)
 
     s = sub.add_parser("tokens", parents=[common],
