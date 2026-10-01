@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.14.0] — 2026-10-01
 
 State lived in every item's frontmatter and in the progress file's: one field to read meant opening
 every file of a cycle, a hand edit anywhere could change an item's fate, and nothing guarded it.
