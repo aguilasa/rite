@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`rite commit-new` pushes under `[commit].push = "after-each-item"`** (#3): it opened items with a
+  bookkeeping commit and never pushed, leaving a clean tree silently ahead of origin. It now pushes
+  the bookkeeping repository like `rite finish` and reports it in `pushed`; a failed push is
+  reported, not fatal.
+- **Evidence citing a missing path is `cannot_decide`, never a verdict** (#2): a command over a file
+  of a reviewer's scratch copy fails the same before and after a repair, and read as `NOT
+  REPRODUCED` it got the fix marked stale. `rite reproduce` lists those paths in `missing_path` (per
+  command and per fix) and flags the fix `cannot_decide`; `rite check` warns when a reading command
+  (`grep`, `cat`, `diff`, `head`, `tail`, `wc`, `cmp`) cites a file the repository does not hold.
+- **`rite reproduce` cannot hang silent** (#1): output goes to a file, never a pipe a background
+  child can hold open; a command past `[limits].reproduce_timeout_s` (default 300, `--timeout`
+  overrides) is killed with its children and reported `timed_out` (`cannot_decide`); every command
+  reports its `seconds`, and each fix prints one line to stderr as soon as it is measured — stdout
+  unchanged.
+
 ## [0.14.0] — 2026-10-01
 
 State lived in every item's frontmatter and in the progress file's: one field to read meant opening
