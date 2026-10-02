@@ -21,8 +21,8 @@ Arguments: `$ARGUMENTS`
      `rite reproduce <FIX> --json` and it joins the batch; else it stays blocked: report command and output.
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
    - `REPRODUCED` → stays in the batch; paste the output into its Execution Log.
-   - **Residue** — `runnable: false`, `over_limit`, `shell_error`, `CANNOT RUN`, or an output that does
-     not decide: only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
+   - **Residue** — `runnable: false`, `over_limit`, `cannot_decide`, `CANNOT RUN`, or an output that
+     does not decide: only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
      `rite context <FIX> --json`. Handle its verdict as above; `CANNOT RUN` stays in the batch.
    - **With `--plan` the triage is dry**: `--plan` measures and reports, never writes — report each
      verdict and whether it was decided inline or is residue, with no `mark-stale` or `mark`, no Execution Log and
@@ -91,8 +91,8 @@ frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->
   revision or an old log documents, never verifies.
 - **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
-  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `shell_error`, missing path) → an agent or a
-  person, never *stale*. An exit code is not a verdict.
+  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error` or
+  `missing_path`) → an agent or a person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.

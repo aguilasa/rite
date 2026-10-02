@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +20,47 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 # a script an evidence line runs: `python x.py`, `bash tools/x.sh`, `node x.mjs`, `./x`
+# commands that only read the files they name: one cited from a scratch copy fails the same once fixed
+_READERS = {"grep", "egrep", "fgrep", "rg", "cat", "diff", "head", "tail", "wc", "cmp"}
+_FILE_LIKE = re.compile(r"[^/\\]\.[A-Za-z0-9]{1,8}$")
+
+
+def _words(line: str) -> list[str]:
+    lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        return list(lexer)
+    except ValueError:  # an unbalanced quote: the line is prose for the shell too
+        return line.split()
+
+
+def _reads(line: str) -> list[str]:
+    """Files a reader (`grep x f.txt`, `cat f.log | wc -l`) names in one line; a grep's first operand
+    is its pattern unless `-e`/`-f` gave one."""
+    found, segment, words = [], [], [*_words(line), ";"]
+    for i, word in enumerate(words):
+        if word and set(word) <= set(";&|()"):
+            if segment and Path(segment[0]).name in _READERS:
+                operands = [w for w in segment[1:] if not w.startswith("-")]
+                if Path(segment[0]).name in ("grep", "egrep", "fgrep", "rg"):
+                    operands = operands if {"-e", "-f"} & set(segment) else operands[1:]
+                found += [w for w in operands if _FILE_LIKE.search(w) and not _dynamic(w)]
+            segment = []
+        elif not (word in (">", ">>", "<") or (i and words[i - 1] in (">", ">>"))):
+            segment.append(word)  # a redirect's target is written, not read
+    return found
+
+
+def _writes(line: str) -> set[str]:
+    """Files a line creates: `> f`, `>> f`, `tee f`, `touch f`."""
+    words = _words(line)
+    made = {b for a, b in zip(words, words[1:]) if a in (">", ">>")}
+    for i, word in enumerate(words):
+        if word in ("tee", "touch"):
+            made |= {w for w in words[i + 1:] if not w.startswith("-") and not set(w) <= set(";&|()<>")}
+    return made
+
+
 _SCRIPT_RE = re.compile(r"""(?:^|[;&|(]\s*|\s)(?:(?:python3?|py|sh|bash|node|ruby|perl)\s+(?:-\S+\s+)*"""
                         r"""([^\s;&|<>'"-][^\s;&|<>'"]*\.(?:py|sh|mjs|cjs|js|rb|pl))"""
                         r"""|\./([^\s;&|<>'"]+))""")
@@ -395,12 +437,15 @@ class Checker:
             self.warn(fix.path, f"unblocked_by runs `{script}`, which is not in the repository: "
                       "the command must run from HEAD as written")
 
+    def _fix_root(self, fix: Item) -> Path:
+        try:
+            return self.p.git_root(fix)
+        except RiteError:
+            return self.p.root
+
     def missing_scripts(self, fix: Item, command: str) -> list[str]:
         """Scripts the first line of ``command`` runs that are not in the fix's repository."""
-        try:
-            root = self.p.git_root(fix)
-        except RiteError:
-            root = self.p.root
+        root = self._fix_root(fix)
         return [s for s in (a or b for a, b in _SCRIPT_RE.findall(command.splitlines()[0]))
                 if not _dynamic(s) and not (root / s).exists()]
 
@@ -416,6 +461,7 @@ class Checker:
             if not found:
                 continue
             moved = False  # after a `cd`, relative paths are no longer the repository's
+            made: set[str] = set()  # files an earlier line wrote
             for command in compose._shell_lines(found[1])[0]:
                 first = command.splitlines()[0]
                 moved = moved or bool(re.search(r"(?:^|[;&|]\s*)cd\s", command))
@@ -423,6 +469,12 @@ class Checker:
                     for script in self.missing_scripts(fix, first):
                         self.warn(fix.path, f"'{found[0]}' runs `{script}`, which is not in the repository: "
                                   "evidence must run from HEAD as written")
+                    root = self._fix_root(fix)
+                    for path in dict.fromkeys(_reads(first)):
+                        if path not in made and not (root / path).exists():
+                            self.warn(fix.path, f"'{found[0]}' cites `{path}`, which is not in the repository: "
+                                      "evidence runs from the repository root")
+                made |= _writes(first)
                 if _pinned(command):
                     self.warn(fix.path, f"'{found[0]}' runs `{first}`, which reads a fixed git revision: "
                               "it documents, never verifies — add a command over the working tree")

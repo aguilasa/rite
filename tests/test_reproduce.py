@@ -190,6 +190,22 @@ class ReproduceTest(unittest.TestCase):
         run = self.reproduce(fix_id)["fixes"][0]["commands"][0]
         self.assertNotEqual(run["exit_code"], 0)  # the caller reads this as CANNOT RUN
 
+    def test_a_path_that_is_not_there_cannot_decide(self):
+        # a reviewer cited files of its scratch copy: the command fails the same before and after a fix
+        fix_id = self.add_fix("```text\n$ grep x nope1.txt nope2.txt\n3\n```")
+        fix = self.reproduce(fix_id)["fixes"][0]
+        self.assertEqual(fix["commands"][0]["missing_path"], ["nope1.txt", "nope2.txt"])
+        self.assertEqual((fix["missing_path"], fix["cannot_decide"]), (["nope1.txt", "nope2.txt"], True))
+        code, out, _ = self.fx.rite("reproduce", "--cycle", "alpha", fix_id)
+        self.assertIn("(missing path: nope1.txt, nope2.txt; cannot decide)", out)
+
+    def test_a_search_without_a_match_is_a_result(self):
+        (self.root / "notes.txt").write_text("nothing here\n", encoding="utf-8")
+        fix_id = self.add_fix("```text\n$ grep zzz-no-match notes.txt\n```")
+        fix = self.reproduce(fix_id)["fixes"][0]
+        self.assertEqual(fix["commands"][0]["exit_code"], 1)
+        self.assertEqual((fix["missing_path"], fix["cannot_decide"]), ([], False))
+
     def test_a_passing_command_is_cut_to_its_tail(self):
         fix_id = self.add_fix(f"```text\n$ {PY} -c \"[print(i) for i in range(50)]\"\n```")
         run = self.reproduce(fix_id, "--tail", "5")["fixes"][0]["commands"][0]
@@ -249,6 +265,14 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual(len(warnings), 1, warnings)
         self.assertIn("runs `run.py`, which is not in the repository", warnings[0])
 
+    def test_check_warns_on_a_file_that_is_not_in_the_repository(self):
+        (self.root / "kept.txt").write_text("x\n", encoding="utf-8")
+        fix_id = self.add_fix("```text\n$ grep x cost1.txt kept.txt\n$ echo 1 > made.txt\n$ cat made.txt\n"
+                              "$ grep -n made.txt kept.txt\n$ cd /tmp && cat far.txt\n```")
+        warnings = self.evidence_warnings(fix_id)
+        self.assertEqual(len(warnings), 1, warnings)
+        self.assertIn("cites `cost1.txt`, which is not in the repository", warnings[0])
+
     def test_check_warns_on_a_python_heredoc_holding_its_output(self):
         fix_id = self.add_fix("```text\n$ python - <<'EOF'\nslot 1 max rotation spread 4552\nEOF\n```")
         warnings = self.evidence_warnings(fix_id)
@@ -288,7 +312,8 @@ class StaleRuleTest(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         text = (root / "parts" / "evidence.md").read_text(encoding="utf-8")
         rule = next(b for b in text.split("\n- ") if "NOT REPRODUCED" in b)
-        for term in ("why: ok", "shell_error", "CANNOT RUN", "never *stale*", "exit code is not a verdict"):
+        for term in ("why: ok", "shell_error", "missing_path", "cannot_decide", "CANNOT RUN", "never *stale*",
+                     "exit code is not a verdict"):
             self.assertIn(term, " ".join(rule.split()), term)
         reproducer = (root / "agents" / "rite-reproducer.md").read_text(encoding="utf-8")
         self.assertIn("never `NOT REPRODUCED`", reproducer)

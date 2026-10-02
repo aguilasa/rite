@@ -329,6 +329,31 @@ def gates(project: Project, *, cycle_name: str | None, item_id: str | None, tail
 
 # --- reproduce -----------------------------------------------------------------
 SHELL_ERRORS = (126, 127)  # the shell could not run the command at all: not found, not executable
+# a path a failed command could not open: `ls: cannot access 'x'`, `head: cannot open 'x' for reading`,
+# `python: can't open file 'x'`, node's `ENOENT: …, open 'x'` — quoted; `grep: x: No such file…` — bare
+_GONE = ("No such file or directory", "ENOENT")
+_GONE_QUOTED = re.compile(r"""(?:cannot access|can't open file|cannot open|ENOENT\b[^'"\n]*?)\s*['"\u2018]"""
+                          r"""([^'"\u2019\n]+)['"\u2019]""")
+_GONE_BARE = re.compile(r"""(?:^|[:\s])([^\s:'"]+):\s*No such file or directory""")
+
+
+def _missing_paths(output: str, where: Path) -> list[str]:
+    """Paths a failed command reports it could not find and that are indeed absent from ``where``:
+    evidence citing a file of someone's scratch copy fails the same before and after a repair."""
+    found: list[str] = []
+    for line in output.splitlines():
+        if not any(g in line for g in _GONE):
+            continue
+        match = _GONE_QUOTED.search(line) or _GONE_BARE.search(line)
+        if not match or match.group(1) in found:
+            continue
+        try:
+            gone = not (where / match.group(1)).exists()
+        except OSError:
+            gone = True
+        if gone:
+            found.append(match.group(1))
+    return found
 
 
 def _fenced(body: str) -> list[list[str]]:
@@ -482,8 +507,15 @@ def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = Non
     output = (proc.stdout or "") + (proc.stderr or "")
     lines = output.splitlines()
     return {"command": command, "exit_code": proc.returncode, "shell_error": proc.returncode in SHELL_ERRORS,
+            "missing_path": _missing_paths(output, where) if proc.returncode else [],
             "output": output if proc.returncode else "\n".join(lines[-tail:]),
             "truncated": proc.returncode == 0 and len(lines) > tail}
+
+
+def _undecidable(runs: list[dict]) -> dict:
+    """A fix whose evidence could not run as written has no verdict: never *stale*."""
+    missing = list(dict.fromkeys(p for r in runs for p in r["missing_path"]))
+    return {"missing_path": missing, "cannot_decide": bool(missing) or any(r["shell_error"] for r in runs)}
 
 
 def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, all_open: bool = False,
@@ -495,7 +527,8 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     `[limits].inline_triage_max_output_kb` is cut to its tail and flagged `over_limit`: the main
     thread does not hold it; that fix goes to an agent. Runs only commands written in the
     repository's own versioned fix files — the same trust `[gates].global` has. A blocked fix runs
-    its `unblocked_by` in place of its evidence: exit 0 says the environment it waited on is there."""
+    its `unblocked_by` in place of its evidence: exit 0 says the environment it waited on is there.
+    A fix whose command could not run as written (`shell_error`, `missing_path`) is `cannot_decide`."""
     import shutil
     import tempfile
     cycle = project.resolve_cycle(cycle_name)
@@ -524,6 +557,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                     "unblock": _run_one(command, _repo_dir(project, fix), tail, shell) if command else None,
                     "resources": fix.fields.get("resources") or [],
                     "recorded": [], "commands": [], "held_bytes": 0, "over_limit": False,
+                    "missing_path": [], "cannot_decide": False,
                 })
                 continue
             found = evidence_commands(fix.path.read_text(encoding="utf-8", errors="replace"),
@@ -548,6 +582,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                 **{k: found[k] for k in ("looked_for", "near", "broken") if k in found},
                 "resources": fix.fields.get("resources") or [],
                 "recorded": found["recorded"], "commands": runs, "held_bytes": held, "over_limit": over,
+                **_undecidable(runs),
             })
     finally:
         for copy in copies.values():

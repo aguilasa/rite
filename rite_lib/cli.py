@@ -134,7 +134,9 @@ def cmd_reproduce(project: Project, args) -> int:
         if fix["blocked"] and fix["unblock"]:
             lines += [f"    {line}" for line in fix["unblock"]["output"].splitlines()]
         for run in fix["commands"]:
-            lines.append(f"  $ {run['command']}  -> exit {run['exit_code']}")
+            gone = (f" (missing path: {', '.join(run['missing_path'])}; cannot decide)"
+                    if run["missing_path"] else "")
+            lines.append(f"  $ {run['command']}  -> exit {run['exit_code']}{gone}")
             lines += [f"    {line}" for line in run["output"].splitlines()]
         if fix["recorded"]:
             lines.append("  recorded:")

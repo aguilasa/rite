@@ -20,8 +20,9 @@ One fix per invocation, then stop. Batches are `/rite:fix-all`.
 3. **Reproduce** at the current HEAD: `rite reproduce <FIX> --json`.
    - *Symptom gone* → change nothing: `rite mark-stale <FIX> --reason "<command> now prints <output>"`,
      report, stop. "Fixing" right code is how regressions get in.
-   - *No runnable evidence* (any `why` but `ok`, a `shell_error`) → write one that shows the problem
-     into the Evidence section first. If the problem cannot be made observable,
+   - *No runnable evidence* (any `why` but `ok`, `cannot_decide`: a `shell_error` or a `missing_path`) →
+     write one that shows the problem into the Evidence section first, runnable from the repository
+     root over files it holds. If the problem cannot be made observable,
      `rite mark <FIX> blocked --reason "..." --unblocked-by "<command>" --commit` and stop.
    - *Reproduced* → paste the decisive output under the Execution Log and continue.
 4. **Root cause**: confirm or correct that section before changing anything. A defect in generated
@@ -103,8 +104,8 @@ matching pitfalls entries. Read that instead of opening those files.
   revision or an old log documents, never verifies.
 - **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
-  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `shell_error`, missing path) → an agent or a
-  person, never *stale*. An exit code is not a verdict.
+  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error` or
+  `missing_path`) → an agent or a person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.
