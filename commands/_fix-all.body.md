@@ -40,6 +40,7 @@ Arguments: `$ARGUMENTS`
 
 Triage, one line per fix: verdict, inline or agent · fixes without a command (ID, `why`, origin): a
 defect of their review · waves and conflict pairs · per item: result, work SHA,
-bookkeeping SHA · gates · new fixes opened · what to run next.
+bookkeeping SHA · `pushed`, if any (from `finish` and `commit-new`) · gates · new fixes opened · what to
+run next.
 
 <!-- rite:parts -->

@@ -617,7 +617,7 @@ def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str |
     """Close the item, verify the cycle and say what comes next — the three calls that ended every run."""
     cycle, item = project.find_item(item_id, project.resolve_cycle(cycle_name) if cycle_name else None)
     closed = ops.close(project, cycle, item, sha=sha, commit=commit, no_repo=no_repo, reason=reason)
-    pushed = _push_after_close(project, item, no_repo) if closed.get("commit") else []
+    pushed = _push_after_commit(project, item, no_repo) if closed.get("commit") else []
     cycle = project.load_cycle(cycle.path, archived=cycle.archived)
     findings = checkmod.run(project, [cycle], quick=True)
     errors = [str(f) for f in findings if f.level == "error"]
@@ -633,10 +633,18 @@ def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str |
             "pushed": pushed}
 
 
-def _push_after_close(project: Project, item: Item, no_repo: bool) -> list[dict]:
+def commit_new(project: Project, *, item_id: str, cycle_name: str | None) -> dict:
+    """Commit a newly created item and, under `after-each-item`, push the bookkeeping repository."""
+    cycle, item = project.find_item(item_id, project.resolve_cycle(cycle_name) if cycle_name else None)
+    res = ops.commit_new(project, cycle, item)
+    return {**res, "pushed": _push_after_commit(project, item, True) if res.get("commit") else []}
+
+
+def _push_after_commit(project: Project, item: Item, no_repo: bool) -> list[dict]:
     """`[commit].push = "after-each-item"`: push the work repository and the bookkeeping one.
 
-    A failed push is reported, never fatal: the item is already closed in the local history.
+    Run after `rite finish` and `rite commit-new`. A failed push is reported, never fatal: the
+    commit already stands in the local history.
     """
     if project.cfg["commit"]["push"] != "after-each-item":
         return []

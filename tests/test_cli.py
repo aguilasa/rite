@@ -593,6 +593,37 @@ global = ["test \"$(echo 'a  b')\" = \"a  b\""]
         self.assertIn("git push", push["error"])
         self.assertEqual(self.log(1), ["chore(rite): close ALP-TASK-01"])
 
+    def new_fix(self) -> str:
+        return self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T",
+                       "--severity", "low")["id"]
+
+    def test_commit_new_does_not_push_by_default(self):
+        data = self.js("commit-new", self.new_fix(), "--cycle", "alpha")
+        self.assertEqual(data["pushed"], [])
+
+    def test_commit_new_pushes_when_configured(self):
+        with tempfile.TemporaryDirectory() as bare:
+            subprocess.run(["git", "init", "-q", "--bare", bare], check=True)
+            self.fx.git("remote", "add", "origin", bare)
+            self.fx.git("push", "-q", "-u", "origin", "HEAD")
+            self.push_after_each_item()
+            self.fx.git("commit", "-q", "-am", "chore: push after each item")
+            fix_id = self.new_fix()
+            data = self.js("commit-new", fix_id, "--cycle", "alpha")
+            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None}])
+            remote = subprocess.run(["git", "-C", bare, "log", "-1", "--format=%s"], check=True,
+                                    capture_output=True, text=True).stdout.splitlines()
+            self.assertEqual(remote, [f"chore(rite): open {fix_id}"])
+            self.assertNotIn("ahead", self.fx.git("status", "-sb"))
+
+    def test_commit_new_reports_failed_push(self):
+        self.push_after_each_item()  # no remote at all
+        fix_id = self.new_fix()
+        data = self.js("commit-new", fix_id, "--cycle", "alpha")
+        [push] = data["pushed"]
+        self.assertFalse(push["ok"])
+        self.assertEqual(self.log(1), [f"chore(rite): open {fix_id}"])
+
 
 class NoConfigTest(unittest.TestCase):
     def test_exit_code_3(self):

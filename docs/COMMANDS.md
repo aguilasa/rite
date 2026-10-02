@@ -47,7 +47,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `finish ID [--sha S \| --no-repo --reason R]` | close the item, `check --quick`, and name the next one |
 | `resolve-cycle [name]` | cycle chosen by the rules, with prefix, profile, pitfalls, plan, ticket, local, workspace and its repos |
 | `next task\|review\|fix` | deterministic selection |
-| `new-task`, `new-fix` `[--repo R]`, `commit-new ID` | atomic ID allocation (`--repo`: the item's repository in a workspace); commit a new filled-in item |
+| `new-task`, `new-fix` `[--repo R]`, `commit-new ID` | atomic ID allocation (`--repo`: the item's repository in a workspace); commit a new filled-in item (pushed under `[commit].push = "after-each-item"`, reported in `pushed`) |
 | `commit-refs ID` | subject template and trailers for an item's work commit |
 | `close ID [--sha S \| --no-repo --reason R]` | record a finished item from its work commit; `--no-repo` when it has none (`done_commit: none`) |
 | `rebind ID --sha S` | repoint `done_commit` after a squash or rebase rewrote the work commit |

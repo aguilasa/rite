@@ -41,7 +41,8 @@ Arguments: `$ARGUMENTS`
 
 Triage, one line per fix: verdict, inline or agent · fixes without a command (ID, `why`, origin): a
 defect of their review · waves and conflict pairs · per item: result, work SHA,
-bookkeeping SHA · gates · new fixes opened · what to run next.
+bookkeeping SHA · `pushed`, if any (from `finish` and `commit-new`) · gates · new fixes opened · what to
+run next.
 
 ## The CLI
 
@@ -105,8 +106,8 @@ frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->
 - **Staging**: explicit paths (`git add -- <paths>`), never `git add -A`, never a `never_stage` path.
   In a local cycle, never stage the cycle folder, its profile or its pitfalls file.
 - **Never** amend, rebase, force, skip hooks or push by hand; push only when `[commit].push = "on-request"`
-  and the user asked in this conversation. With `after-each-item`, `rite finish` pushes: report a
-  failed entry of its `pushed`, never retry it with force. A hook that refuses is reported, never bypassed.
+  and the user asked in this conversation. With `after-each-item`, `rite finish` and `rite commit-new`
+  push: report a failed entry of their `pushed`, never retry it with force. A hook that refuses is reported, never bypassed.
 - Every run ends with a commit, except in a local cycle, where a run touching only item files does not.
 
 ## Batches — waves, workers, serial commits

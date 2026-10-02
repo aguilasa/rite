@@ -163,10 +163,13 @@ def cmd_finish(project: Project, args) -> int:
     lines += [f"    {e}" for e in data["check"]["errors"]]
     nxt = data["next"]
     lines.append(f"  next {nxt['kind']}: {nxt['id'] or '— ' + nxt['reason']}")
-    lines += [f"  pushed: {p['repo']}" if p["ok"] else f"  push failed: {p['repo']}: {p['error']}"
-              for p in data["pushed"]]
+    lines += _pushed_lines(data["pushed"])
     _emit(args, data, "\n".join(lines))
     return EXIT_FAIL if data["check"]["errors"] else EXIT_OK
+
+
+def _pushed_lines(pushed: list[dict]) -> list[str]:
+    return [f"  pushed: {p['repo']}" if p["ok"] else f"  push failed: {p['repo']}: {p['error']}" for p in pushed]
 
 
 def cmd_next(project: Project, args) -> int:
@@ -237,9 +240,8 @@ def _paths(values: list[str]) -> list[str]:
 
 
 def cmd_commit_new(project: Project, args) -> int:
-    cycle, item = _item(project, args, args.id)
-    res = ops.commit_new(project, cycle, item)
-    _emit(args, res, _result_text("opened", res))
+    res = compose.commit_new(project, item_id=args.id, cycle_name=args.cycle)
+    _emit(args, res, "\n".join([_result_text("opened", res), *_pushed_lines(res["pushed"])]))
     return EXIT_OK
 
 

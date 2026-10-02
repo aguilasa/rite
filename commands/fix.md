@@ -41,7 +41,7 @@ evidence, `rite commit-new <NEW-FIX>`, mention it in the report.
 
 Fix (ID, severity, origin) · reproduction output before, or "stale" · root cause, confirmed or
 corrected · files changed and the test added · verification output after, and gates · sweep commit
-or "none needed" · work and bookkeeping SHAs · `pushed`, if any · new fixes · the `next` from `finish`.
+or "none needed" · work and bookkeeping SHAs · `pushed`, if any (from `finish` and `commit-new`) · new fixes · the `next` from `finish`.
 
 ## The CLI
 
@@ -139,8 +139,8 @@ searched and updated, or `sweep: none`.
 - **Staging**: explicit paths (`git add -- <paths>`), never `git add -A`, never a `never_stage` path.
   In a local cycle, never stage the cycle folder, its profile or its pitfalls file.
 - **Never** amend, rebase, force, skip hooks or push by hand; push only when `[commit].push = "on-request"`
-  and the user asked in this conversation. With `after-each-item`, `rite finish` pushes: report a
-  failed entry of its `pushed`, never retry it with force. A hook that refuses is reported, never bypassed.
+  and the user asked in this conversation. With `after-each-item`, `rite finish` and `rite commit-new`
+  push: report a failed entry of their `pushed`, never retry it with force. A hook that refuses is reported, never bypassed.
 - Every run ends with a commit, except in a local cycle, where a run touching only item files does not.
 
 ## Workspace
