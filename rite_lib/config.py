@@ -43,6 +43,7 @@ DEFAULTS: dict = {
         "execution_log": "Execution Log",
         "phase_checks": "Phase-specific checks",
         "phase_label": "Phase",
+        "dependency_graph": "Dependency graph",
         "evidence": "Evidence",
         "verification": "Verification",
         "files": "Files",

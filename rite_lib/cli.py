@@ -503,10 +503,12 @@ def cmd_sections(project: Project, args) -> int:
 
 def cmd_migrate(args) -> int:
     from . import migrate
-    if args.source not in ("we2002", "frontmatter"):
-        raise RiteError(f"unknown source {args.source!r}; supported: frontmatter, we2002")
+    if args.source not in ("we2002", "frontmatter", "graph"):
+        raise RiteError(f"unknown source {args.source!r}; supported: frontmatter, graph, we2002")
     if args.source == "frontmatter":
         return _migrate_frontmatter(args)
+    if args.source == "graph":
+        return _migrate_graph(args)
     root = Path(args.root).resolve() if args.root else Path.cwd()
     report = migrate.migrate_we2002(root, write=args.write)
     r = report.as_dict()
@@ -545,6 +547,28 @@ def _migrate_frontmatter(args) -> int:
                      + ", ".join(f"{k} ({n})" for k, n in sorted(r["extra_keys"].items())))
     if r["comments"]:
         lines.append(f"frontmatter comments dropped (JSON has none): {r['comments']} line(s)")
+    lines += [f"warning: {w}" for w in r["warnings"]]
+    if r["commit"]:
+        lines.append(f"committed {r['commit']}")
+    if not args.write:
+        lines.append("dry run: nothing written (pass --write, optionally --commit)")
+    elif r["cycles"]:
+        lines.append("next: rite check --all --include-archived")
+    _emit(args, r, "\n".join(lines))
+    return EXIT_OK
+
+
+def _migrate_graph(args) -> int:
+    from . import migrate
+    root = config.find_root(Path(args.root) if args.root else Path.cwd())
+    report = migrate.graph_regions(root, write=args.write, commit=args.commit)
+    r = report.as_dict()
+    verb = "generated" if args.write else "would generate"
+    lines = [f"{verb} the dependency graph of {len(r['cycles'])} cycle(s) from depends_on:"]
+    lines += [f"  {c}" for c in r["cycles"]]
+    if r["skipped"]:
+        lines.append(f"already generated, left as is: {', '.join(r['skipped'])}")
+    lines.append(f"files {'written' if args.write else 'to write'}: {len(r['changed'])}")
     lines += [f"warning: {w}" for w in r["warnings"]]
     if r["commit"]:
         lines.append(f"committed {r['commit']}")
@@ -787,9 +811,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("migrate", parents=[common], help="adopt a legacy backlog in place (run on a branch)")
     s.add_argument("--from", dest="source", required=True,
-                   help="frontmatter (Rite <= 0.13: state in frontmatter, moved to JSON) or we2002")
+                   help="frontmatter (Rite <= 0.13: state in frontmatter, moved to JSON), graph "
+                        "(hand-drawn dependency graph replaced by the generated one) or we2002")
     s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
-    s.add_argument("--commit", action="store_true", help="--from frontmatter: commit the result")
+    s.add_argument("--commit", action="store_true", help="--from frontmatter|graph: commit the result")
     s.set_defaults(fn=cmd_migrate, needs_project=False)
 
     s = sub.add_parser("tokens", parents=[common],

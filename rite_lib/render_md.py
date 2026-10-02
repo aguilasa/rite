@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Render a cycle's markdown views from its JSON state: the tasks table of the progress file and the
-fixes table of the fixes file.
+"""Render a cycle's markdown views from its JSON state: the tasks table and the dependency graph of the
+progress file, and the fixes table of the fixes file.
 
 Standalone on purpose: stdlib only, no import of the rest of rite_lib, so the markdown can be rebuilt
 without Rite (and this file dropped once nobody reads the markdown). Rite calls the same functions
@@ -8,12 +8,14 @@ after every state change (`rite sync`).
 
 Only the generated region between ``<!-- rite:begin <region> -->`` and ``<!-- rite:end -->`` is
 rewritten; the rest of each file is free text and is kept. Rows come in the order of the JSON arrays,
-which Rite keeps in execution order.
+which Rite keeps in execution order. The graph region is rendered only where its begin marker already
+is: a progress file written before it keeps its hand-drawn graph until `rite migrate --from graph`.
 
     python render_md.py <cycle_dir> [--root DIR] [--link-style root-absolute|relative] [--check]
 
 Without ``--root`` the root is the nearest folder above the cycle holding ``rite.toml``; link style
-and file names are read from it (``[paths].link_style``, ``[naming]``) unless given.
+and file names are read from it (``[paths].link_style``, ``[naming]``, ``[sections].phase_label``)
+unless given.
 """
 
 from __future__ import annotations
@@ -21,11 +23,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
 TASKS_REGION = "tasks"
 FIXES_REGION = "fixes"
+GRAPH_REGION = "graph"
 END_MARKER = "<!-- rite:end -->"
 DEFAULT_NAMES = {"progress_file": "progress.md", "fixes_file": "fixes.md",
                  "progress_state": "progress.json", "fixes_state": "fixes.json"}
@@ -65,6 +69,40 @@ def tasks_table(tasks: list[dict], *, md_path: Path, cycle_dir: Path, root: Path
     if not tasks:
         rows.append("| — | *(no tasks yet)* | | | | | | |")
     return "\n".join(rows)
+
+
+def _node(item_id) -> str:
+    return re.sub(r"\W", "_", str(item_id))
+
+
+def _label(text) -> str:
+    return (str(text).replace("\n", " ").replace("#", "#35;").replace('"', "#quot;")
+            .replace("<", "#lt;").replace(">", "#gt;"))
+
+
+def dependency_graph(tasks: list[dict], *, phase_label: str = "Phase") -> str:
+    """A mermaid flowchart of ``depends_on``: one subgraph per phase, nodes in the order of the array."""
+    lines = ["```mermaid", "graph TD"]
+    ids = {str(t.get("id")) for t in tasks}
+    phases: dict = {}
+    for t in tasks:
+        phases.setdefault(t.get("phase"), []).append(t)
+
+    def node(t: dict) -> str:
+        title = t.get("title") or ""
+        return f'{_node(t.get("id"))}["{_label(t.get("id"))}' + (f"<br/>{_label(title)}" if title else "") + '"]'
+
+    numbered = sorted((p for p in phases if p is not None),
+                      key=lambda p: (0, p, "") if isinstance(p, int) else (1, 0, str(p)))
+    for phase in numbered:
+        lines.append(f'  subgraph phase_{_node(phase)}["{_label(phase_label)} {_label(phase)}"]')
+        lines += [f"    {node(t)}" for t in phases[phase]]
+        lines.append("  end")
+    lines += [f"  {node(t)}" for t in phases.get(None, [])]
+    for t in tasks:
+        lines += [f"  {_node(d)} --> {_node(t.get('id'))}" for d in _deps(t) if d in ids]
+    lines.append("```")
+    return "\n".join(lines)
 
 
 def fixes_table(fixes: list[dict], *, md_path: Path, cycle_dir: Path, root: Path, link_style: str) -> str:
@@ -107,38 +145,52 @@ def read_state(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
 
 
-def views(cycle_dir: Path, *, root: Path, link_style: str, names: dict | None = None) -> dict[Path, tuple[str, str]]:
-    """{markdown file: (region, generated content)} for one cycle, from its JSON files."""
+def views(cycle_dir: Path, *, root: Path, link_style: str, names: dict | None = None,
+          phase_label: str = "Phase") -> dict[Path, list[tuple[str, str]]]:
+    """{markdown file: [(region, generated content), ...]} for one cycle, from its JSON files."""
     names = {**DEFAULT_NAMES, **(names or {})}
     progress = read_state(cycle_dir / names["progress_state"])
     fixes = read_state(cycle_dir / names["fixes_state"])
     progress_md, fixes_md = cycle_dir / names["progress_file"], cycle_dir / names["fixes_file"]
     opts = {"cycle_dir": cycle_dir, "root": root, "link_style": link_style}
+    tasks = progress.get("tasks") or []
     return {
-        progress_md: (TASKS_REGION, tasks_table(progress.get("tasks") or [], md_path=progress_md, **opts)),
-        fixes_md: (FIXES_REGION, fixes_table(fixes.get("fixes") or [], md_path=fixes_md, **opts)),
+        progress_md: [(TASKS_REGION, tasks_table(tasks, md_path=progress_md, **opts)),
+                      (GRAPH_REGION, dependency_graph(tasks, phase_label=phase_label))],
+        fixes_md: [(FIXES_REGION, fixes_table(fixes.get("fixes") or [], md_path=fixes_md, **opts))],
     }
 
 
-def out_of_sync(cycle_dir: Path, *, root: Path, link_style: str, names: dict | None = None) -> list[Path]:
+def _applies(text: str, region: str) -> bool:
+    """The graph is opt-in by its marker; the tables are always there (created when missing)."""
+    return region != GRAPH_REGION or begin_marker(region) in text
+
+
+def out_of_sync(cycle_dir: Path, *, root: Path, link_style: str, names: dict | None = None,
+                phase_label: str = "Phase") -> list[Path]:
     stale = []
-    for path, (region, content) in views(cycle_dir, root=root, link_style=link_style, names=names).items():
+    for path, regions in views(cycle_dir, root=root, link_style=link_style, names=names,
+                               phase_label=phase_label).items():
         current = path.read_text(encoding="utf-8") if path.is_file() else ""
-        if extract_region(current, region) != content:
+        if any(_applies(current, region) and extract_region(current, region) != content
+               for region, content in regions):
             stale.append(path)
     return stale
 
 
-def render(cycle_dir: Path, *, root: Path, link_style: str, names: dict | None = None) -> list[Path]:
+def render(cycle_dir: Path, *, root: Path, link_style: str, names: dict | None = None,
+           phase_label: str = "Phase") -> list[Path]:
     """Rewrite only the generated regions. Idempotent. Returns the files that changed."""
-    name = read_state(cycle_dir / {**DEFAULT_NAMES, **(names or {})}["progress_state"]).get("cycle") \
-        or cycle_dir.name
+    names = {**DEFAULT_NAMES, **(names or {})}
+    name = read_state(cycle_dir / names["progress_state"]).get("cycle") or cycle_dir.name
     changed = []
-    for path, (region, content) in views(cycle_dir, root=root, link_style=link_style, names=names).items():
+    for path, regions in views(cycle_dir, root=root, link_style=link_style, names=names,
+                               phase_label=phase_label).items():
         current = path.read_text(encoding="utf-8") if path.is_file() else ""
-        if not current:
-            current = f"# {'Fixes' if region == FIXES_REGION else 'Progress'} — {name}\n"
-        new = replace_region(current, region, content)
+        new = current or f"# {'Fixes' if path.name == names['fixes_file'] else 'Progress'} — {name}\n"
+        for region, content in regions:
+            if _applies(new, region):
+                new = replace_region(new, region, content)
         if new != current:
             path.write_text(new, encoding="utf-8", newline="\n")
             changed.append(path)
@@ -178,12 +230,14 @@ def main(argv: list[str] | None = None) -> int:
         root = root or cycle_dir
         style = args.link_style or cfg.get("paths", {}).get("link_style", "root-absolute")
         names = {k: v for k, v in cfg.get("naming", {}).items() if k in DEFAULT_NAMES}
+        label = cfg.get("sections", {}).get("phase_label", "Phase")
+        label = (label[0] if isinstance(label, list) else label) or "Phase"
         if args.check:
-            for path in out_of_sync(cycle_dir, root=root, link_style=style, names=names):
+            for path in out_of_sync(cycle_dir, root=root, link_style=style, names=names, phase_label=label):
                 print(f"stale: {path}")
                 code = 1
         else:
-            for path in render(cycle_dir, root=root, link_style=style, names=names):
+            for path in render(cycle_dir, root=root, link_style=style, names=names, phase_label=label):
                 print(f"rendered: {path}")
     return code
 

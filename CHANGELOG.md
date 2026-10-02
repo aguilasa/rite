@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **The dependency graph is generated from `depends_on`**: the progress file's mermaid graph was
+  drawn by hand by `/rite:plan-to-tasks`, a second copy of the dependencies that went stale on the
+  first `rite set --depends-on`. It is now a view like the tasks table — a `<!-- rite:begin graph
+  -->` region, one subgraph per phase, rewritten by `rite sync` and stale under `rite check`. Nothing
+  new in the JSON. Rendered only where its marker is; new cycles carry it.
+
+### Added
+
+- **`rite migrate --from graph`** swaps a hand-drawn graph for the generated region, keeps the prose
+  around it, and reports each edge the drawing has and `depends_on` lacks instead of adding it.
+- **`[sections].dependency_graph`** (default `"Dependency graph"`) names that section.
+
 ## [0.14.1] — 2026-10-02
 
 ### Fixed

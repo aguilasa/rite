@@ -6,6 +6,11 @@ frontmatter of each item and of the progress file. The migration moves it to `pr
 checks its own work before writing a byte: the cycles read back from the JSON must equal the cycles
 read from the frontmatter, item by item and field by field.
 
+`--from graph`: progress files written before the dependency graph became a generated view keep a
+hand-drawn mermaid block. The migration swaps that block for the generated region (rendered from each
+task's `depends_on`) and keeps every other line. An edge the hand-drawn graph has and `depends_on`
+lacks is reported, never added: the JSON is the source, and the operator decides.
+
 `--from we2002`:
 
 The legacy system kept state in three places (frontmatter, progress tables with emoji, dates in table
@@ -592,6 +597,21 @@ def _plan_cycle(old_project: LegacyProject, project: Project, cycle_dir: Path, r
                  writes={k: v for k, v in writes.items() if not k.is_file() or k.read_bytes() != v})
 
 
+def _refuse_unsafe_write(root: Path, paths: list[Path], *, commit: bool, check_dirty: bool = True) -> None:
+    if not gitutil.is_repo(root):
+        return
+    if check_dirty:
+        status = gitutil.run(root, "status", "--porcelain", "--", *(str(p.relative_to(root)) for p in paths
+                                                                     if p.exists())).splitlines()
+        # an untracked file has no committed version to lose; an edited tracked one would mix with ours
+        dirty = [line for line in status if line.strip() and not line.startswith("??")]
+        if dirty:
+            raise RiteError("uncommitted changes in files the migration rewrites; commit or stash them first:\n"
+                            + "\n".join(dirty))
+    if commit and gitutil.run(root, "diff", "--cached", "--name-only").strip():
+        raise RiteError("the index has staged changes; commit or unstage them first")
+
+
 def to_json(root: Path, *, write: bool, commit: bool = False, mid_migration: bool = False) -> Report:
     """Move every cycle's state from frontmatter to the JSON files. All cycles or none.
 
@@ -614,16 +634,7 @@ def to_json(root: Path, *, write: bool, commit: bool = False, mid_migration: boo
 
     paths = [p for plan in plans for p in plan.writes]
     git = gitutil.is_repo(root)
-    if git and not mid_migration:
-        status = gitutil.run(root, "status", "--porcelain", "--", *(str(p.relative_to(root)) for p in paths
-                                                                     if p.exists())).splitlines()
-        # an untracked file has no committed version to lose; an edited tracked one would mix with ours
-        dirty = [line for line in status if line.strip() and not line.startswith("??")]
-        if dirty:
-            raise RiteError("uncommitted changes in files the migration rewrites; commit or stash them first:\n"
-                            + "\n".join(dirty))
-    if commit and git and gitutil.run(root, "diff", "--cached", "--name-only").strip():
-        raise RiteError("the index has staged changes; commit or unstage them first")
+    _refuse_unsafe_write(root, paths, commit=commit, check_dirty=git and not mid_migration)
     for plan in plans:
         for path, data in plan.writes.items():
             path.write_bytes(data)
@@ -642,4 +653,167 @@ def to_json(root: Path, *, write: bool, commit: bool = False, mid_migration: boo
                                              "chore(rite): move cycle state to JSON" if
                                              cfg["commit"]["style"] == "conventional" else
                                              "rite: move cycle state to JSON")
+    return report
+
+
+# --- --from graph ----------------------------------------------------------------------
+_MERMAID_OPEN = re.compile(r"^\s{0,3}(```|~~~)\s*mermaid\b", re.IGNORECASE)
+_ARROW = re.compile(r"\s*(?:<?-->|<?==>|<?-\.->|---|-\.-)(?:\|[^|]*\|)?\s*")
+_NODE = re.compile(r"^([\w-]+)\s*(?:[\[({>]+\s*\"?(.*?)\"?\s*[\])}]+)?")
+
+
+def _graph_edges(mermaid: str, ids: list[str]) -> tuple[list[tuple[str, str]], set[str]]:
+    """Best-effort (from, to) task-ID edges of a hand-drawn flowchart, and the node names no task ID
+    could be read from. A node is a task when its name or its label holds the ID."""
+    def find_id(text: str) -> str | None:
+        hits = [i for i in ids if i in text]
+        return max(hits, key=len) if hits else None
+
+    norm = {re.sub(r"\W", "", i).lower(): i for i in ids}
+    labels: dict[str, str] = {}
+    chains = []
+    for raw in mermaid.splitlines():
+        line = raw.split("%%", 1)[0].strip()
+        if not line or re.match(r"^(graph|flowchart|subgraph|end|classDef|class|style|linkStyle|click)\b", line):
+            continue
+        sides = _ARROW.split(line)
+        chain = []
+        for side in sides:
+            group = []
+            for part in side.split("&"):
+                m = _NODE.match(part.strip())
+                if not m:
+                    continue
+                name, label = m.group(1), m.group(2)
+                if label:
+                    labels[name] = label
+                group.append(name)
+            chain.append(group)
+        if len(chain) > 1:
+            chains.append(chain)
+
+    unresolved: set[str] = set()
+
+    def resolve(name: str) -> str | None:
+        found = find_id(labels.get(name, "")) or find_id(name) or norm.get(re.sub(r"\W", "", name).lower())
+        if not found:
+            unresolved.add(name)
+        return found
+
+    edges = []
+    for chain in chains:
+        for left, right in zip(chain, chain[1:]):
+            for a in left:
+                for b in right:
+                    pair = (resolve(a), resolve(b))
+                    if all(pair) and pair not in edges:
+                        edges.append(pair)
+    return edges, unresolved
+
+
+def _with_graph_region(text: str, titles: list[str]) -> tuple[str, str | None]:
+    """(text with an empty graph region in place of the hand-drawn block, that block's body or None).
+    The region goes where the graph was: the first mermaid block of the graph section; else the top of
+    that section; else a new section before the tasks table."""
+    lines = text.splitlines(keepends=True)
+    eol = "\r\n" if "\r\n" in text else "\n"
+    region = [render_md.begin_marker(render_md.GRAPH_REGION) + eol, render_md.END_MARKER + eol]
+    fence = None
+    start = level = None
+    end = len(lines)
+    for i, line in enumerate(lines):
+        m = markdown._FENCE_RE.match(line)
+        if m:
+            fence = m.group(1) if fence is None else (None if m.group(1) == fence else fence)
+            continue
+        if fence:
+            continue
+        h = markdown._HEADING_RE.match(line.rstrip("\r\n"))
+        if not h:
+            continue
+        if start is None:
+            if any(markdown.title_matches(h.group(2), t) for t in titles):
+                start, level = i, len(h.group(1))
+        elif len(h.group(1)) <= level:
+            end = i
+            break
+    if start is not None:
+        for i in range(start + 1, end):
+            m = _MERMAID_OPEN.match(lines[i])
+            if not m:
+                continue
+            close = next((j for j in range(i + 1, end) if lines[j].strip().startswith(m.group(1))), None)
+            if close is None:
+                break
+            body = "".join(lines[i + 1:close])
+            return "".join(lines[:i] + region + lines[close + 1:]), body
+        return "".join(lines[:start + 1] + [eol] + region + lines[start + 1:]), None
+    section = [f"## {titles[0]}{eol}", eol, *region, eol]
+    tasks_at = next((i for i, line in enumerate(lines)
+                     if render_md.begin_marker(render_md.TASKS_REGION) in line), None)
+    if tasks_at is None:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += eol
+        return "".join(lines + [eol] + section), None
+    # before the tasks table's own section; the document title (level 1) is not one
+    at = tasks_at
+    for i in range(tasks_at - 1, -1, -1):
+        h = markdown._HEADING_RE.match(lines[i].rstrip("\r\n"))
+        if h:
+            at = i if len(h.group(1)) > 1 else tasks_at
+            break
+    return "".join(lines[:at] + section + lines[at:]), None
+
+
+def graph_regions(root: Path, *, write: bool, commit: bool = False) -> Report:
+    """Swap every cycle's hand-drawn dependency graph for the generated region. Idempotent."""
+    root = root.resolve()
+    cfg = config.load(root)
+    project = Project(cfg)
+    report = Report()
+    titles = project.section_titles("dependency_graph")
+    writes: dict[Path, bytes] = {}
+    cycles = []
+    for d in project._cycle_dirs(project.cycles_root) + project.archived_dirs():
+        if project.is_legacy_dir(d):
+            raise RiteError(f"{display(root, d)} is a cycle from before the JSON state: run "
+                            "`rite migrate --from frontmatter --write` first")
+        cycle = project.load_cycle(d)
+        path = cycle.progress_path
+        text = path.read_bytes().decode("utf-8") if path.is_file() else ""
+        if render_md.begin_marker(render_md.GRAPH_REGION) in text:
+            report.skipped.append(cycle.name)
+            continue
+        new, drawn = _with_graph_region(text, titles)
+        tasks = [i.fields | {"id": i.id} for i in cycle.tasks]
+        new = render_md.replace_region(new, render_md.GRAPH_REGION, render_md.dependency_graph(
+            tasks, phase_label=project.section_title("phase_label")))
+        if drawn is not None:
+            ids = [t["id"] for t in tasks]
+            edges, unresolved = _graph_edges(drawn, ids)
+            deps = {t["id"]: set(render_md._deps(t)) for t in tasks}
+            for a, b in edges:
+                if a not in deps.get(b, set()):
+                    report.warnings.append(f"{cycle.name}: {a} --> {b} is in the hand-drawn graph, not in "
+                                           f"{b}'s depends_on; if it holds: rite set {b} --depends-on …")
+            if unresolved:
+                report.warnings.append(f"{cycle.name}: hand-drawn nodes naming no task, not compared: "
+                                       + ", ".join(sorted(unresolved)))
+        report.cycles.append(f"{cycle.name}: " + ("hand-drawn graph replaced" if drawn is not None else
+                                                  "graph region added"))
+        report.items += len(tasks)
+        writes[path] = new.encode("utf-8")
+        cycles.append(cycle)
+    report.changed = [display(root, p) for p in writes]
+    if not write or not writes:
+        return report
+    _refuse_unsafe_write(root, list(writes), commit=commit)
+    for path, data in writes.items():
+        path.write_bytes(data)
+    tracked = [c.progress_path for c in cycles if not c.local]
+    if commit and gitutil.is_repo(root) and tracked:
+        report.commit = gitutil.commit_paths(root, tracked,
+                                             "chore(rite): generate dependency graphs from depends_on" if
+                                             cfg["commit"]["style"] == "conventional" else
+                                             "rite: generate dependency graphs from depends_on")
     return report

@@ -53,6 +53,10 @@ keep their history (`git mv`).
   `<!-- rite:begin … -->` and `<!-- rite:end -->`; the rest is free text. `rite sync` regenerates the
   region; `rite check` fails when it is stale. The rendering is `rite_lib/render_md.py`, standalone
   (stdlib only): `python render_md.py <cycle folder> [--check]` rebuilds the views without Rite.
+- **The dependency graph is a view too.** The progress file's `<!-- rite:begin graph -->` region is a
+  mermaid flowchart of each task's `depends_on`, one subgraph per phase — nothing else is stored for
+  it. It is rendered only where its marker is: new cycles have it, older ones get it from
+  `rite migrate --from graph`. Prose explaining the order goes below the region.
 - **Links in the JSON resolve as they did in frontmatter**: a cycle's `plan`, `profile`, `pitfalls`
   from its progress file, an item's `source_of_truth` from its own file.
 - **Vocabulary is closed**: task status `pending | in-progress | done | blocked | skipped`; fix status

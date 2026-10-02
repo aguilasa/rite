@@ -20,7 +20,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | --- | --- |
 | `/rite:init [--yes]` | Detects layout, ID conventions, languages, commit style, protected paths and documented gates; asks the rest; writes `rite.toml` and a short `CLAUDE.md` block. Never moves files. |
 | `/rite:new-cycle <name> [--prefix X] [--plan P] [--copy-plan] [--ticket KEY] [--local]` | `rite new-cycle`: folder, views, profile skeleton, pitfalls file; seeds the profile only with facts. Asks for the tracker ticket and whether the cycle is local ([CONCEPTS.md](CONCEPTS.md#local-cycles)), and whether to copy a plan outside `plans_dir` into it (`--copy-plan`; a plan outside the repository is refused without it). |
-| `/rite:plan-to-tasks <plan> [cycle] [--dry-run]` | Proposes phases, tasks with anchored `source_of_truth` (from `rite anchors`), verifiable criteria, `depends_on`, a closing task per phase, a graph and phase checks; writes after confirmation; `rite check` must pass. |
+| `/rite:plan-to-tasks <plan> [cycle] [--dry-run]` | Proposes phases, tasks with anchored `source_of_truth` (from `rite anchors`), verifiable criteria, `depends_on`, a closing task per phase, a graph (rendered from `depends_on`, not written) and phase checks; writes after confirmation; `rite check` must pass. |
 | `/rite:status [cycle]` | Read-only summary and the suggested next command. |
 | `/rite:close-cycle <cycle>` | `rite archive --dry-run` blockers, else archive with link rewriting. |
 | `/rite:retro <cycle>` | `rite stats` numbers, fixes grouped by root cause; proposes keep / promote / report / prune; applies what the user approves. |
@@ -58,7 +58,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `new-cycle NAME --prefix X [--plan P] [--copy-plan] [--ticket K] [--local]`, `archive NAME [--dry-run]`, `publish NAME` | lifecycle; `publish` makes a local cycle tracked |
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth`; retro numbers |
 | `sections [--all] [--write]` | propose `[sections]` from the titles the items and profiles use, recognised by what each section holds (fenced `$ ` lines, lists of paths, command lines, the item's last section, phases named) and never by the words of the title; each guess with its evidence, a key nothing matches reliably commented with its candidates. `--all` reads every cycle, archived too; `--write` merges only the matched keys into `rite.toml`, keeping comments, other keys and their order |
-| `relink [--write]`, `migrate --from frontmatter\|we2002 [--write] [--commit]` | normalize link style; move cycles from Rite ≤ 0.13 to the JSON state, or convert a legacy backlog (see [MIGRATING.md](MIGRATING.md)) |
+| `relink [--write]`, `migrate --from frontmatter\|graph\|we2002 [--write] [--commit]` | normalize link style; move cycles from Rite ≤ 0.13 to the JSON state, swap a hand-drawn dependency graph for the generated one, or convert a legacy backlog (see [MIGRATING.md](MIGRATING.md)) |
 | `guard PATH` | read-only / generated verdict (the hook uses it) |
 | `tokens [--by command\|session\|day\|project\|agent] [--since D] [--until D] [--project G] [--command C]… [--top N] [--markdown F] [--check BASELINE --tolerance P] [--cache-weight W] [--suggest-limits]` | where the tokens went — all of Claude Code, main thread and subagents apart, with totals; `--suggest-limits` measures this repository's `[limits].inline_triage_max_output_kb` instead; runs without `rite.toml` (see [TOKENS.md](TOKENS.md)) |
 

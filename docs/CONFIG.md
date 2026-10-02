@@ -107,7 +107,8 @@ execution_log = ["Log de Execução", "Log de Execução *(preenchido após exec
 | --- | --- | --- |
 | `execution_log` | `"Execution Log"` | item; every transition appends its log line here |
 | `phase_checks` | `"Phase-specific checks"` | profile; `check` and `context` |
-| `phase_label` | `"Phase"` | the word looked for inside `phase_checks` (`Phase 3`, `Fase 3`, …) |
+| `phase_label` | `"Phase"` | the word looked for inside `phase_checks` (`Phase 3`, `Fase 3`, …); the dependency graph's subgraph labels |
+| `dependency_graph` | `"Dependency graph"` | progress; the section `new-cycle` writes and `migrate --from graph` looks for |
 | `evidence` | `"Evidence"` | fix; `reproduce` runs the `$ ` lines of its fenced blocks |
 | `verification` | `"Verification"` | fix; `reproduce`'s fallback: its `$ ` lines, else its bullets' code spans |
 | `files` | `"Files"` | item; `batch-plan` predicts the paths it lists (code spans, or bullets opening with a path that exists) |
@@ -242,6 +243,7 @@ profile_file  = "perfil-{cycle}.md"
 execution_log = "Log de Execução"
 phase_checks  = "Verificações por fase"
 phase_label   = "Fase"
+dependency_graph = "Grafo de dependências"
 evidence      = "Evidência"
 verification  = "Verificação"
 files         = ["Arquivos a criar ou modificar", "Arquivos"]

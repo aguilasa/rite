@@ -36,9 +36,10 @@ Arguments: `$ARGUMENTS`
 5. **Write**, in dependency order: each task with `rite new-task --cycle <cycle> --title … --type …
    --phase … --depends-on … --source-of-truth … [--repo <repo>] --json`, then its body (Goal, Scope,
    Done criteria, Notes) and its predicted paths with `rite set <ID> --files …` — never another field;
-   a task that must run before lower IDs goes in `rite set-cycle --cycle <cycle> --order …`; the graph
-   into the progress file's "Dependency graph" section; the checks into the profile's phase-checks
-   section, one sub-heading per phase.
+   a task that must run before lower IDs goes in `rite set-cycle --cycle <cycle> --order …`; the checks
+   into the profile's phase-checks section, one sub-heading per phase. The graph is not written: `rite
+   sync` renders it from `depends_on` into the progress file's graph region — only prose explaining
+   the order goes below that region.
 6. **Validate**: `rite sync --cycle <cycle>`, then `rite check --cycle <cycle>` must be clean.
 7. **Commit** the task files, `progress.json`, the views and the profile, staged explicitly:
    `docs(rite): plan <cycle> from <plan file name>`.

@@ -78,6 +78,7 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
             # a local template override may predate the {{phase_checks}} placeholder
             text = text.replace("## Phase-specific checks", "## " + project.section_title("phase_checks"))
         if tpl == "progress.md":
+            text = text.replace("## Dependency graph", "## " + project.section_title("dependency_graph"))
             # the template's frontmatter seeds progress.json; ticket and local are set, not templated:
             # a local template override may predate these keys
             meta, body = frontmatter.parse(text)

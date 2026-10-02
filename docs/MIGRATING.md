@@ -6,7 +6,8 @@ Two ways in:
   describes them (`[paths]`, `[naming]`, `[sections]`). Nothing is renamed. Works when your items already
   keep state in frontmatter with Rite's vocabulary — then `migrate --from frontmatter` moves it to JSON.
 - **Convert in place** — `rite.py migrate --from <format>` rewrites a known legacy format so the cycle's
-  JSON becomes the single source of state. Today: `frontmatter` (Rite ≤ 0.13) and `we2002`.
+  JSON becomes the single source of state. Today: `frontmatter` (Rite ≤ 0.13), `graph` (a hand-drawn
+  dependency graph) and `we2002`.
 
 Always convert **on a branch**, and review the diff before merging.
 
@@ -44,6 +45,26 @@ cycle. After writing it reads the files back once more. It refuses when a file i
 uncommitted changes (an untracked file has no committed version, so it does not count), and is
 idempotent: a cycle already on JSON is listed as skipped. A local cycle's files are written, never
 committed.
+
+## `migrate --from graph`
+
+Up to 0.14 `/rite:plan-to-tasks` drew the progress file's dependency graph by hand, a second copy of
+`depends_on` that nothing kept in step. It is now a generated region; cycles written before keep their
+block until this migration swaps it:
+
+```sh
+rite migrate --from graph                     # dry run: cycles, and edges depends_on lacks
+rite migrate --from graph --write --commit    # one commit: chore(rite): generate dependency graphs from depends_on
+rite check --all --include-archived
+```
+
+In each progress file it replaces the first mermaid block of the `[sections].dependency_graph`
+section with the region and keeps every other line, prose included; with no block, the region opens
+that section; with no section, one is added before the tasks table. An edge the hand-drawn graph has
+and `depends_on` lacks is a warning, never added to the JSON — if it holds, `rite set <ID>
+--depends-on …`. Nodes whose name and label hold no task ID are listed, not compared. Same safety as
+`--from frontmatter`: refused over uncommitted changes in those files, idempotent (a cycle that has
+the region is skipped), a local cycle's files written but never committed.
 
 ## `migrate --from we2002`
 

@@ -1,4 +1,4 @@
-"""Generated regions of progress.md / fixes.md. Data lives in the cycle's JSON; tables are views.
+"""Generated regions of progress.md (tasks table, dependency graph) / fixes.md. Data lives in the cycle's JSON; tables are views.
 
 The rendering is ``render_md`` (standalone, stdlib only). This module adds what only Rite knows: the
 JSON arrays are kept in execution order before rendering, so the rows read in the order work runs.
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from . import render_md, state
 from .model import Cycle, Project
-from .render_md import END_MARKER, FIXES_REGION, TASKS_REGION, begin_marker, extract_region, replace_region  # noqa: F401
+from .render_md import END_MARKER, FIXES_REGION, GRAPH_REGION, TASKS_REGION, begin_marker, extract_region, replace_region  # noqa: F401
 
 
 def names(project: Project) -> dict:
@@ -19,7 +19,8 @@ def names(project: Project) -> dict:
 
 
 def _opts(project: Project) -> dict:
-    return {"root": project.root, "link_style": project.cfg.link_style, "names": names(project)}
+    return {"root": project.root, "link_style": project.cfg.link_style, "names": names(project),
+            "phase_label": project.section_title("phase_label")}
 
 
 def unordered(project: Project, cycle: Cycle) -> list[Path]:
@@ -33,8 +34,8 @@ def unordered(project: Project, cycle: Cycle) -> list[Path]:
     return out
 
 
-def expected(project: Project, cycle: Cycle) -> dict[Path, tuple[str, str]]:
-    """{file: (region, generated content)}"""
+def expected(project: Project, cycle: Cycle) -> dict[Path, list[tuple[str, str]]]:
+    """{file: [(region, generated content), ...]}"""
     return render_md.views(cycle.path, **_opts(project))
 
 

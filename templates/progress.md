@@ -14,9 +14,9 @@ local: false
 
 ## Dependency graph
 
-```mermaid
-graph TD
-```
+<!-- Generated from each task's depends_on; prose explaining the order goes below the region. -->
+<!-- rite:begin graph -->
+<!-- rite:end -->
 
 ## Tasks
 

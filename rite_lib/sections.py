@@ -266,8 +266,9 @@ def detect(project: Project, cycles: list[Cycle]) -> dict:
 
 def render_block(project: Project, keys: dict) -> str:
     lines = ["[sections]"]
-    order = [k for k in config.DEFAULTS["sections"] if k != "phase_label"]
-    lines.append(f"phase_label = {toml_value(project.section_titles('phase_label'))}  # not detected")
+    undetected = ("phase_label", "dependency_graph")
+    order = [k for k in config.DEFAULTS["sections"] if k not in undetected]
+    lines += [f"{key} = {toml_value(project.section_titles(key))}  # not detected" for key in undetected]
     for key in order:
         v = keys[key]
         if v["confident"]:
