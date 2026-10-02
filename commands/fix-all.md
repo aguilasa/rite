@@ -14,7 +14,8 @@ Arguments: `$ARGUMENTS`
 1. `rite begin fix --cycle <cycle> --json` (`--no-claim` with `--plan`: it takes no item). The batch:
    the fix IDs given, or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle>
    --json`); fixes opened mid-run wait: a batch that grows never ends.
-2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for all.
+2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for all (many fixes:
+   in the background; stderr names each).
    Compare each output with its `recorded` Evidence; write the verdict:
    - `blocked: true` → its `unblock` ran its `unblocked_by` — the gesture `/rite:execute` makes with a
      blocked task. Exit 0 → `rite mark <FIX> pending --reason "<command> now passes" --commit`, then
@@ -91,8 +92,8 @@ frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->
   revision or an old log documents, never verifies.
 - **Reproduce before fixing** (`rite reproduce <FIX> --json`, `--scratch` if it writes files):
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
-  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error` or
-  `missing_path`) → an agent or a person, never *stale*. An exit code is not a verdict.
+  (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error`,
+  `missing_path` or `timed_out`) → an agent or a person, never *stale*. An exit code is not a verdict.
 - **Negative results are results**: "X fails, because Y (command, output)".
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.

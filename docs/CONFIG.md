@@ -203,6 +203,7 @@ Statuses and severities are fixed, not configurable:
 | `read_kb` | `8` | Above this a command slices a file (`rite.py context`, `grep -n`, `sed -n`) instead of opening it whole. |
 | `delegate_above_kb` | `5000` | Repository size (git's own object count) above which `/rite:execute` hands the implementation to a worker agent. |
 | `sweep_hits` | `40` | Cap of hits `rite.py sweep` prints per term. |
+| `reproduce_timeout_s` | `300` | Seconds a fix's command may run under `rite reproduce` (its `unblocked_by` too) before it is killed with its children and reported `timed_out` — a fix it cannot decide, never stale. `rite reproduce --timeout` overrides it for one call. |
 | `inline_triage_max_output_kb` | `7` | A fix whose reproduction prints more than this is triaged by an agent, not in the main thread. `7` is the break-even measured on a small example ([tokens report](tokens/2026-09-24-fixall-as-is-vs-inline.md)); the line is the repository's, not the plugin's — a large one usually sits an order of magnitude higher (72 KB [measured](tokens/2026-09-25-inline-triage-limit.md) on one). Measure yours: `rite tokens --project "*<repo>*" --suggest-limits`. |
 
 ## `[status]`

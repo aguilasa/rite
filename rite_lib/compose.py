@@ -7,10 +7,13 @@ the whole context, so the ceremony around the work was measured as a third of an
 
 from __future__ import annotations
 
+import functools
 import os
 import re
+import signal
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 from . import check as checkmod, gitutil, markdown, ops, selection, views
 from .config import DEFAULTS
@@ -499,27 +502,68 @@ def shell_name(shell: list[str] | None) -> str:
     return Path(shell[0]).stem if shell else "system"
 
 
-def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = None) -> dict:
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill a command and whatever it started: a shell's children outlive the shell."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        proc.kill()
+
+
+def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = None, *,
+             timeout: float | None = None, cap_bytes: int | None = None) -> dict:
+    """Run one command and keep its output: the tail when it passes, else up to ``cap_bytes`` of its
+    end (`truncated` when cut). Past ``timeout`` seconds the command and its children are killed:
+    `timed_out`, no exit code, the output so far."""
+    import tempfile
+    import time
     run = ([*shell, command], False) if shell else (command, True)
-    # stdin closed: a heredoc arrives one line at a time, and `python -` would wait on it forever
-    proc = subprocess.run(run[0], shell=run[1], cwd=where, capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                          encoding="utf-8", errors="replace", env={**os.environ})
-    output = (proc.stdout or "") + (proc.stderr or "")
+    # a file, not a pipe: a child left in the background keeps a pipe open, and reading it to its
+    # end waited forever; nor does an endless output pile up in memory
+    group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+             else {"start_new_session": True})
+    started = time.monotonic()
+    with tempfile.TemporaryFile() as out:
+        # stdin closed: a heredoc arrives one line at a time, and `python -` would wait on it forever
+        proc = subprocess.Popen(run[0], shell=run[1], cwd=where, stdout=out, stderr=out,
+                                stdin=subprocess.DEVNULL, env={**os.environ}, **group)
+        timed_out = False
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _kill_tree(proc)
+            proc.wait()
+        seconds = round(time.monotonic() - started, 1)
+        size = out.seek(0, os.SEEK_END)
+        out.seek(max(0, size - cap_bytes) if cap_bytes else 0)
+        raw = out.read()
+    output = raw.decode("utf-8", errors="replace").replace("\r\n", "\n")
+    clipped = len(raw) < size
+    if clipped and "\n" in output:
+        output = output.split("\n", 1)[1]  # a line cut in half is noise
+    code = None if timed_out else proc.returncode
     lines = output.splitlines()
-    return {"command": command, "exit_code": proc.returncode, "shell_error": proc.returncode in SHELL_ERRORS,
-            "missing_path": _missing_paths(output, where) if proc.returncode else [],
-            "output": output if proc.returncode else "\n".join(lines[-tail:]),
-            "truncated": proc.returncode == 0 and len(lines) > tail}
+    return {"command": command, "exit_code": code, "shell_error": code in SHELL_ERRORS,
+            "timed_out": timed_out, "seconds": seconds, "output_bytes": size,
+            "missing_path": _missing_paths(output, where) if code else [],
+            "output": "\n".join(lines[-tail:]) if code == 0 else output,
+            "truncated": clipped or (code == 0 and len(lines) > tail)}
 
 
 def _undecidable(runs: list[dict]) -> dict:
     """A fix whose evidence could not run as written has no verdict: never *stale*."""
     missing = list(dict.fromkeys(p for r in runs for p in r["missing_path"]))
-    return {"missing_path": missing, "cannot_decide": bool(missing) or any(r["shell_error"] for r in runs)}
+    return {"missing_path": missing, "timed_out": any(r["timed_out"] for r in runs),
+            "cannot_decide": bool(missing) or any(r["shell_error"] or r["timed_out"] for r in runs)}
 
 
 def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, all_open: bool = False,
-              tail: int = 20, scratch: bool = False) -> dict:
+              tail: int = 20, scratch: bool = False, timeout: float | None = None,
+              progress: Callable[[int, int, dict], None] | None = None) -> dict:
     """Run the evidence of one fix, or of every open fix of the cycle, and measure — never judge.
 
     Whoever calls compares the output with the recorded Evidence and writes the verdict. Fixes run
@@ -528,7 +572,9 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     thread does not hold it; that fix goes to an agent. Runs only commands written in the
     repository's own versioned fix files — the same trust `[gates].global` has. A blocked fix runs
     its `unblocked_by` in place of its evidence: exit 0 says the environment it waited on is there.
-    A fix whose command could not run as written (`shell_error`, `missing_path`) is `cannot_decide`."""
+    A fix whose command could not run as written (`shell_error`, `missing_path`) is `cannot_decide`,
+    and so is one whose command outlived `timeout` (`[limits].reproduce_timeout_s`): it was killed
+    with its children, `timed_out`. ``progress`` hears of each fix as soon as it is measured."""
     import shutil
     import tempfile
     cycle = project.resolve_cycle(cycle_name)
@@ -542,7 +588,13 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
     else:
         raise RiteError("name a fix, or pass --all")
     limit_kb = project.cfg["limits"]["inline_triage_max_output_kb"]
+    if timeout is None:
+        timeout = project.cfg["limits"]["reproduce_timeout_s"]
+    if timeout <= 0:
+        raise RiteError("--timeout must be a number of seconds > 0")
     shell = project_shell(project)
+    # one byte past the limit: enough to tell an output over it, never the whole of an endless one
+    run = functools.partial(_run_one, tail=tail, shell=shell, timeout=timeout, cap_bytes=int(limit_kb * 1024) + 1)
     copies: dict[Path, Path] = {}
     results = []
     try:
@@ -554,11 +606,13 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                     "id": fix.id, "path": display(project.root, fix.path), "runnable": False,
                     "source": None, "heading": None, "why": "blocked", "blocked": True,
                     "unblocked_by": command or None,
-                    "unblock": _run_one(command, _repo_dir(project, fix), tail, shell) if command else None,
+                    "unblock": run(command, _repo_dir(project, fix)) if command else None,
                     "resources": fix.fields.get("resources") or [],
                     "recorded": [], "commands": [], "held_bytes": 0, "over_limit": False,
-                    "missing_path": [], "cannot_decide": False,
+                    "missing_path": [], "timed_out": False, "cannot_decide": False,
                 })
+                if progress:
+                    progress(len(results), len(fixes), results[-1])
                 continue
             found = evidence_commands(fix.path.read_text(encoding="utf-8", errors="replace"),
                                       project.section_titles("evidence"), project.section_titles("verification"))
@@ -569,8 +623,9 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                     copies[repo] = Path(tempfile.mkdtemp(prefix="rite-reproduce-"))
                     _export(repo, copies[repo])
                 where = copies[repo]
-            runs = [_run_one(command, where, tail, shell) for command in found["commands"]]
-            held = sum(len(r["output"].encode("utf-8")) for r in runs)
+            runs = [run(command, where) for command in found["commands"]]
+            # what holding it inline would cost: a failing command's whole output, a passing one's tail
+            held = sum(len(r["output"].encode("utf-8")) if r["exit_code"] == 0 else r["output_bytes"] for r in runs)
             over = held > limit_kb * 1024
             if over:
                 for r in runs:
@@ -584,10 +639,12 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                 "recorded": found["recorded"], "commands": runs, "held_bytes": held, "over_limit": over,
                 **_undecidable(runs),
             })
+            if progress:
+                progress(len(results), len(fixes), results[-1])
     finally:
         for copy in copies.values():
             shutil.rmtree(copy, ignore_errors=True)
-    return {"cycle": cycle.name, "scratch": scratch, "limit_kb": limit_kb,
+    return {"cycle": cycle.name, "scratch": scratch, "limit_kb": limit_kb, "timeout_s": timeout,
             "shell": shell_name(shell), "count": len(results),
             "fixes": results}
 

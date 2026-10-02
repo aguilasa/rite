@@ -13,7 +13,8 @@ Arguments: `$ARGUMENTS`
 1. `rite begin fix --cycle <cycle> --json` (`--no-claim` with `--plan`: it takes no item). The batch:
    the fix IDs given, or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle>
    --json`); fixes opened mid-run wait: a batch that grows never ends.
-2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for all.
+2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call for all (many fixes:
+   in the background; stderr names each).
    Compare each output with its `recorded` Evidence; write the verdict:
    - `blocked: true` → its `unblock` ran its `unblocked_by` — the gesture `/rite:execute` makes with a
      blocked task. Exit 0 → `rite mark <FIX> pending --reason "<command> now passes" --commit`, then

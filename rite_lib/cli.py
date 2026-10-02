@@ -110,9 +110,22 @@ def cmd_gates(project: Project, args) -> int:
     return EXIT_OK if data["passed"] else EXIT_FAIL
 
 
+def _reproduce_progress(done: int, total: int, fix: dict) -> None:
+    """One line per fix on stderr as soon as it is measured: stdout stays the JSON a caller parses."""
+    runs = [*fix["commands"], *([fix["unblock"]] if fix.get("unblock") else [])]
+    late = next((r for r in runs if r["timed_out"]), None)
+    if late:
+        status = f"TIMEOUT after {late['seconds']:g}s: {late['command'].splitlines()[0]}"
+    else:
+        status = ("exit " + ",".join(str(r["exit_code"]) for r in runs)) if runs else "nothing to run"
+    seconds = sum(r["seconds"] for r in runs)
+    print(f"[{done}/{total}] {fix['id']}  {len(runs)} cmd  {status}  {seconds:.1f}s", file=sys.stderr, flush=True)
+
+
 def cmd_reproduce(project: Project, args) -> int:
     data = compose.reproduce(project, fix_id=args.id, cycle_name=args.cycle, all_open=args.all,
-                             tail=args.tail, scratch=args.scratch)
+                             tail=args.tail, scratch=args.scratch, timeout=args.timeout,
+                             progress=_reproduce_progress)
     lines = []
     for fix in data["fixes"]:
         if fix["runnable"]:
@@ -136,7 +149,9 @@ def cmd_reproduce(project: Project, args) -> int:
         for run in fix["commands"]:
             gone = (f" (missing path: {', '.join(run['missing_path'])}; cannot decide)"
                     if run["missing_path"] else "")
-            lines.append(f"  $ {run['command']}  -> exit {run['exit_code']}{gone}")
+            ended = (f"TIMEOUT after {run['seconds']:g}s (killed; cannot decide)" if run["timed_out"]
+                     else f"exit {run['exit_code']}")
+            lines.append(f"  $ {run['command']}  -> {ended}{gone}")
             lines += [f"    {line}" for line in run["output"].splitlines()]
         if fix["recorded"]:
             lines.append("  recorded:")
@@ -616,6 +631,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--kind", choices=("fix",), default="fix", help="only fixes carry evidence to reproduce")
     s.add_argument("--tail", type=int, default=20, help="lines kept from a command that exits 0")
     s.add_argument("--scratch", action="store_true", help="run in an exported copy of HEAD")
+    s.add_argument("--timeout", type=float, metavar="SECONDS",
+                   help="kill a command (and its children) running longer; default [limits].reproduce_timeout_s")
     s.set_defaults(fn=cmd_reproduce)
 
     s = sub.add_parser("sweep", parents=[common], help="find stale mentions of what an item changed")

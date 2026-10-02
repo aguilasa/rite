@@ -73,7 +73,10 @@ DEFAULTS: dict = {
     # inline_triage_max_output_kb: break-even of holding a fix's reproduction inline against starting
     # its reproducer, measured on a small example (docs/tokens/2026-09-24-fixall-as-is-vs-inline.md);
     # a repository measures its own with `rite tokens --suggest-limits`
-    "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40, "inline_triage_max_output_kb": 7},
+    # reproduce_timeout_s: a fix's command past it is killed with its children — a run that never
+    # ends tells nothing, and held `rite reproduce --all` silent for half an hour
+    "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40, "inline_triage_max_output_kb": 7,
+               "reproduce_timeout_s": 300},
     "status": {"review_age_days": 7},
     "hooks": {"stop_check": False},
 }
@@ -187,9 +190,10 @@ def parse(root: Path, text: str) -> Config:
     for res in data["resources"]["serialized"]:
         if not isinstance(res, dict) or "name" not in res:
             errors.append("[resources].serialized entries need a 'name'")
-    limit = data["limits"]["inline_triage_max_output_kb"]
-    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or limit <= 0:
-        errors.append("[limits].inline_triage_max_output_kb must be a number > 0")
+    for key in ("inline_triage_max_output_kb", "reproduce_timeout_s"):
+        limit = data["limits"][key]
+        if isinstance(limit, bool) or not isinstance(limit, (int, float)) or limit <= 0:
+            errors.append(f"[limits].{key} must be a number > 0")
     if errors:
         raise ConfigError(f"{CONFIG_NAME}: " + "; ".join(errors))
     return Config(root=root, data=data)

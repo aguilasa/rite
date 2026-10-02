@@ -3,6 +3,7 @@
 import json
 import re
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -245,6 +246,46 @@ class ReproduceTest(unittest.TestCase):
         code, _, err = self.fx.rite("status")
         self.assertEqual(code, 1)
         self.assertIn("inline_triage_max_output_kb", err)
+
+    def test_the_timeout_is_a_positive_number(self):
+        toml = self.root / "rite.toml"
+        toml.write_text(toml.read_text(encoding="utf-8") + "\n[limits]\nreproduce_timeout_s = 0\n",
+                        encoding="utf-8")
+        code, _, err = self.fx.rite("status")
+        self.assertEqual(code, 1)
+        self.assertIn("reproduce_timeout_s", err)
+
+    def test_a_command_past_the_timeout_is_killed_and_cannot_decide(self):
+        fix_id = self.add_fix(f"```text\n$ {PY} -c \"print('started', flush=True); import time; "
+                              f"time.sleep(30)\"\n```")
+        started = time.monotonic()
+        data = self.reproduce(fix_id, "--timeout", "1")
+        self.assertLess(time.monotonic() - started, 10)
+        fix = data["fixes"][0]
+        [run] = fix["commands"]
+        self.assertEqual((run["timed_out"], run["exit_code"]), (True, None))
+        self.assertIn("started", run["output"])
+        self.assertGreaterEqual(run["seconds"], 1)
+        self.assertEqual((fix["timed_out"], fix["cannot_decide"], data["timeout_s"]), (True, True, 1))
+
+    def test_a_child_left_in_the_background_does_not_hold_the_run(self):
+        # a background child inherited the output pipe: reading it to its end waited for the child
+        fix_id = self.add_fix(f"```text\n$ ({PY} -c \"import time; time.sleep(30)\" &) ; echo ok\n```")
+        started = time.monotonic()
+        run = self.reproduce(fix_id)["fixes"][0]["commands"][0]
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual((run["exit_code"], run["timed_out"], run["output"].strip()), (0, False, "ok"))
+
+    def test_each_fix_reports_on_stderr_and_stdout_stays_json(self):
+        first = self.add_fix(f"```text\n$ {PY} -c \"print(1)\"\n```")
+        second = self.add_fix(f"```text\n$ {PY} -c \"import sys; sys.exit(3)\"\n```")
+        code, out, err = self.fx.rite("reproduce", "--cycle", "alpha", "--all", "--json")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(len(json.loads(out)["fixes"]), 2)
+        lines = err.strip().splitlines()
+        self.assertEqual(len(lines), 2, err)
+        self.assertRegex(lines[0], rf"^\[1/2\] {first}  1 cmd  exit 0  \d+\.\ds$")
+        self.assertRegex(lines[1], rf"^\[2/2\] {second}  1 cmd  exit 3  \d+\.\ds$")
 
     def test_needs_a_fix_or_all(self):
         code, _, err = self.fx.rite("reproduce", "--cycle", "alpha")
