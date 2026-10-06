@@ -12,6 +12,11 @@ All notable changes to this project are documented here. Versions follow [SemVer
   covers (exact, folder or glob; a rename by its new path; the item's own document exempt) is now
   listed under **Outside declared files** in the Execution Log and returned in `outside_files`. A
   warning, not a refusal: the scope was a prediction, and the review judges the departure.
+- **`rite stats` reports every status, zero included, and the retro asks only for what it counts**
+  (#5): a status no item had was missing, so a retro could not read "stale 0" from it, and
+  `templates/retro.md` asked for bookkeeping-only fixes, a count the CLI never had. Tasks and fixes now
+  list each status; the template's Numbers come from `rite stats` alone, and the bookkeeping and
+  engineering totals are the sums of the root-cause groups.
 
 ## [0.15.0] — 2026-10-02
 

@@ -4,9 +4,13 @@ Date: {{date}}
 
 ## Numbers
 
-<!-- tasks, fixes by severity, fixes per task, bookkeeping-only fixes, stale fixes, median days to review -->
+<!-- from `rite stats` only: tasks, fixes by status (stale included) and by severity, fixes per task,
+     median days to review -->
 
 ## Root-cause groups
+
+<!-- one line per group: count, kind (bookkeeping | engineering), fix IDs. The bookkeeping and
+     engineering totals are the sums of these counts. -->
 
 ## Proposals
 

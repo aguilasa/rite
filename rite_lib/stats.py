@@ -6,7 +6,7 @@ import datetime as dt
 import statistics
 
 from . import markdown
-from .config import SEVERITIES
+from .config import FIX_STATUSES, SEVERITIES, TASK_STATUSES
 from .model import Cycle, Project, display
 
 
@@ -19,10 +19,10 @@ def _days(a, b) -> int | None:
 
 def cycle_stats(project: Project, cycle: Cycle) -> dict:
     tasks, fixes = cycle.tasks, cycle.fixes
-    by_status = {}
+    by_status = dict.fromkeys(TASK_STATUSES, 0)  # every status, zero included: a retro reads "stale 0"
     for t in tasks:
         by_status[t.status] = by_status.get(t.status, 0) + 1
-    fix_status = {}
+    fix_status = dict.fromkeys(FIX_STATUSES, 0)
     for f in fixes:
         fix_status[f.status] = fix_status.get(f.status, 0) + 1
     sev = {s: sum(1 for f in fixes if f.fields.get("severity") == s) for s in SEVERITIES}

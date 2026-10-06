@@ -19,7 +19,8 @@ twice belongs in the repo config, and a failure of the rite itself belongs to th
    Logs of the tasks with the most fixes (`fixes_by_origin`). Read the profile and, by search, the
    pitfalls entries that those fixes touch; read earlier retros in `[paths].archive_dir` if any.
 4. **Group** fixes by root cause, not by symptom: one line and a count per group, each marked
-   **bookkeeping** (state, links, logs) or **engineering** (code, data, numbers).
+   **bookkeeping** (state, links, logs) or **engineering** (code, data, numbers). The bookkeeping and
+   engineering totals are the sums of these counts — `rite stats` does not classify fixes.
 5. **Propose**, every proposal carrying its fix IDs as evidence:
    - **Keep** — pitfalls for the next cycle's pitfalls file, in the template's format.
    - **Promote** — a rule that caused fixes here and in an earlier cycle → a line in `rite.toml`

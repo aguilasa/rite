@@ -192,6 +192,9 @@ class AnchorsAndStatsTest(FixtureCase):
         s = self.js("stats", "alpha")
         self.assertEqual(s["tasks"]["total"], 3)
         self.assertEqual(s["fixes"]["by_severity"]["high"], 1)
+        self.assertEqual({k: s["fixes"][k] for k in ("pending", "done", "stale")},
+                         {"pending": 1, "done": 0, "stale": 0})
+        self.assertEqual(s["tasks"]["blocked"], 0)
         self.assertEqual(s["fixes_by_origin"], {"ALP-TASK-01": 1})
         self.assertEqual(s["review_latency_days"]["reviewed"], 1)
         self.assertEqual(s["by_phase"]["1"], {"tasks": 2, "fixes": 1})
