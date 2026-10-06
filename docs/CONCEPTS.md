@@ -47,8 +47,8 @@ keep their history (`git mv`).
   else; `check` reports a field written back into it, an item file no entry lists, an entry whose
   file is gone.
 - **Only the CLI writes the JSON.** `status`, dates and SHAs through `close`, `mark*`, `rebind`; the
-  planning fields through `rite set <ID> --files … --resources …`; the cycle's `order`, `ticket`,
-  `plan` through `rite set-cycle`. The guard hook refuses an edit of the JSON by hand.
+  planning fields through `rite set <ID> --files … --resources … --depends-on …`; the cycle's
+  `order`, `ticket`, `plan` through `rite set-cycle`. The guard hook refuses an edit of the JSON by hand.
 - **Tables are views.** `progress.md` and `fixes.md` contain a generated region between
   `<!-- rite:begin … -->` and `<!-- rite:end -->`; the rest is free text. `rite sync` regenerates the
   region; `rite check` fails when it is stale. The rendering is `rite_lib/render_md.py`, standalone

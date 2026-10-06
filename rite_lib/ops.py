@@ -92,7 +92,7 @@ def _write_item(item: Item, updates: dict, log_line: str | None, log_titles: lis
 
 
 # planning fields: what the model fills in after creating an item; every other field is the CLI's
-PLANNING_FIELDS = ("files", "resources")
+PLANNING_FIELDS = ("files", "resources", "depends_on")
 CYCLE_FIELDS = ("order", "ticket", "plan")
 
 
@@ -175,10 +175,7 @@ def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, d
     types = project.cfg["vocab"]["task_types"]
     if types and type_ not in types:
         raise RiteError(f"type {type_!r} not in [vocab].task_types {types}")
-    index = cycle.by_id()
-    for dep in depends_on:
-        if dep not in index:
-            raise RiteError(f"depends_on {dep} is not an item of cycle {cycle.name}")
+    _check_depends(cycle, None, depends_on)
     repo = _check_repo(project, repo)
     if project.workspace and not repo:
         raise RiteError("rite.toml is outside git (a workspace): pass --repo, the repository the task's work "
@@ -256,8 +253,39 @@ def commit_new(project: Project, cycle: Cycle, item: Item) -> dict:
     return {"id": item.id, **result}
 
 
+def _check_depends(cycle: Cycle, item: Item | None, deps: list[str]) -> None:
+    """Dependencies stay inside the cycle and the graph stays acyclic. ``item`` is None for an item
+    being created: nothing depends on it yet, so it cannot close a loop."""
+    index = cycle.by_id()
+    for dep in deps:
+        if item is not None and dep == item.id:
+            raise RiteError(f"{item.id} cannot depend on itself")
+        if dep not in index:
+            raise RiteError(f"depends_on {dep} is not an item of cycle {cycle.name}")
+    if item is None:
+        return
+    graph = {i.id: i.depends_on for i in cycle.items}
+    graph[item.id] = deps
+    trail: list[str] = []
+    cleared: set[str] = set()  # explored without reaching the item
+
+    def visit(node: str) -> None:
+        if node == item.id and trail:
+            raise RiteError("depends_on would close a dependency cycle: " + " -> ".join([*trail, node]))
+        if node in trail or node in cleared:
+            return
+        trail.append(node)
+        for dep in graph.get(node, []):
+            visit(dep)
+        trail.pop()
+        cleared.add(node)
+
+    visit(item.id)
+
+
 def set_fields(project: Project, cycle: Cycle, item: Item, updates: dict) -> dict:
-    """Set an item's planning fields (`files`, `resources`) — the only fields the model writes."""
+    """Set an item's planning fields (`files`, `resources`, `depends_on`) — the only fields the model
+    writes. `depends_on` grows as a phase does: a closing task covers tasks added after it."""
     bad = [k for k in updates if k not in PLANNING_FIELDS]
     if bad:
         raise RiteError(f"rite set writes {list(PLANNING_FIELDS)} only; {', '.join(bad)} "
@@ -265,6 +293,10 @@ def set_fields(project: Project, cycle: Cycle, item: Item, updates: dict) -> dic
     for key, value in updates.items():
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise RiteError(f"{key} must be a list of strings")
+    if "depends_on" in updates:
+        if item.status in ("done", "stale"):
+            raise RiteError(f"{item.id} is {item.status}: its dependencies were the order it ran in")
+        _check_depends(cycle, item, updates["depends_on"])
     _write_item(item, updates, None, [])
     views.sync(project, _reload(project, cycle))
     return {"id": item.id, **updates, "file": display(project.root, item.state_path)}

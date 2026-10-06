@@ -78,8 +78,8 @@ and their `id`; the tables in the progress and fixes files are views the CLI ren
 - A **local cycle** (`"local": true`) writes the same fields and commits nothing, by design; never
   commit its documents yourself.
 
-- Planning fields: `rite set <ID> --files a,b --resources r`; the cycle's `order`, `ticket`, `plan`:
-  `rite set-cycle --cycle C --order <IDs>`. The only fields you write, and only through these.
+- Planning fields: `rite set <ID> --files a,b --resources r --depends-on <IDs>`; the cycle's `order`,
+  `ticket`, `plan`: `rite set-cycle --cycle C --order <IDs>`. The only fields you write.
 
 Never edit `progress.json` / `fixes.json` (the guard refuses it), never put fields back into an item's
 frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->`, never invent an ID.

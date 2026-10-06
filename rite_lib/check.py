@@ -204,6 +204,8 @@ class Checker:
         for item in cycle.items:
             self.check_item(cycle, item, index, owner)
         self.check_cycles_in_graph(cycle, index)
+        if not cycle.archived:
+            self.check_closing_coverage(cycle)
         if not self.quick:
             self.check_profile(cycle)
             self.check_fix_sections(cycle)
@@ -404,6 +406,30 @@ class Checker:
 
         for node in index:
             visit(node, [])
+
+    def check_closing_coverage(self, cycle: Cycle) -> None:
+        """A closing task depends, directly or through another task, on every task of its phase. A phase
+        that grows after its closing task was written leaves the new tasks outside it — and the closing
+        task would run before them."""
+        index = cycle.by_id()
+        for closer in cycle.tasks:
+            if closer.fields.get("type") != "closing":
+                continue
+            reached: set[str] = set()
+            stack = list(closer.depends_on)
+            while stack:
+                dep = stack.pop()
+                if dep not in reached and dep in index:
+                    reached.add(dep)
+                    stack += index[dep].depends_on
+            phase = str(closer.fields.get("phase"))
+            missing = [t.id for t in cycle.tasks
+                       if str(t.fields.get("phase")) == phase and t.fields.get("type") != "closing"
+                       and t.id not in reached]
+            if missing:
+                self.warn(closer.path, f"closing task {closer.id} does not depend on {', '.join(missing)} of "
+                          f"phase {phase} (rite set {closer.id} --depends-on "
+                          f"{','.join([*closer.depends_on, *missing])})")
 
     def check_fix_sections(self, cycle: Cycle) -> None:
         """An open fix with neither an evidence nor a verification title reproduces as "nothing to

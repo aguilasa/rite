@@ -27,7 +27,8 @@ Arguments: `$ARGUMENTS`
    - In a workspace, each task touches one repository; work crossing two becomes two tasks, linked by
      `depends_on` when order matters.
    - **One closing task per phase** (`type: closing`) depending on every task of that phase, whose
-     criteria re-run the phase's gates and checks.
+     criteria re-run the phase's gates and checks. A task added later to that phase goes into it with
+     `rite set <CLOSING> --depends-on <all>`; `rite check` warns while one is missing.
    - **Graph**: a mermaid `graph TD` of the dependencies.
    - **Phase checks**: 2–5 checks per phase, derived from the plan, that the reviewer will run.
 4. **Show** the breakdown as a table (ID-to-be, title, type, phase, repo, anchor, depends_on) with the

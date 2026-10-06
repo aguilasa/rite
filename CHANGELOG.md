@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite set <ID> --depends-on <IDs>`** (#7): `depends_on` is a planning field, like `files`. A
+  closing task created up front now takes the tasks a discovery phase adds later. The list is
+  replaced, `''` empties it; an ID outside the cycle, the item itself, a loop in the graph and a done
+  or stale item are refused. `rite sync` redraws the dependency graph — the option the 0.15.0 entry
+  below already named.
+
+### Fixed
+
+- **`rite check` warns when a closing task leaves out a task of its phase** (#7), directly or through
+  another task, and prints the `rite set` line that covers it.
+
 ## [0.15.1] — 2026-10-06
 
 ### Fixed

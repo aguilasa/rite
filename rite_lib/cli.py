@@ -225,8 +225,10 @@ def cmd_set(project: Project, args) -> int:
         updates["files"] = _paths(args.files)
     if args.resources is not None:
         updates["resources"] = _paths(args.resources)
+    if args.depends_on is not None:
+        updates["depends_on"] = _ids(args.depends_on)
     if not updates:
-        raise RiteError("rite set needs --files and/or --resources")
+        raise RiteError("rite set needs --files, --resources and/or --depends-on")
     res = ops.set_fields(project, cycle, item, updates)
     _emit(args, res, f"set {', '.join(updates)} of {item.id} in {res['file']}")
     return EXIT_OK
@@ -740,10 +742,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-commit", action="store_true")
     s.set_defaults(fn=cmd_mark_stale)
 
-    s = sub.add_parser("set", parents=[common], help="set an item's planning fields (files, resources)")
+    s = sub.add_parser("set", parents=[common],
+                       help="set an item's planning fields (files, resources, depends_on)")
     s.add_argument("id")
     s.add_argument("--files", action="append", help="predicted paths/globs (repeat or comma-separate; '' empties)")
     s.add_argument("--resources", action="append", help="serialized resources the item needs")
+    s.add_argument("--depends-on", action="append",
+                   help="item IDs of the cycle, replacing the list (repeat or comma-separate; '' empties)")
     s.set_defaults(fn=cmd_set)
 
     s = sub.add_parser("set-cycle", parents=[common], help="set a cycle's order, ticket or plan")

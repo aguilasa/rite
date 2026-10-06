@@ -650,6 +650,47 @@ global = ["test \"$(echo 'a  b')\" = \"a  b\""]
         self.assertEqual(self.log(1), [f"chore(rite): open {fix_id}"])
 
 
+class DependsOnTest(FixtureCase):
+    """`rite set --depends-on`: a closing task grows with its phase (#7)."""
+
+    def warnings(self) -> list[str]:
+        _, out, _ = self.fx.rite("check", "--all", "--json")
+        return [f["message"] for f in json.loads(out)["findings"] if f["level"] == "warn"]
+
+    def test_a_closing_task_covers_a_task_added_after_it(self):
+        new = self.js("new-task", "--cycle", "alpha", "--title", "Measured later", "--type", "tool",
+                      "--phase", "2", "--depends-on", "ALP-TASK-01",
+                      "--source-of-truth", "/docs/plans/PLAN-alpha.md#3")["id"]
+        self.assertIn(f"closing task ALP-TASK-03 does not depend on {new} of phase 2 "
+                      f"(rite set ALP-TASK-03 --depends-on ALP-TASK-02,{new})", self.warnings())
+        res = self.js("set", "ALP-TASK-03", "--depends-on", "ALP-TASK-02", "--depends-on", new)
+        self.assertEqual(res["depends_on"], ["ALP-TASK-02", new])
+        self.assertEqual(fields(self.root / "docs/rite/cycles/alpha/03-close-phase.md")["depends_on"],
+                         ["ALP-TASK-02", new])
+        self.assertFalse([w for w in self.warnings() if "closing task" in w])
+        self.assertEqual(self.check_errors("--all"), [])
+
+    def test_a_dependency_through_another_task_covers_the_phase(self):
+        self.assertFalse([w for w in self.warnings() if "closing task" in w])
+
+    def test_refusals(self):
+        for deps, msg in ((["ALP-TASK-01"], "cannot depend on itself"),
+                          (["ALP-TASK-99"], "is not an item of cycle alpha"),
+                          (["ALP-TASK-03"], "ALP-TASK-01 -> ALP-TASK-03 -> ALP-TASK-02 -> ALP-TASK-01")):
+            code, _, err = self.fx.rite("set", "ALP-TASK-01", "--depends-on", ",".join(deps))
+            self.assertEqual(code, 1, deps)
+            self.assertIn(msg, err)
+        self.fx.work_commit("src/a.py", "a\n", "feat: a")
+        self.ok("close", "ALP-TASK-01")
+        code, _, err = self.fx.rite("set", "ALP-TASK-01", "--depends-on", "")
+        self.assertEqual(code, 1)
+        self.assertIn("is done", err)
+
+    def test_an_empty_value_clears_the_list(self):
+        self.assertEqual(self.js("set", "ALP-TASK-02", "--depends-on", "")["depends_on"], [])
+        self.assertEqual(self.check_errors("--all"), [])
+
+
 class NoConfigTest(unittest.TestCase):
     def test_exit_code_3(self):
         with tempfile.TemporaryDirectory() as tmp:
