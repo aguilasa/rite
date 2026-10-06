@@ -11,11 +11,21 @@ All notable changes to this project are documented here. Versions follow [SemVer
   replaced, `''` empties it; an ID outside the cycle, the item itself, a loop in the graph and a done
   or stale item are refused. `rite sync` redraws the dependency graph — the option the 0.15.0 entry
   below already named.
+- **`rite set-cycle --pitfalls <file>`** (#6) points a cycle at an existing pitfalls file, written as a
+  link in `[paths].link_style`; `''` goes back to `[naming].pitfalls_file`. No hand edit of
+  `progress.json` for it any more.
+- **`rite new-cycle --pitfalls-from <cycle|file>`** (#6) starts the new cycle's pitfalls file as a copy
+  of another cycle's (live or archived) or of a file, and reports it in `pitfalls_copied_from`.
 
 ### Fixed
 
 - **`rite check` warns when a closing task leaves out a task of its phase** (#7), directly or through
   another task, and prints the `rite set` line that covers it.
+- **Kept pitfalls reach the next cycle** (#6): `/rite:retro` wrote **Keep** for a next cycle that did
+  not exist yet, and `/rite:new-cycle` always opened an empty pitfalls file, so what a retro kept was
+  lost. The retro now writes it to the closing cycle's file, and `/rite:new-cycle` proposes starting
+  from a copy of the last cycle's file that has entries. `rite check` warns when a cycle's `pitfalls`
+  points at a file that does not exist.
 
 ## [0.15.1] — 2026-10-06
 

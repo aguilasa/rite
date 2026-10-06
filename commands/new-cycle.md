@@ -17,15 +17,19 @@ Arguments: `$ARGUMENTS`
      (`rite status --all --json` lists prefixes) and confirm: the prefix is in every ID of the cycle
      and cannot change later without renaming every file.
    - No plan → look in `[paths].plans_dir` for one whose name matches; confirm it, or proceed without.
+   - **Pitfalls**: the most recent cycle (`rite status --all --json`, archived included) whose pitfalls
+     file (`rite resolve-cycle <c> --json` → `pitfalls`) has entries, not only the template's header —
+     what its retro kept. Propose starting from a copy of it (`--pitfalls-from <c>`, default yes, taken
+     under `--yes`), in the same question as ticket and local below.
    - Unless `--yes`, ask in one question: the cycle's **ticket** in an external tracker (optional; every
      commit of the cycle carries it) and whether the cycle is **local** (its documents stay out of git;
      code commits still go to the repository). In a workspace, skip the local question — every cycle
      there is local. When `--plan` is outside `[paths].plans_dir`, the same question asks whether to
      copy it there: default yes when it is outside the repository (it cannot be used from there), no
      otherwise; `--copy-plan` answers it. Under `--yes`, take the default.
-2. **Create**: `rite new-cycle <name> --prefix <X> [--plan <path>] [--copy-plan] [--ticket <KEY>]
-   [--local] --commit --json`, with `--copy-plan` when copying was chosen. It writes the cycle folder
-   with its progress and fixes files, the profile skeleton and an empty pitfalls file (and copies the
+2. **Create**: `rite new-cycle <name> --prefix <X> [--plan <path>] [--copy-plan] [--pitfalls-from <c>]
+   [--ticket <KEY>] [--local] --commit --json`, with `--copy-plan` when copying was chosen. It writes the cycle folder
+   with its progress and fixes files, the profile skeleton and the pitfalls file (empty, or the copy) (and copies the
    plan), and commits them; a local cycle commits nothing. It refuses flat layouts, existing folders,
    prefixes already used, an outside plan without `--copy-plan` and a copy that would overwrite a
    different file — report such a refusal as is. For a local cycle, show
@@ -39,6 +43,7 @@ Arguments: `$ARGUMENTS`
 ## Report
 
 Cycle (name, prefix, folder, ticket, local or tracked) · created files · copied plan (from → to) ·
+pitfalls copied from (`pitfalls_copied_from`), or why none ·
 what was seeded and from where · commit SHAs · next: `/rite:plan-to-tasks <plan> <name>`.
 
 ## The CLI

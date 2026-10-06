@@ -10,7 +10,7 @@ from pathlib import Path
 from . import frontmatter, gitutil, markdown, state, views
 from .config import OPEN_FIX_STATUSES
 from .model import Cycle, Project, RiteError, display, make_link, resolve_link
-from .ops import bookkeeping_message, render
+from .ops import bookkeeping_message, render, repo_file
 
 LINK_FIELDS = ("source_of_truth", "plan", "profile", "pitfalls")
 # a link field in the JSON resolves from the markdown it describes: the progress file for the cycle's
@@ -22,7 +22,7 @@ _PREFIX_RE = re.compile(r"^[A-Za-z0-9]+$")
 # --- new cycle -----------------------------------------------------------------
 def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = None,
               ticket: str | None = None, local: bool = False, commit: bool = False,
-              copy_plan: bool = False) -> dict:
+              copy_plan: bool = False, pitfalls_from: str | None = None) -> dict:
     if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", name):
         raise RiteError(f"cycle name {name!r}: use letters, digits, '.', '_' or '-'")
     if not _PREFIX_RE.match(prefix):
@@ -57,6 +57,7 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
                             f"{display(project.root, project.cfg.path('plans_dir'))}")
         plan_link = make_link(project.root, path / project.progress_name, plan_path, project.cfg.link_style)
 
+    pitfalls_source = _pitfalls_source(project, pitfalls_from) if pitfalls_from else None
     naming = project.cfg["naming"]
     profiles = project.cfg.path("profiles_dir")
     profile = profiles / naming["profile_file"].format(cycle=name)
@@ -77,6 +78,8 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
         if tpl == "profile.md":
             # a local template override may predate the {{phase_checks}} placeholder
             text = text.replace("## Phase-specific checks", "## " + project.section_title("phase_checks"))
+        if tpl == "pitfalls.md" and pitfalls_source:
+            text = pitfalls_source.read_text(encoding="utf-8")
         if tpl == "progress.md":
             text = text.replace("## Dependency graph", "## " + project.section_title("dependency_graph"))
             # the template's frontmatter seeds progress.json; ticket and local are set, not templated:
@@ -101,8 +104,22 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
     return {"cycle": name, "prefix": prefix, "path": display(project.root, path), "ticket": cycle.ticket,
             "local": cycle.local, "plan": display(project.root, plan_path) if plan_path else None,
             "plan_copied_from": copied_from,
+            "pitfalls_copied_from": display(project.root, pitfalls_source) if pitfalls_source else None,
             "created": [display(project.root, p) for p in created], "commit": sha,
             "ignored": _ignored(project, local_paths) if cycle.local else None}
+
+
+def _pitfalls_source(project: Project, source: str) -> Path:
+    """The pitfalls file a new cycle starts from: a cycle's (live or archived, by name or folder), else
+    a file in the repository. What a retro kept lands in the closed cycle's file; this carries it on."""
+    try:
+        cycle = project.resolve_cycle(source)
+    except RiteError:
+        return repo_file(project, source, "--pitfalls-from:")
+    if not cycle.pitfalls_path.is_file():
+        raise RiteError(f"--pitfalls-from: cycle {cycle.name} has no pitfalls file "
+                        f"({display(project.root, cycle.pitfalls_path)})")
+    return cycle.pitfalls_path
 
 
 def _plan_source(project: Project, plan: str) -> Path:

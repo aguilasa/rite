@@ -75,7 +75,8 @@ Task numbers are per cycle. Fix numbers are per prefix across all cycles, archiv
 IDs are always allocated by `rite.py new-task` / `new-fix`, which create the file atomically.
 
 A cycle's `prefix` (and optionally `cycle`, `plan`, `profile`, `pitfalls`, `ticket`, `local`, `order`)
-comes from its `progress_state` file.
+comes from its `progress_state` file. `pitfalls` points the cycle at another file (`rite set-cycle
+--pitfalls <file>`, `''` back to `pitfalls_file`); `rite check` warns when it points at nothing.
 
 **Execution order.** Tasks run in ID order unless the cycle's `order` lists task IDs that
 come first, in that order; unlisted tasks follow by number. It is how a task split late (new, higher

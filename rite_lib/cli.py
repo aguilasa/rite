@@ -243,8 +243,10 @@ def cmd_set_cycle(project: Project, args) -> int:
         updates["ticket"] = args.ticket.strip() or None
     if args.plan is not None:
         updates["plan"] = args.plan.strip() or None
+    if args.pitfalls is not None:
+        updates["pitfalls"] = args.pitfalls.strip() or None
     if not updates:
-        raise RiteError("rite set-cycle needs --order, --ticket and/or --plan")
+        raise RiteError("rite set-cycle needs --order, --ticket, --plan and/or --pitfalls")
     res = ops.set_cycle(project, cycle, updates)
     _emit(args, res, f"set {', '.join(updates)} of cycle {cycle.name} in {res['file']}")
     return EXIT_OK
@@ -405,11 +407,14 @@ def cmd_batch_plan(project: Project, args) -> int:
 def cmd_new_cycle(project: Project, args) -> int:
     from . import lifecycle
     res = lifecycle.new_cycle(project, args.name, args.prefix, plan=args.plan, ticket=args.ticket,
-                              local=args.local, commit=args.commit, copy_plan=args.copy_plan)
+                              local=args.local, commit=args.commit, copy_plan=args.copy_plan,
+                              pitfalls_from=args.pitfalls_from)
     lines = [f"created cycle {res['cycle']} [{res['prefix']}] at {res['path']}"
              + (f", ticket {res['ticket']}" if res["ticket"] else "") + (", local" if res["local"] else "")]
     if res["plan_copied_from"]:
         lines.append(f"  copied plan {res['plan_copied_from']} -> {res['plan']}")
+    if res["pitfalls_copied_from"]:
+        lines.append(f"  pitfalls copied from {res['pitfalls_copied_from']}")
     lines += [f"  {p}" for p in res["created"]]
     if res["commit"]:
         lines.append(f"  committed {res['commit']}")
@@ -751,10 +756,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="item IDs of the cycle, replacing the list (repeat or comma-separate; '' empties)")
     s.set_defaults(fn=cmd_set)
 
-    s = sub.add_parser("set-cycle", parents=[common], help="set a cycle's order, ticket or plan")
+    s = sub.add_parser("set-cycle", parents=[common], help="set a cycle's order, ticket, plan or pitfalls file")
     s.add_argument("--order", action="append", help="task IDs in execution order (repeat or comma-separate)")
     s.add_argument("--ticket", help="external tracker key ('' clears it)")
     s.add_argument("--plan", help="plan link, in [paths].link_style ('' clears it)")
+    s.add_argument("--pitfalls", help="an existing pitfalls file, repo-relative ('' back to [naming])")
     s.set_defaults(fn=cmd_set_cycle)
 
     s = sub.add_parser("sync", parents=[common], help="regenerate progress/fixes tables from the JSON state")
@@ -782,6 +788,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--prefix", required=True)
     s.add_argument("--plan", help="plan file (repo-relative, root-absolute or absolute)")
     s.add_argument("--copy-plan", action="store_true", help="copy an outside plan into [paths].plans_dir")
+    s.add_argument("--pitfalls-from", help="start the pitfalls file as a copy of this cycle's (or this file)")
     s.add_argument("--ticket", help="external tracker key the cycle's commits carry, e.g. PROJ-123")
     s.add_argument("--local", action="store_true", help="documents stay out of git: no bookkeeping commits")
     s.add_argument("--commit", action="store_true")

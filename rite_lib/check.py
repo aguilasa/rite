@@ -514,6 +514,10 @@ class Checker:
                                   "place of its script?")
 
     def check_profile(self, cycle: Cycle) -> None:
+        # a pointer to a missing file is a mistake; the [naming] default may not exist yet (legacy)
+        if not cycle.archived and cycle.meta.get("pitfalls") and not cycle.pitfalls_path.is_file():
+            self.warn(cycle.progress_path, f"pitfalls file {display(self.p.root, cycle.pitfalls_path)} not found "
+                      "(rite set-cycle --pitfalls <file>, or '' for the [naming] default)")
         prof = cycle.profile_path
         if not prof.is_file():
             if not cycle.archived:

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import write
+from fixtures import set_fields, write
 
 from test_cli import FixtureCase, fields
 
@@ -198,6 +198,47 @@ class AnchorsAndStatsTest(FixtureCase):
         self.assertEqual(s["fixes_by_origin"], {"ALP-TASK-01": 1})
         self.assertEqual(s["review_latency_days"]["reviewed"], 1)
         self.assertEqual(s["by_phase"]["1"], {"tasks": 2, "fixes": 1})
+
+
+class PitfallsCarryOverTest(FixtureCase):
+    """What a retro kept reaches the next cycle, and a pointer to nothing is reported (#6)."""
+
+    KEPT = "# Pitfalls — alpha\n\n### Literal floor from an f-string\n\nMeasured in ALP-FIX-01.\n"
+
+    def test_new_cycle_starts_from_the_pitfalls_of_another(self):
+        write(self.root / "docs/rite/profiles/alpha.pitfalls.md", self.KEPT)
+        res = self.js("new-cycle", "gamma", "--prefix", "GAM", "--pitfalls-from", "alpha", "--commit")
+        self.assertEqual(res["pitfalls_copied_from"], "docs/rite/profiles/alpha.pitfalls.md")
+        self.assertEqual((self.root / "docs/rite/profiles/gamma.pitfalls.md").read_text(encoding="utf-8"),
+                         self.KEPT)
+        self.assertIn("docs/rite/profiles/gamma.pitfalls.md", res["created"])
+        res = self.js("new-cycle", "delta", "--prefix", "DEL", "--pitfalls-from",
+                      "docs/rite/profiles/alpha.pitfalls.md")
+        self.assertEqual(res["pitfalls_copied_from"], "docs/rite/profiles/alpha.pitfalls.md")
+        code, _, err = self.fx.rite("new-cycle", "eps", "--prefix", "EPS", "--pitfalls-from", "nope")
+        self.assertEqual(code, 1)
+        self.assertIn("--pitfalls-from: nope not found", err)
+        self.assertFalse((self.root / "docs/rite/cycles/eps").exists())
+
+    def test_set_cycle_points_at_a_pitfalls_file(self):
+        write(self.root / "docs/rite/shared.pitfalls.md", self.KEPT)
+        self.ok("set-cycle", "--cycle", "alpha", "--pitfalls", "docs/rite/shared.pitfalls.md")
+        self.assertEqual(self.js("resolve-cycle", "alpha")["pitfalls"], "docs/rite/shared.pitfalls.md")
+        self.assertEqual(fields(self.root / "docs/rite/cycles/alpha/progress.md")["pitfalls"],
+                         "/docs/rite/shared.pitfalls.md")
+        self.assertEqual(self.check_errors("--all"), [])
+        code, _, err = self.fx.rite("set-cycle", "--cycle", "alpha", "--pitfalls", "docs/nope.md")
+        self.assertEqual(code, 1)
+        self.assertIn("pitfalls file docs/nope.md not found", err)
+        self.ok("set-cycle", "--cycle", "alpha", "--pitfalls", "")
+        self.assertEqual(self.js("resolve-cycle", "alpha")["pitfalls"],
+                         "docs/rite/profiles/alpha.pitfalls.md")
+
+    def test_check_warns_about_a_pitfalls_pointer_to_nothing(self):
+        set_fields(self.root / "docs/rite/cycles/alpha/progress.md", {"pitfalls": "/docs/rite/profiles/nope.md"})
+        _, out, _ = self.fx.rite("check", "--all", "--json")
+        self.assertIn("pitfalls file docs/rite/profiles/nope.md not found",
+                      " ".join(f["message"] for f in json.loads(out)["findings"] if f["level"] == "warn"))
 
 
 class AnchorsRelativeTest(FixtureCase):

@@ -23,7 +23,8 @@ twice belongs in the repo config, and a failure of the rite itself belongs to th
    **bookkeeping** (state, links, logs) or **engineering** (code, data, numbers). The bookkeeping and
    engineering totals are the sums of these counts — `rite stats` does not classify fixes.
 5. **Propose**, every proposal carrying its fix IDs as evidence:
-   - **Keep** — pitfalls for the next cycle's pitfalls file, in the template's format.
+   - **Keep** — pitfalls, in the template's format, written to this cycle's pitfalls file: the next
+     cycle does not exist yet, and `/rite:new-cycle` starts its file as a copy of it (`--pitfalls-from`).
    - **Promote** — a rule that caused fixes here and in an earlier cycle → a line in `rite.toml`
      (guards, gates, resources) or `CLAUDE.md`.
    - **Report** — a failure of the rite itself → the text of an issue for the plugin repository.
