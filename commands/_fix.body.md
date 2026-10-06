@@ -41,6 +41,7 @@ evidence, `rite commit-new <NEW-FIX>`, mention it in the report.
 
 Fix (ID, severity, origin) · reproduction output before, or "stale" · root cause, confirmed or
 corrected · files changed and the test added · verification output after, and gates · sweep commit
-or "none needed" · work and bookkeeping SHAs · `pushed`, if any (from `finish` and `commit-new`) · new fixes · the `next` from `finish`.
+or "none needed" · work and bookkeeping SHAs · `pushed`, if any (from `finish` and `commit-new`) · `outside_files` from `finish`, if any · new
+fixes · the `next` from `finish`.
 
 <!-- rite:parts -->

@@ -29,6 +29,6 @@ Arguments: `$ARGUMENTS`
 ## Report
 
 Waves with their item IDs and the conflict pairs that shaped them · per item: result (done / stale /
-blocked / aborted), work SHA, bookkeeping SHA · gates · forwarded notes · what to run next.
+blocked / aborted), work SHA, bookkeeping SHA, `outside_files` from `finish` if any · gates · forwarded notes · what to run next.
 
 <!-- rite:parts -->

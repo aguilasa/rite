@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`rite close` and `rite finish` compare the work commit with the declared `files`** (#4): they
+  listed the commit's paths in the Execution Log but never checked them against the item's scope, so
+  only the review caught a commit that edited another task's document. Each path no declared entry
+  covers (exact, folder or glob; a rename by its new path; the item's own document exempt) is now
+  listed under **Outside declared files** in the Execution Log and returned in `outside_files`. A
+  warning, not a refusal: the scope was a prediction, and the review judges the departure.
+
 ## [0.15.0] — 2026-10-02
 
 ### Changed

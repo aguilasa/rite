@@ -273,6 +273,9 @@ def _result_text(verb: str, res: dict) -> str:
         lines.append("  local cycle, files written (no bookkeeping commit): " + ", ".join(res["files"]))
     else:
         lines.append("  files written, not committed: " + ", ".join(res["files"]))
+    if res.get("outside_files"):
+        lines.append("  warning: the work commit touched files outside the declared `files`: "
+                     + ", ".join(res["outside_files"]))
     return "\n".join(lines)
 
 

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import frontmatter, gitutil, state, views
 from .config import FIX_STATUSES, NO_COMMIT, SEVERITIES, TASK_STATUSES
+from .guard import glob_regex
 from .markdown import append_to_section
 from .model import Cycle, Item, Project, RiteError, display, make_link
 from .naming import slugify
@@ -323,10 +324,38 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     log = [f"- **Closed** — commit `{short}`{where} ({date}): {subj}",
            f"  - Files (`{git_c} show --name-status {short}`):"]
     log += [f"    - `{st} {p}`" for st, p in files] or ["    - *(none)*"]
+    declared = _declared_files(item)
+    outside = _outside_declared(declared, files, display(root, item.path)) if declared else []
+    if outside:
+        log.append(f"  - **Outside declared files** ({', '.join(f'`{d}`' for d in declared)}):")
+        log += [f"    - `{p}`" for p in outside]
     _write_item(item, updates, "\n".join(log), project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": short, "work_subject": subj,
-            **result}
+            "outside_files": outside, **result}
+
+
+def _declared_files(item: Item) -> list[str]:
+    value = item.fields.get("files")
+    if value is None:
+        return []
+    return [str(v) for v in value] if isinstance(value, list) else [str(value)]
+
+
+def _outside_declared(declared: list[str], files: list[tuple[str, str]], own: str) -> list[str]:
+    """Paths of the work commit that no declared `files` entry covers — a warning, never a refusal:
+    the scope was a prediction, and the review judges whether leaving it was right. A rename counts by
+    its new path; the item's own document is never outside its scope."""
+    patterns = [d.strip().removeprefix("./").lstrip("/") for d in declared if d.strip()]
+    outside = []
+    for _, path in files:
+        path = path.split(" -> ")[-1]
+        if path == own:
+            continue
+        if not any(path == d or path.startswith(d.rstrip("/") + "/") or glob_regex(d).fullmatch(path)
+                   for d in patterns):
+            outside.append(path)
+    return outside
 
 
 def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: str | None, reason: str,

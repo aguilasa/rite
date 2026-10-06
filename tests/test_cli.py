@@ -120,6 +120,31 @@ class LoopTest(FixtureCase):
         self.assertIsNone(res["commit"])
         self.assertEqual(self.log(1), ["feat: b"])
 
+    def test_close_warns_about_files_outside_the_declared_ones(self):
+        path = self.root / "docs/rite/cycles/alpha/01-harness.md"
+        set_fields(path, {"files": ["src/*.py", "./docs/notes/"]})
+        write(self.root / "src/a.py", "a\n")
+        write(self.root / "docs/notes/n.md", "n\n")
+        write(self.root / "docs/other.md", "o\n")
+        self.fx.git("add", "--", "src/a.py", "docs/notes/n.md", "docs/other.md")
+        self.fx.git("commit", "-q", "-m", "feat: a")
+        res = self.js("close", "ALP-TASK-01")
+        self.assertEqual(res["outside_files"], ["docs/other.md"])
+        self.assertEqual(fields(path)["status"], "done")
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("**Outside declared files** (`src/*.py`, `./docs/notes/`):", text)
+        self.assertIn("    - `docs/other.md`", text)
+
+    def test_close_inside_the_declared_files_or_without_any_has_no_warning(self):
+        set_fields(self.root / "docs/rite/cycles/alpha/01-harness.md", {"files": ["src/a.py"]})
+        self.fx.work_commit("src/a.py", "a\n", "feat: a")
+        res = self.js("close", "ALP-TASK-01")
+        self.assertEqual(res["outside_files"], [])
+        self.assertNotIn("Outside declared files",
+                         (self.root / "docs/rite/cycles/alpha/01-harness.md").read_text(encoding="utf-8"))
+        self.fx.work_commit("src/b.py", "b\n", "feat: b")
+        self.assertEqual(self.js("close", "ALP-TASK-02")["outside_files"], [])
+
     def test_close_without_work_commit(self):
         self.fx.work_commit("src/a.py", "a\n", "feat: unrelated")
         code, _, err = self.fx.rite("close", "ALP-TASK-01", "--no-repo")
