@@ -10,6 +10,11 @@ All notable changes to this project are documented here. Versions follow [SemVer
   itself waits on the closing task (added after it, `depends_on` the closing task), so the suggested
   `rite set` would close a loop; and it warned about a closing task already done, whose dependencies
   `rite set` will not change. Neither case is warned about now.
+- **A command continued on lines without `$ ` is not run as half a command** (#8): Evidence that
+  wrote `$ R=…` and then `comm -13 \` without a prompt ran only the assignment — exit 0, no output,
+  `why: ok`, which a triage reads as a symptom gone and a real fix as stale. A line without `$ ` that
+  ends in a backslash is now a command, not output: `rite reproduce` reports `why: unprompted` with
+  those lines and runs nothing (cannot run, never stale), and `rite check` warns about it.
 
 ## [0.16.0] — 2026-10-06
 

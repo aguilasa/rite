@@ -140,6 +140,9 @@ def cmd_reproduce(project: Project, args) -> int:
                     if unblock else " (blocked, with no unblocked_by: nothing re-checks it)")
         elif fix["why"] == "unterminated":
             flag = " (a heredoc is never closed, so nothing ran: runnable false)"
+        elif fix["why"] == "unprompted":
+            flag = (" (a command goes on over lines without `$ `, so nothing ran: runnable false; "
+                    "start it with `$ `)")
         else:
             flag = " (its section has no command: runnable false)"
         flag += f" (over {data['limit_kb']} KB: hand it to an agent)" if fix["over_limit"] else ""

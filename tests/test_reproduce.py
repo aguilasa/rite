@@ -80,6 +80,22 @@ class EvidenceCommandsTest(unittest.TestCase):
         found = compose.evidence_commands(fix_body("```text\n$ echo ok\n$ cat <<X\nnever closed\n```"))
         self.assertEqual((found["why"], found["commands"], found["broken"]), ("unterminated", [], ["cat <<X"]))
 
+    ISSUE_8 = ("```text\n"
+               "$ R=/home/u/.claude/plugins/cache/rite/rite/0.15.0/bin/rite\n"
+               "LC_ALL=C comm -13 \\\n"
+               "  <(sh $R context KITS-TASK-40 --json | LC_ALL=C sort) \\\n"
+               "  <(git show --name-only --format= 05d54ec | LC_ALL=C sort)\n"
+               "tools/kits/core/api.py\n"
+               "```")
+
+    def test_a_command_continued_without_its_prompt_runs_nothing(self):
+        found = compose.evidence_commands(fix_body(self.ISSUE_8))
+        self.assertEqual((found["why"], found["commands"]), ("unprompted", []))
+        self.assertEqual(found["unprompted"], ["LC_ALL=C comm -13 \\\n"
+                                              "  <(sh $R context KITS-TASK-40 --json | LC_ALL=C sort) \\\n"
+                                              "  <(git show --name-only --format= 05d54ec | LC_ALL=C sort)"])
+        self.assertEqual(found["recorded"], ["tools/kits/core/api.py"])
+
     def test_a_title_mismatch_is_no_section_not_no_command(self):
         text = "# CORR-X\n\n## Evidência\n\n```text\n$ grep -n x f\n```\n"
         found = compose.evidence_commands(text)
@@ -345,6 +361,13 @@ class ReproduceTest(unittest.TestCase):
             fix_id = self.add_fix(f"```text\n$ {command}\n7\n```")
             self.assertEqual(self.evidence_warnings(fix_id), [], command)
 
+
+    def test_an_unprompted_continuation_is_not_runnable_and_check_says_so(self):
+        fix_id = self.add_fix(EvidenceCommandsTest.ISSUE_8)
+        fix = self.reproduce(fix_id)["fixes"][0]
+        self.assertEqual((fix["runnable"], fix["why"], fix["commands"]), (False, "unprompted", []))
+        warnings = self.evidence_warnings(fix_id)
+        self.assertTrue(any("`LC_ALL=C comm -13 \\` without `$ `" in w for w in warnings), warnings)
 
 class StaleRuleTest(unittest.TestCase):
     """`mark-stale` closes a fix unrepaired: the rule names what never authorizes it."""

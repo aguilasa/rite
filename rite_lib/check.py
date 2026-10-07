@@ -496,7 +496,11 @@ class Checker:
                 continue
             moved = False  # after a `cd`, relative paths are no longer the repository's
             made: set[str] = set()  # files an earlier line wrote
-            for command in compose._shell_lines(found[1])[0]:
+            commands, _, _, unprompted = compose._shell_lines(found[1])
+            for command in unprompted:
+                self.warn(fix.path, f"'{found[0]}' has `{command.splitlines()[0]}` without `$ `: a command "
+                          "written as output, so reproduce runs nothing; start it with `$ `")
+            for command in commands:
                 first = command.splitlines()[0]
                 moved = moved or bool(re.search(r"(?:^|[;&|]\s*)cd\s", command))
                 if not moved:

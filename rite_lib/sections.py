@@ -77,8 +77,8 @@ def h2_sections(text: str) -> list[tuple[str, str]]:
 
 
 def _commands(body: str) -> list[str]:
-    commands, _, broken = compose._shell_lines(body)
-    return commands + broken
+    commands, _, broken, unprompted = compose._shell_lines(body)
+    return commands + broken + unprompted
 
 
 def _command_lines(body: str) -> int:

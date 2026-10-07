@@ -383,22 +383,32 @@ def _continued(line: str) -> str:
     return line[2:] if line.startswith("> ") else line
 
 
-def _shell_lines(body: str) -> tuple[list[str], list[str], list[str]]:
+def _shell_lines(body: str) -> tuple[list[str], list[str], list[str], list[str]]:
     """Commands (`$ ` lines inside fences), every other line of those fences (the recorded output),
-    and the commands a heredoc left open.
+    the commands a heredoc left open, and the commands written without a `$ ` prompt.
 
     A command goes on over a line ending in a backslash and over the body of each heredoc it opens, up
     to its delimiter — one command, run whole. Why: run line by line, `python - <<'EOF'` got no body
     and a continued `for` loop half its text; exit 2 read like a reproduced symptom. A heredoc with no
-    closing delimiter is not run at all: half a command measures nothing."""
-    commands, recorded, broken = [], [], []
+    closing delimiter is not run at all: half a command measures nothing.
+
+    A line without `$ ` that ends in a backslash is a command written without its prompt, not output:
+    it and its continuation lines are `unprompted`. Why: `$ R=…` then `comm -13 \\` on the next line
+    ran only the assignment — exit 0, no output, read as a symptom gone."""
+    commands, recorded, broken, unprompted = [], [], [], []
     for block in _fenced(body):
         i = 0
         while i < len(block):
             stripped = block[i].strip()
             i += 1
             if not stripped.startswith("$"):
-                if stripped:
+                if stripped.endswith("\\"):
+                    command = stripped
+                    while command.endswith("\\") and i < len(block):
+                        command += "\n" + _continued(block[i])
+                        i += 1
+                    unprompted.append(command)
+                elif stripped:
                     recorded.append(block[i - 1].rstrip())
                 continue
             command = stripped[1:].strip()
@@ -419,7 +429,7 @@ def _shell_lines(body: str) -> tuple[list[str], list[str], list[str]]:
                 command += "\n" + "\n".join([*body_lines, delimiter])
                 i += 1
             (commands if closed else broken).append(command)
-    return commands, recorded, broken
+    return commands, recorded, broken, unprompted
 
 
 def evidence_commands(text: str, evidence: list[str] | None = None,
@@ -431,23 +441,30 @@ def evidence_commands(text: str, evidence: list[str] | None = None,
     `source` names the kind of section whatever the language; `heading` is the title found. `why`
     tells the empty cases apart: `no_section` (neither title is there — `looked_for` lists them; a
     title mismatch, not a clean fix; `near` lists headings that begin with one), `no_command` (a
-    section is there, with nothing to run) or `unterminated` (a heredoc never closed; `broken`)."""
+    section is there, with nothing to run), `unterminated` (a heredoc never closed; `broken`) or
+    `unprompted` (a command continued on lines without `$ `, so what would run is not what was meant)."""
     evidence = evidence or as_list(DEFAULTS["sections"]["evidence"])
     verification = verification or as_list(DEFAULTS["sections"]["verification"])
     found_evidence = markdown.first_section(text, evidence)
     found_verification = markdown.first_section(text, verification)
-    commands, recorded, broken = _shell_lines(found_evidence[1] if found_evidence else "")
+    commands, recorded, broken, unprompted = _shell_lines(found_evidence[1] if found_evidence else "")
     if broken:
         return {"source": "Evidence", "heading": found_evidence[0], "why": "unterminated", "broken": broken,
                 "commands": [], "recorded": recorded}
+    if unprompted:
+        return {"source": "Evidence", "heading": found_evidence[0], "why": "unprompted",
+                "unprompted": unprompted, "commands": [], "recorded": recorded}
     if commands:
         return {"source": "Evidence", "heading": found_evidence[0], "why": "ok", "commands": commands,
                 "recorded": recorded}
     body = found_verification[1] if found_verification else ""
-    commands, _, broken = _shell_lines(body)
+    commands, _, broken, unprompted = _shell_lines(body)
     if broken:
         return {"source": "Verification", "heading": found_verification[0], "why": "unterminated",
                 "broken": broken, "commands": [], "recorded": recorded}
+    if unprompted:
+        return {"source": "Verification", "heading": found_verification[0], "why": "unprompted",
+                "unprompted": unprompted, "commands": [], "recorded": recorded}
     if not commands:
         commands = [span.group(1).strip() for line in body.splitlines()
                     if BULLET.match(line) for span in [CODE_SPAN.search(line)] if span]
@@ -634,7 +651,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
             results.append({
                 "id": fix.id, "path": display(project.root, fix.path), "runnable": bool(found["commands"]),
                 "source": found["source"], "heading": found["heading"], "why": found["why"], "blocked": False,
-                **{k: found[k] for k in ("looked_for", "near", "broken") if k in found},
+                **{k: found[k] for k in ("looked_for", "near", "broken", "unprompted") if k in found},
                 "resources": fix.fields.get("resources") or [],
                 "recorded": found["recorded"], "commands": runs, "held_bytes": held, "over_limit": over,
                 **_undecidable(runs),
