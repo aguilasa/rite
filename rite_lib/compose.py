@@ -530,6 +530,28 @@ def _kill_tree(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
+# a launcher path of one installed version: `~/.claude/plugins/cache/<marketplace>/rite/0.15.0` (#10)
+_PINNED_CLI = re.compile(r"""(?:~|/)[^\s"'`;|&()<>=]*?/\.claude/plugins/cache/"""
+                         r"""[^/\s"'`;|&()<>]+/rite/[^/\s"'`;|&()<>]+""")
+
+
+def unpin_cli(command: str) -> tuple[str, list[str]]:
+    """``command`` with each Rite install of a version no longer on disk swapped for the running one.
+
+    Why: a reviewer wrote the resolved cache path of its own version into the Evidence; after an
+    upgrade that path is gone, and the evidence ran a CLI that is not there. A path still on disk is
+    left alone: it is what was written, and it still runs."""
+    swapped = []
+
+    def swap(m: re.Match) -> str:
+        if Path(os.path.expanduser(m.group(0))).exists():
+            return m.group(0)
+        swapped.append(f"{m.group(0)} -> {ops.PLUGIN_ROOT}")
+        return str(ops.PLUGIN_ROOT)
+
+    return _PINNED_CLI.sub(swap, command), swapped
+
+
 def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = None, *,
              timeout: float | None = None, cap_bytes: int | None = None) -> dict:
     """Run one command and keep its output: the tail when it passes, else up to ``cap_bytes`` of its
@@ -546,7 +568,8 @@ def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = Non
     with tempfile.TemporaryFile() as out:
         # stdin closed: a heredoc arrives one line at a time, and `python -` would wait on it forever
         proc = subprocess.Popen(run[0], shell=run[1], cwd=where, stdout=out, stderr=out,
-                                stdin=subprocess.DEVNULL, env={**os.environ}, **group)
+                                stdin=subprocess.DEVNULL, env={**os.environ, "RITE_HOME": str(ops.PLUGIN_ROOT)},
+                                **group)
         timed_out = False
         try:
             proc.wait(timeout=timeout)
@@ -611,7 +634,13 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
         raise RiteError("--timeout must be a number of seconds > 0")
     shell = project_shell(project)
     # one byte past the limit: enough to tell an output over it, never the whole of an endless one
-    run = functools.partial(_run_one, tail=tail, shell=shell, timeout=timeout, cap_bytes=int(limit_kb * 1024) + 1)
+    run_raw = functools.partial(_run_one, tail=tail, shell=shell, timeout=timeout, cap_bytes=int(limit_kb * 1024) + 1)
+
+    def run(command: str, where: Path) -> dict:
+        command, swapped = unpin_cli(command)
+        result = run_raw(command, where)
+        return {**result, "rewritten": swapped} if swapped else result
+
     copies: dict[Path, Path] = {}
     results = []
     try:

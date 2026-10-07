@@ -154,6 +154,7 @@ def cmd_reproduce(project: Project, args) -> int:
                     if run["missing_path"] else "")
             ended = (f"TIMEOUT after {run['seconds']:g}s (killed; cannot decide)" if run["timed_out"]
                      else f"exit {run['exit_code']}")
+            lines += [f"  (rewritten: {r})" for r in run.get("rewritten", [])]
             lines.append(f"  $ {run['command']}  -> {ended}{gone}")
             lines += [f"    {line}" for line in run["output"].splitlines()]
         if fix["recorded"]:

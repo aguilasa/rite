@@ -27,6 +27,8 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
   measurement that needed a patched copy is written as the steps that rebuild it from HEAD; if it
   cannot be, the finding says the measurement was ad hoc and names the missing probe in its fix.
   Why: a fix whose evidence cites a script nobody has cannot be reproduced, and its triage never ends.
+  The Rite CLI in a `$` line is `sh "$RITE_HOME/bin/rite"` (`rite reproduce` sets it), never the
+  resolved path of the installed version: the next upgrade removes that path.
 - Read the CLI rules at `${CLAUDE_PLUGIN_ROOT}/parts/cli.md`; you may run read-only subcommands
   (`resolve-cycle`, `next`, `status`, `check`, `guard`) only.
 

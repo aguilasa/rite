@@ -15,6 +15,12 @@ All notable changes to this project are documented here. Versions follow [SemVer
   `why: ok`, which a triage reads as a symptom gone and a real fix as stale. A line without `$ ` that
   ends in a backslash is now a command, not output: `rite reproduce` reports `why: unprompted` with
   those lines and runs nothing (cannot run, never stale), and `rite check` warns about it.
+- **Evidence that pins the plugin's versioned path survives an upgrade** (#10): fixes written by a
+  review carried `~/.claude/plugins/cache/rite/rite/0.15.0/bin/rite`, gone after the upgrade to
+  0.16.0. `rite reproduce` now swaps an installed version's path that is no longer on disk for the
+  running CLI and says so in `rewritten`; it sets `RITE_HOME` for the commands it runs, so Evidence
+  can call `sh "$RITE_HOME/bin/rite"`, which the review and the reviewer are told to write; and `rite
+  check` warns about a pinned path.
 
 ## [0.16.0] — 2026-10-06
 

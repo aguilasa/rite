@@ -501,6 +501,10 @@ class Checker:
                 self.warn(fix.path, f"'{found[0]}' has `{command.splitlines()[0]}` without `$ `: a command "
                           "written as output, so reproduce runs nothing; start it with `$ `")
             for command in commands:
+                if compose._PINNED_CLI.search(command):
+                    self.warn(fix.path, f"'{found[0]}' calls the Rite CLI by an installed version's path "
+                              f"(`{compose._PINNED_CLI.search(command).group(0)}`): write "
+                              "`sh \"$RITE_HOME/bin/rite\"`, which reproduce sets to the running CLI")
                 first = command.splitlines()[0]
                 moved = moved or bool(re.search(r"(?:^|[;&|]\s*)cd\s", command))
                 if not moved:

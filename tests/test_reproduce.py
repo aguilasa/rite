@@ -369,6 +369,19 @@ class ReproduceTest(unittest.TestCase):
         warnings = self.evidence_warnings(fix_id)
         self.assertTrue(any("`LC_ALL=C comm -13 \\` without `$ `" in w for w in warnings), warnings)
 
+    def test_a_pinned_cli_of_a_version_gone_runs_the_current_one(self):
+        gone = "/nowhere/.claude/plugins/cache/rite/rite/0.0.1"
+        fix_id = self.add_fix(f"```text\n$ R={gone}/bin/rite; echo \"$R|$RITE_HOME\"\nx\n```")
+        run = self.reproduce(fix_id)["fixes"][0]["commands"][0]
+        root = str(Path(compose.__file__).resolve().parent.parent)
+        self.assertEqual(run["rewritten"], [f"{gone} -> {root}"])
+        self.assertEqual(run["output"].strip(), f"{root}/bin/rite|{root}")
+        self.assertTrue(any("by an installed version's path" in w for w in self.evidence_warnings(fix_id)))
+        fine = self.add_fix('```text\n$ sh "$RITE_HOME/bin/rite" --help >/dev/null; echo $?\n0\n```')
+        run = self.reproduce(fine)["fixes"][0]["commands"][0]
+        self.assertEqual((run["output"].strip(), "rewritten" in run), ("0", False))
+        self.assertEqual(self.evidence_warnings(fine), [])
+
 class StaleRuleTest(unittest.TestCase):
     """`mark-stale` closes a fix unrepaired: the rule names what never authorizes it."""
 
