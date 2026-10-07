@@ -673,6 +673,21 @@ class DependsOnTest(FixtureCase):
     def test_a_dependency_through_another_task_covers_the_phase(self):
         self.assertFalse([w for w in self.warnings() if "closing task" in w])
 
+    def add_phase_2_task(self, depends_on: str) -> str:
+        return self.js("new-task", "--cycle", "alpha", "--title", "Added later", "--type", "tool",
+                       "--phase", "2", "--depends-on", depends_on,
+                       "--source-of-truth", "/docs/plans/PLAN-alpha.md#3")["id"]
+
+    def test_a_task_that_waits_on_the_closing_task_is_not_left_out(self):
+        self.add_phase_2_task("ALP-TASK-03")  # covering it would close a loop (#9)
+        self.assertFalse([w for w in self.warnings() if "closing task" in w])
+
+    def test_a_closing_task_that_already_ran_is_not_warned_about(self):
+        self.fx.work_commit("src/close.py", "c\n", "chore: close phase")
+        self.ok("close", "ALP-TASK-03")
+        self.add_phase_2_task("ALP-TASK-01")  # `rite set` refuses a done item: nothing could clear it
+        self.assertFalse([w for w in self.warnings() if "closing task" in w])
+
     def test_refusals(self):
         for deps, msg in ((["ALP-TASK-01"], "cannot depend on itself"),
                           (["ALP-TASK-99"], "is not an item of cycle alpha"),

@@ -131,6 +131,18 @@ def covered_phases(body: str, labels) -> set[str]:
     return covered
 
 
+def _reach(index: dict[str, Item], start: list[str]) -> set[str]:
+    """Every item reachable from ``start`` through `depends_on`, ``start`` included."""
+    reached: set[str] = set()
+    stack = list(start)
+    while stack:
+        node = stack.pop()
+        if node not in reached and node in index:
+            reached.add(node)
+            stack += index[node].depends_on
+    return reached
+
+
 @dataclass
 class Finding:
     level: str  # "error" | "warn"
@@ -410,22 +422,18 @@ class Checker:
     def check_closing_coverage(self, cycle: Cycle) -> None:
         """A closing task depends, directly or through another task, on every task of its phase. A phase
         that grows after its closing task was written leaves the new tasks outside it — and the closing
-        task would run before them."""
+        task would run before them. Not a task that itself waits on the closing task (it runs after it
+        by design; covering it would close a loop), nor a closing task that already ran: its
+        dependencies are the order it ran in, and `rite set` refuses to change them."""
         index = cycle.by_id()
         for closer in cycle.tasks:
-            if closer.fields.get("type") != "closing":
+            if closer.fields.get("type") != "closing" or closer.status in ("done", "stale", "skipped"):
                 continue
-            reached: set[str] = set()
-            stack = list(closer.depends_on)
-            while stack:
-                dep = stack.pop()
-                if dep not in reached and dep in index:
-                    reached.add(dep)
-                    stack += index[dep].depends_on
+            reached = _reach(index, closer.depends_on)
             phase = str(closer.fields.get("phase"))
             missing = [t.id for t in cycle.tasks
                        if str(t.fields.get("phase")) == phase and t.fields.get("type") != "closing"
-                       and t.id not in reached]
+                       and t.id not in reached and closer.id not in _reach(index, t.depends_on)]
             if missing:
                 self.warn(closer.path, f"closing task {closer.id} does not depend on {', '.join(missing)} of "
                           f"phase {phase} (rite set {closer.id} --depends-on "

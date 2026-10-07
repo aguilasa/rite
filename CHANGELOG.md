@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The closing-task warning no longer asks for what `rite set` refuses** (#9): it named a task that
+  itself waits on the closing task (added after it, `depends_on` the closing task), so the suggested
+  `rite set` would close a loop; and it warned about a closing task already done, whose dependencies
+  `rite set` will not change. Neither case is warned about now.
+
 ## [0.16.0] — 2026-10-06
 
 ### Added
