@@ -89,8 +89,9 @@ frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->
 
 - **Message**: `[commit].style` `conventional` gives `<type>(<scope>): <summary>` (`feat`, `fix`,
   `refactor`, `test`, `docs`, `build`, `chore`), `free` a plain imperative one, in `commit_language`.
-  Put your subject into the `subject_template` from `rite begin` and end the body with its `trailers`,
-  which carry `Refs: <ID>` and the cycle's ticket so `git log --grep` finds an item's commits.
+  Put your subject in the `subject_template` from `rite begin` and end the body with its `trailers`
+  (`Refs: <ID>`, the ticket: what `git log --grep` finds). With `co_author_footer: false`, add no
+  `Co-Authored-By` trailer, whatever your attribution asks.
 - **Staging**: explicit paths (`git add -- <paths>`), never `git add -A`, never a `never_stage` path.
   In a local cycle, never stage the cycle folder, its profile or its pitfalls file.
 - **Never** amend, rebase, force, skip hooks or push by hand; push only when `[commit].push = "on-request"`

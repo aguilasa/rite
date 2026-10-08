@@ -484,6 +484,7 @@ class ComposeTest(FixtureCase):
         self.assertEqual(data["item"]["source_of_truth"], "/docs/plans/PLAN-alpha.md#2.1")
         self.assertEqual(data["paths"]["profile"], "docs/rite/profiles/alpha.md")
         self.assertEqual(data["commit"]["trailers"], ["Refs: ALP-TASK-01"])
+        self.assertIs(data["commit"]["co_author_footer"], True)
         self.assertEqual(data["config"]["read_only"], ["vendor/**"])
         self.assertTrue(data["config"]["generated"][0]["generator"])
         self.assertIsInstance(data["repo_kb"], int)

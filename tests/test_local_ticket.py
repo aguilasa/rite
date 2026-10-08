@@ -125,6 +125,14 @@ class TicketTest(FixtureCase):
         self.ok("close", "ALP-TASK-01")
         self.assertEqual(body(self), "chore(rite): close ALP-TASK-01")
 
+    def test_co_author_footer_reaches_the_agent(self):
+        self.assertIs(self.js("commit-refs", "ALP-TASK-01")["co_author_footer"], True)
+        path = self.root / "rite.toml"
+        path.write_text(path.read_text(encoding="utf-8") + "\n[commit]\nco_author_footer = false\n",
+                        encoding="utf-8", newline="\n")
+        self.assertIs(self.js("commit-refs", "ALP-TASK-01")["co_author_footer"], False)
+        self.assertIs(self.js("begin", "task", "--cycle", "alpha")["commit"]["co_author_footer"], False)
+
     def test_ticket_format_needs_the_placeholder(self):
         path = self.root / "rite.toml"
         path.write_text(path.read_text(encoding="utf-8") + '\n[commit]\nticket_format = "Refs: JIRA"\n',

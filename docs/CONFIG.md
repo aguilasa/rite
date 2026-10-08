@@ -128,7 +128,7 @@ no evidence or verification title, and about a live profile with no gates title.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `style` | `"conventional"` | `conventional` (`feat: …`, bookkeeping `chore(rite): …`) or `free` (bookkeeping `rite: …`). |
-| `co_author_footer` | `true` | Commands add the agent's co-author footer to work commits. |
+| `co_author_footer` | `true` | `true`: work commits keep the agent's own co-author attribution. `false`: commands write work commits with no `Co-Authored-By` trailer, even when the agent's attribution asks for one. Reaches commands in the `commit` block of `rite begin` and `rite commit-refs`. Bookkeeping commits never carry one. |
 | `bookkeeping` | `"separate-commit"` | Only mode in v1: the work commit first, then `rite.py close` records it in its own commit. |
 | `push` | `"on-request"` | `never`: commands never push. `on-request`: only when you ask in the conversation. `after-each-item`: `rite finish` runs a plain `git push` (the branch's upstream, never forced) in the work repository and the bookkeeping one after every task or fix, and `rite commit-new` pushes the bookkeeping repository after opening an item; a failure is reported in its `pushed` field and does not fail the command — the item stays closed locally. Once pushed, squashing or rebasing (then `rite rebind`) needs a force push, which is yours to do. |
 | `never_stage` | `[]` | Globs never added to a commit. |

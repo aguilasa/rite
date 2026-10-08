@@ -185,6 +185,8 @@ def parse(root: Path, text: str) -> Config:
     fmt = data["commit"]["ticket_format"]
     if not isinstance(fmt, str) or "{ticket}" not in fmt:
         errors.append("[commit].ticket_format must be a string containing {ticket}")
+    if not isinstance(data["commit"]["co_author_footer"], bool):
+        errors.append("[commit].co_author_footer must be true or false")
     for gen in data["guards"]["generated"]:
         if not isinstance(gen, dict) or "paths" not in gen or "generator" not in gen:
             errors.append("[[guards.generated]] entries need 'paths' and 'generator'")

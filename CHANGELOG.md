@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`[commit].co_author_footer = false` drops the co-author trailer** (#11): the key was documented
+  but read by nothing, so work commits kept the agent's `Co-Authored-By` trailer. `rite begin` and
+  `rite commit-refs` now carry it in their `commit` block, and the commands write no such trailer when
+  it is `false`; a value other than `true` or `false` is a config error.
+
 ## [0.16.1] — 2026-10-07
 
 ### Fixed

@@ -31,6 +31,7 @@ def commit_refs(project: Project, cycle: Cycle, item: Item | None = None) -> dic
     A tracked cycle refers to the item (`Refs: <ID>`) so `git log --grep <ID>` finds its commits.
     A local cycle does not: its documents are not in the repository, so the ID would point nowhere.
     The cycle's ticket goes in every commit either way; the tracker lives outside the repository.
+    `co_author_footer` is not a trailer Rite writes: it tells the agent whether its own attribution stays.
     """
     fmt = project.cfg["commit"]["ticket_format"]
     ticket = cycle.ticket
@@ -42,7 +43,8 @@ def commit_refs(project: Project, cycle: Cycle, item: Item | None = None) -> dic
         else:
             trailers.append(fmt.replace("{ticket}", ticket))
     return {"local": cycle.local, "ticket": ticket, "repo": item.repo if item else None,
-            "subject_template": subject_template, "trailers": trailers}
+            "subject_template": subject_template, "trailers": trailers,
+            "co_author_footer": project.cfg["commit"]["co_author_footer"]}
 
 
 def compose_message(refs: dict, subject: str, body: str = "") -> str:

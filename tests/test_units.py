@@ -151,6 +151,12 @@ class CommitConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(config.ConfigError, r"push"):
             config.parse(Path("."), '[commit]\npush = "always"\n')
 
+    def test_co_author_footer_is_a_boolean(self):
+        self.assertIs(config.parse(Path("."), "")["commit"]["co_author_footer"], True)
+        self.assertIs(config.parse(Path("."), "[commit]\nco_author_footer = false\n")["commit"]["co_author_footer"], False)
+        with self.assertRaisesRegex(config.ConfigError, r"co_author_footer"):
+            config.parse(Path("."), '[commit]\nco_author_footer = "no"\n')
+
 
 class SectionParsersTest(unittest.TestCase):
     def test_bare_paths_count_only_when_they_exist(self):

@@ -78,7 +78,8 @@ a second commit — and it is always consistent with the first. With
 `[commit].push = "after-each-item"`, `rite finish` pushes both right after.
 
 Work commits name what they belong to with trailers from `rite commit-refs <ID>`: `Refs: <ID>`, and
-the cycle's `ticket` if it has one (see `[commit].ticket_format`).
+the cycle's `ticket` if it has one (see `[commit].ticket_format`). With `[commit].co_author_footer =
+false` they carry no `Co-Authored-By` trailer.
 
 A squash or rebase rewrites the work commit and leaves `done_commit` pointing at a commit outside
 HEAD's history; `rite check` warns (errors once the old commit is gone) and `rite rebind <ID> --sha
