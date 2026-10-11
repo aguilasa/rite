@@ -30,8 +30,11 @@ the serialized resources you may use. Other workers may be editing other files a
 2. Do the work. For a fix: reproduce its evidence first; if the symptom is gone, change nothing and
    report `STALE` with the output.
 3. Verify each done criterion (task) or the Verification command (fix) by running it.
-4. Run the gates you were given.
-5. Write the item's prose (Notes, results, Root cause, Verification output) into the item file body.
+4. Run the gates you were given, only to catch breakage: other workers edit the same tree, so their
+   counts are not this item's.
+5. Write the item's prose (Notes, results, Root cause, Verification output) into the item file body —
+   never gate results or the counts they print: the main thread measures gates for this item alone before its
+   commit and records them.
 
 ## Output (exactly this format)
 

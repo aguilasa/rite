@@ -6,6 +6,13 @@ All notable changes to this project are documented here. Versions follow [SemVer
 
 ### Fixed
 
+- **Gate results recorded in a batch reproduce at the item's commit** (#12): workers ran the gates on
+  the tree the whole wave shares and wrote the counts into their item, so a task recorded `90 passed`
+  where its own commit gives `30`. The main thread now measures each item's gates right before its
+  commit, with the later items' files stashed (`git stash push -u -- <files>`), and that is the only
+  result the item records; a red item stops the commits. Workers still run the gates, as a check, but
+  write no counts. A wave of n items runs its gates n + 1 times.
+
 - **Work that needs a read-only path changed blocks the item until it is** (#13): a fix that needed the
   plan amended (a `[guards].read_only` path only the user may commit) was closed on a note, and nothing
   made sure the plan was amended before the cycle closed. The guards rule now has the item marked

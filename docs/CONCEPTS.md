@@ -138,8 +138,14 @@ projects, say. Rite detects it (the root is not a git repository) and runs in wo
 ## Batches
 
 A batch relaxes one rule — more than one item per invocation — and nothing else. Items share a wave
-only when they share no file, no serialized resource and no dependency. Workers (subagents) edit; the
-main thread commits, one item at a time. Default size 2; never "all" for tasks.
+only when they share no file, no serialized resource and no dependency; when the dependency graph and
+the conflict matrix disagree, the matrix wins. Workers (subagents) edit; the main thread commits, one
+item at a time. Default size 2; never "all" for tasks.
+
+Gates are measured twice. Once on the combined tree, to abort a wave that breaks the build. Then per
+item, with the later items' files stashed, right before its commit: that tree is the commit, so the gate
+result an item records reproduces there. A worker's own gate run is only a check — other workers are
+editing the same tree. A wave of n items runs its gates n + 1 times.
 
 ## Delegation cost
 

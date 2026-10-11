@@ -425,6 +425,14 @@ class PlanWritesNothingTest(unittest.TestCase):
         for term in ("no `mark-stale`", "no Execution Log", "no `rite:rite-reproducer`"):
             self.assertIn(term, dry, term)
 
+    def test_batch_gates_each_item_on_its_own_commit_tree(self):
+        text = self.read("parts/batch.md")
+        step = text[text.index("**Serially, in item order**"):]
+        at = [step.index(t) for t in ("git stash push", "rite gates --id", "rite finish", "git stash pop")]
+        self.assertEqual(at, sorted(at))
+        worker = self.read("agents/rite-worker.md")
+        self.assertIn("never gate results or the counts they print", worker)
+
     def test_execute_batch_plan_marks_nothing(self):
         body = (self.root / "commands/_execute-batch.body.md").read_text(encoding="utf-8")
         marks = [" ".join(entry.split()) for entry in re.split(r"\n\s*(?:- |\d+\. )", body) if "rite mark" in entry]
