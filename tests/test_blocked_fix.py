@@ -121,6 +121,31 @@ class BlockedFixTest(FixtureCase):
         self.assertTrue(any(b.startswith(f"{self.fix} is blocked") for b in json.loads(out)["blockers"]), out)
 
 
+class GuardedPathBlocksTest(FixtureCase):
+    """Work that needs a read-only path changed waits for the user's commit, never closes on a note."""
+
+    def test_the_guards_rule_blocks_with_a_command_that_sees_the_path_change(self):
+        rule = " ".join((Path(__file__).resolve().parent.parent / "parts/guards.md").read_text(encoding="utf-8").split())
+        at = rule.index("never closed on a note")
+        for term in ("blocked", "--unblocked-by", "git diff --quiet"):
+            self.assertIn(term, rule[at:], term)
+
+    def test_the_fix_unblocks_once_the_guarded_path_is_committed_changed(self):
+        fix = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "Amend the plan",
+                      "--severity", "medium")["id"]
+        head = self.fx.git("rev-parse", "HEAD").strip()
+        command = f"! git diff --quiet {head} HEAD -- docs/plans/PLAN-alpha.md"
+        self.ok("mark", fix, "blocked", "--reason", "the plan needs amending, by the user", "--unblocked-by", command)
+        code, out, _ = self.fx.rite("archive", "alpha", "--dry-run", "--json")
+        self.assertEqual(code, 1)
+        self.assertTrue(any(b.startswith(f"{fix} is blocked") for b in json.loads(out)["blockers"]), out)
+        self.assertNotEqual(self.js("reproduce", fix, "--cycle", "alpha")["fixes"][0]["unblock"]["exit_code"], 0)
+        plan = self.root / "docs/plans/PLAN-alpha.md"
+        self.fx.work_commit("docs/plans/PLAN-alpha.md", plan.read_text(encoding="utf-8") + "\namended\n",
+                            "docs(plan): amend")
+        self.assertEqual(self.js("reproduce", fix, "--cycle", "alpha")["fixes"][0]["unblock"]["exit_code"], 0)
+
+
 class BlockedFixIsOpenTest(FixtureCase):
     """Open is pending, in-progress or blocked; closed is done or stale. A blocked fix is still debt:
     `check` verifies it and `status` counts it — only the pickers leave it out."""

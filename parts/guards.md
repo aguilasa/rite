@@ -8,4 +8,6 @@ answers about one.
 - `generated` — fix the generator or its input, run it, then its `check`, and commit both together. A
   hand-edited output is reverted by the next regeneration.
 
-An item impossible without writing a guarded path stops and is reported.
+An item impossible without writing a guarded path stops and is reported — never closed on a note:
+`rite mark <ID> blocked --reason "<path> needs <change>, by the user" --commit`; a fix adds
+`--unblocked-by "! git diff --quiet <HEAD now> HEAD -- <path>"`, which passes once that path is changed.

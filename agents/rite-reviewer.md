@@ -72,7 +72,7 @@ evidence:
   $ <command>
   <decisive output lines>
 root_cause: <hypothesis, marked as such if unproven>
-fix: <where the change goes; the generator if the output is generated>
+fix: <where the change goes; the generator if the output is generated; a read-only path is the user's to change: say so>
 files: <paths>
 verification: <command that fails now and must pass after the fix>
 

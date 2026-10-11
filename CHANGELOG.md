@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Work that needs a read-only path changed blocks the item until it is** (#13): a fix that needed the
+  plan amended (a `[guards].read_only` path only the user may commit) was closed on a note, and nothing
+  made sure the plan was amended before the cycle closed. The guards rule now has the item marked
+  `blocked`, and a fix gets `--unblocked-by "! git diff --quiet <HEAD now> HEAD -- <path>"`: `rite
+  archive` refuses the cycle until a commit changes the path, and `/rite:fix-all` reopens the fix then.
+  The reviewer says in a finding when the change belongs to a read-only path.
+
 ## [0.16.2] — 2026-10-08
 
 ### Fixed

@@ -144,7 +144,7 @@ Enforced by the plugin's `PreToolUse` hook on `Edit`, `Write` and `NotebookEdit`
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `read_only` | `[]` | Globs that must never be written (`**` any depth, `*` one segment). |
+| `read_only` | `[]` | Globs that must never be written (`**` any depth, `*` one segment). Work that needs one changed is marked `blocked` until a commit changes it (a fix's `unblocked_by` checks the path). |
 | `read_only_reason` | `""` | Shown when a write is blocked. |
 | `[[guards.generated]]` | — | Tables with `paths` (globs), `generator` (what to edit instead) and optional `check` (command proving output matches the generator). |
 
