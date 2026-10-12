@@ -47,9 +47,10 @@ def commit_refs(project: Project, cycle: Cycle, item: Item | None = None) -> dic
     refs = {"local": cycle.local, "ticket": ticket, "repo": project.repo_of(item) if item else None,
             "subject_template": subject_template, "trailers": trailers,
             "co_author_footer": project.cfg["commit"]["co_author_footer"]}
-    if project.repo_map:
+    if project.multi_repo:
         refs["external"] = external
-        refs["repo_dir"] = project.work_dir(item).as_posix()
+        if item or project.default_repo:  # a workspace root without a default is no repository
+            refs["repo_dir"] = project.work_dir(item).as_posix()
     return refs
 
 
@@ -429,8 +430,7 @@ def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: st
                 project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "repo": project.repo_of(item), "done_on": date, "done_commit": NO_COMMIT,
-            "work_subject": None,
-            **result}
+            "work_subject": None, **result}
 
 
 def mark(project: Project, cycle: Cycle, item: Item, status: str, *, reason: str = "",

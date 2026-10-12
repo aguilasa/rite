@@ -22,11 +22,11 @@ Arguments: `$ARGUMENTS`
    - **Phases** in the plan's order.
    - **Tasks** per phase, each reviewable in one sitting: imperative title, `type` from
      `[vocab].task_types`, `phase`, `source_of_truth`, `depends_on` (inside this cycle), predicted
-     `files`, the `repo` in a workspace, and **done criteria that are verifiable** — a command and its
+     `files`, its `repo` when `resolve-cycle` lists `repos`, and **done criteria that are verifiable** — a command and its
      expected output, a number from a versioned tool, or a file that must exist. "Works", "is clean"
      and "is documented" are not criteria.
-   - In a workspace, each task touches one repository; work crossing two becomes two tasks, linked by
-     `depends_on` when order matters.
+   - With `repos`, each task touches one repository (no `--repo`: `default_repo`; `.`: Rite's own);
+     work crossing two becomes two tasks, linked by `depends_on` when order matters.
    - **One closing task per phase** (`type: closing`) depending on every task of that phase, whose
      criteria re-run the phase's gates and checks. A task added later to that phase goes into it with
      `rite set <CLOSING> --depends-on <all>`; `rite check` warns while one is missing.
@@ -99,14 +99,13 @@ option of each and list them in the report as `assumed: <question> → <choice>`
 an option that deletes, moves or overwrites existing files, and never apply retro proposals — write
 them down only.
 
-## Workspace
+## Repositories
 
-If `rite begin` reported `"workspace": false`, ignore this section.
+If `rite begin` gave no `commit.repo_dir`, ignore this section.
 
-`rite.toml` sits in a plain folder whose sub-folders are the git repositories, and every item names one
-in `repo:`. Run its commands and its git inside that folder (`git -C <repo> …`), never at the root, and
-read its paths relative to it. One item, one repository. Every cycle there is local: its documents stay
-in the workspace folder and are never staged into a repository.
+An item's work lands in its repository, `commit.repo_dir`: run its commands and git there (`git -C
+<repo_dir> …`, a batch's `status` and `stash` too) and read its paths relative to it. One item, one
+repository. Rite's documents are never staged there; in a workspace every cycle is local.
 
 ## Reporting
 

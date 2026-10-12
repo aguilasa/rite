@@ -52,7 +52,7 @@ def _item_facts(project: Project, item: Item) -> dict:
         "severity": f.get("severity"), "origin": f.get("origin"), "repo": project.repo_of(item),
         "source_of_truth": f.get("source_of_truth"), "files": f.get("files") or [],
         "resources": f.get("resources") or [], "depends_on": item.depends_on,
-        **({"repo_dir": project.work_dir(item).as_posix()} if project.repo_map else {}),
+        **({"repo_dir": project.work_dir(item).as_posix()} if project.multi_repo else {}),
     }
 
 

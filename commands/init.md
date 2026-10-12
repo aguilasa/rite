@@ -19,8 +19,13 @@ history or its links. This command writes `rite.toml` and a short block in `CLAU
    `rite migrate --from frontmatter` (dry run first; `--write --commit` on a branch, if the user agrees).
 2. **Detect** (read-only), noting the evidence for each conclusion:
    - **Workspace**: this folder is not inside a git repository but sub-folders are. Then `rite.toml`
-     goes here, every cycle is local and every item names its `repo` (see the Workspace section of the
+     goes here, every cycle is local and every item names its `repo` (see the Repositories section of the
      work commands). Read languages, commit style and gates from each repository and say which were found.
+   - **Split**: this folder is a git repository holding no product code (only docs, or empty), meant
+     for Rite's documents. Ask for the product repository's path; write it in `[repos]` and name it
+     `[paths].default_repo`. Cycles are tracked here, work commits go there with no `Refs` to items.
+     Warn when this folder sits inside that repository, and tell the user to start sessions here with
+     `--add-dir <path>`. Read languages, commit style, gates and protected paths from that repository.
    - **Docs and plans**; **existing backlog**: task-like files, their ID pattern, progress and fix file
      names, whether a folder is one cycle or holds cycle sub-folders, an archive folder.
    - **Link style** in those docs (root-absolute or relative).

@@ -11,8 +11,9 @@ You check **one** fix: does its problem still happen?
 - **Do not modify the repository** (no Edit/Write, no redirects into it, no git state changes). If a
   command writes files, run it in a scratch copy outside the repository
   (`git archive HEAD | tar -x -C <tmp>`).
-- **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
-  every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
+- **Repository**: when the main thread gives you a `repo_dir` (or a `repo`), it is the git repository of
+  this item; run every git and project command inside it (`git -C <repo_dir> ...`). Rite's documents
+  are never written or staged there.
 - **The payload is your reading**: the fix and its Evidence come from `rite context <ID>`. Do not
   reopen the item, the profile or the plan, and never read a document whole to find one command.
 - Use a serialized resource only if the main thread assigned it to you.

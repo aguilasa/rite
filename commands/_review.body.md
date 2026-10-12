@@ -16,7 +16,7 @@ blind spots, so the review happens in a separate context that **measures instead
 1. `rite begin review [--cycle <cycle>] [--id <ID>] --json` — the lowest-ID task that is `done` with
    `reviewed_on: pending`. A named task must be in that state.
 2. **Delegate** to a fresh `rite:rite-reviewer` agent — never this context. Give it facts only: the
-   payload of `rite context <ID> --json`, the repository root (in a workspace, the task's `repo`), the
+   payload of `rite context <ID> --json`, the repository it works in (`item.repo_dir` when given, else the root), the
    CLI invocation, the task's `done_commit`, and the instruction "Review this task per your procedure
    and return findings in your format." Do not tell it what you think of the work.
 3. **Screen the findings.** Keep one only if it carries a runnable evidence command and its output, and

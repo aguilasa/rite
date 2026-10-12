@@ -131,14 +131,13 @@ decides no item's fate.
    `--unblocked-by "<command>"`); one failure does not stop the batch. Forwarded notes go into the
    destination items' Notes, committed together.
 
-## Workspace
+## Repositories
 
-If `rite begin` reported `"workspace": false`, ignore this section.
+If `rite begin` gave no `commit.repo_dir`, ignore this section.
 
-`rite.toml` sits in a plain folder whose sub-folders are the git repositories, and every item names one
-in `repo:`. Run its commands and its git inside that folder (`git -C <repo> …`), never at the root, and
-read its paths relative to it. One item, one repository. Every cycle there is local: its documents stay
-in the workspace folder and are never staged into a repository.
+An item's work lands in its repository, `commit.repo_dir`: run its commands and git there (`git -C
+<repo_dir> …`, a batch's `status` and `stash` too) and read its paths relative to it. One item, one
+repository. Rite's documents are never staged there; in a workspace every cycle is local.
 
 ## Reporting
 

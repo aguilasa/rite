@@ -17,7 +17,7 @@ blind spots, so the review happens in a separate context that **measures instead
 1. `rite begin review [--cycle <cycle>] [--id <ID>] --json` — the lowest-ID task that is `done` with
    `reviewed_on: pending`. A named task must be in that state.
 2. **Delegate** to a fresh `rite:rite-reviewer` agent — never this context. Give it facts only: the
-   payload of `rite context <ID> --json`, the repository root (in a workspace, the task's `repo`), the
+   payload of `rite context <ID> --json`, the repository it works in (`item.repo_dir` when given, else the root), the
    CLI invocation, the task's `done_commit`, and the instruction "Review this task per your procedure
    and return findings in your format." Do not tell it what you think of the work.
 3. **Screen the findings.** Keep one only if it carries a runnable evidence command and its output, and
@@ -92,14 +92,13 @@ frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.
 
-## Workspace
+## Repositories
 
-If `rite begin` reported `"workspace": false`, ignore this section.
+If `rite begin` gave no `commit.repo_dir`, ignore this section.
 
-`rite.toml` sits in a plain folder whose sub-folders are the git repositories, and every item names one
-in `repo:`. Run its commands and its git inside that folder (`git -C <repo> …`), never at the root, and
-read its paths relative to it. One item, one repository. Every cycle there is local: its documents stay
-in the workspace folder and are never staged into a repository.
+An item's work lands in its repository, `commit.repo_dir`: run its commands and git there (`git -C
+<repo_dir> …`, a batch's `status` and `stash` too) and read its paths relative to it. One item, one
+repository. Rite's documents are never staged there; in a workspace every cycle is local.
 
 ## Reporting
 

@@ -21,11 +21,11 @@ Arguments: `$ARGUMENTS`
    - **Phases** in the plan's order.
    - **Tasks** per phase, each reviewable in one sitting: imperative title, `type` from
      `[vocab].task_types`, `phase`, `source_of_truth`, `depends_on` (inside this cycle), predicted
-     `files`, the `repo` in a workspace, and **done criteria that are verifiable** — a command and its
+     `files`, its `repo` when `resolve-cycle` lists `repos`, and **done criteria that are verifiable** — a command and its
      expected output, a number from a versioned tool, or a file that must exist. "Works", "is clean"
      and "is documented" are not criteria.
-   - In a workspace, each task touches one repository; work crossing two becomes two tasks, linked by
-     `depends_on` when order matters.
+   - With `repos`, each task touches one repository (no `--repo`: `default_repo`; `.`: Rite's own);
+     work crossing two becomes two tasks, linked by `depends_on` when order matters.
    - **One closing task per phase** (`type: closing`) depending on every task of that phase, whose
      criteria re-run the phase's gates and checks. A task added later to that phase goes into it with
      `rite set <CLOSING> --depends-on <all>`; `rite check` warns while one is missing.

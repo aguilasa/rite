@@ -191,6 +191,11 @@ class Project:
         """Each nameable repository's absolute folder — where its commands and git run."""
         return {name: self.repo_dir(name).as_posix() for name in self.repo_names()}
 
+    @property
+    def multi_repo(self) -> bool:
+        """The work may land outside the root's own repository: a workspace, or `[repos]`."""
+        return self.workspace or bool(self.repo_map)
+
     def layout(self) -> dict:
         """The repositories an agent works in, as `rite begin` and `resolve-cycle` report them. The
         `[repos]` keys appear only when there are external repositories: `split` (Rite's documents in

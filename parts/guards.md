@@ -10,4 +10,5 @@ answers about one.
 
 An item impossible without writing a guarded path stops and is reported — never closed on a note:
 `rite mark <ID> blocked --reason "<path> needs <change>, by the user" --commit`; a fix adds
-`--unblocked-by "! git diff --quiet <HEAD now> HEAD -- <path>"`, which passes once that path is changed.
+`--unblocked-by "! git diff --quiet <HEAD now> HEAD -- <path>"`, which passes once that path is changed
+(a path in another repository than the fix's: `git -C <its folder> …`, `<HEAD now>` read there).

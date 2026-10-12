@@ -15,8 +15,9 @@ the serialized resources you may use. Other workers may be editing other files a
   `progress.json` / `fixes.json` or the generated tables. The main thread does it after your report.
 - **Stay inside your file list.** If the item needs a file outside it, stop and report; do not edit it.
   Why: the batch's conflict matrix was built from that list.
-- **Workspace**: when the main thread gives you a `repo`, it is the git repository of this item; run
-  every git and project command inside it (`git -C <repo> ...`). The workspace root is not a repository.
+- **Repository**: when the main thread gives you a `repo_dir` (or a `repo`), it is the git repository of
+  this item; run every git and project command inside it (`git -C <repo_dir> ...`). Rite's documents
+  are never written or staged there.
 - **The payload is your reading.** `rite context <ID>` gave the main thread the item, its anchored
   source-of-truth section, the profile rules and the matching pitfalls; it hands you that. Do not
   reopen those files, and never read a document above `[limits].read_kb` whole — slice it.
