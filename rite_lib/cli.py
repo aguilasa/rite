@@ -57,8 +57,7 @@ def cmd_resolve_cycle(project: Project, args) -> int:
         "profile": display(project.root, c.profile_path), "profile_exists": c.profile_path.is_file(),
         "pitfalls": display(project.root, c.pitfalls_path), "pitfalls_exists": c.pitfalls_path.is_file(),
         "plan": c.meta.get("plan"), "archived": c.archived, "ticket": c.ticket, "local": c.local,
-        "commit": ops.commit_refs(project, c), "workspace": project.workspace,
-        "repos": project.repos() if project.workspace else [],
+        "commit": ops.commit_refs(project, c), **project.layout(),
     }
     _emit(args, data, "\n".join(f"{k}: {v}" for k, v in data.items()))
     return EXIT_OK
@@ -71,6 +70,11 @@ def cmd_commit_refs(project: Project, args) -> int:
     lines += [f"subject: {data['subject_template']}"] + [f"trailer: {t}" for t in data["trailers"]]
     if data["local"]:
         lines.append(f"local cycle {cycle.name}: no Refs to the item; never stage its documents")
+    elif data.get("external"):
+        lines.append(f"{data['repo']} is outside rite.toml's repository: no Refs to the item; "
+                     "never stage Rite's documents there")
+    if data.get("repo_dir"):
+        lines.append(f"git -C {data['repo_dir']}")
     _emit(args, data, "\n".join(lines))
     return EXIT_OK
 

@@ -69,6 +69,15 @@ def _section_paths(text: str, titles: list[str], root: Path | None = None) -> li
     return paths_in(found_section[1], root) if found_section else []
 
 
+def _repo_key(project: Project, item: Item):
+    """What makes two items' paths the same repository: its resolved folder, else the name it gives —
+    an item without `repo:` and one naming the default repository work in the same files."""
+    try:
+        return project.git_root(item)
+    except RiteError:
+        return project.repo_of(item)
+
+
 def predicted_files(project: Project, item: Item) -> tuple[list[str], bool]:
     """Declared `files:` frontmatter wins; else the paths under the `[sections]` files and scope
     titles. (paths, declared?)"""
@@ -170,7 +179,7 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
         if not a.files or not b.files:
             why.append("unknown files")
         # paths are relative to the item's repository; two repositories never share a file
-        same_repo = a.item.repo == b.item.repo
+        same_repo = _repo_key(project, a.item) == _repo_key(project, b.item)
         shared = sorted({f"{x}" for x in a.files for y in b.files if same_repo and globs_overlap(x, y)})
         if shared:
             why.append("files: " + ", ".join(shared))
@@ -223,7 +232,7 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
         "cycle": cycle.name,
         "kind": items[0].kind if items else None,
         "items": [{
-            "id": p.item.id, "title": p.item.title, "path": display(root, p.item.path), "repo": p.item.repo,
+            "id": p.item.id, "title": p.item.title, "path": display(root, p.item.path), "repo": project.repo_of(p.item),
             "type": p.item.fields.get("type"), "severity": p.item.fields.get("severity"),
             "files": p.files, "files_declared": p.files_declared, "resources": p.resources,
             "depends_on": p.item.depends_on, "wave": p.wave + 1, "conflicts": p.conflicts,

@@ -27,7 +27,7 @@ def main() -> int:
         return 0
     cwd = Path(event.get("cwd") or ".")
     try:
-        cfg = config.load(start=cwd)
+        cfg = config.load_for_hook(cwd)
     except config.NoConfig:
         return 0
     except config.ConfigError as exc:

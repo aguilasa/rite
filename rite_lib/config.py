@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import os
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,7 +26,11 @@ DEFAULTS: dict = {
         "templates_dir": "",
         "link_style": "root-absolute",
         "default_cycle": "",
+        "default_repo": "",
     },
+    # name -> folder of a git repository outside the root (absolute, ~, or relative to rite.toml's folder):
+    # Rite's documents stay in the root's own repository, the work lands in these
+    "repos": {},
     "naming": {
         "task_id": "{prefix}-TASK-{n:02}",
         "fix_id": "FIX-{prefix}-{n:03}",
@@ -103,6 +109,9 @@ SEVERITIES = ("critical", "high", "medium", "low")
 NO_COMMIT = "none"
 
 
+REPO_NAME = re.compile(r"^[A-Za-z0-9][\w.-]*$")
+
+
 class ConfigError(Exception):
     pass
 
@@ -122,6 +131,11 @@ class Config:
     def path(self, key: str) -> Path:
         value = self.data["paths"][key]
         return (self.root / value).resolve() if value else self.root
+
+    def repo_paths(self) -> dict[str, Path]:
+        """`[repos]` resolved: name -> absolute folder (relative paths from rite.toml's folder)."""
+        return {name: (self.root / Path(value).expanduser()).resolve()
+                for name, value in self.data["repos"].items()}
 
     @property
     def link_style(self) -> str:
@@ -146,7 +160,8 @@ def _merge(defaults: dict, user: dict, where: str, errors: list[str]) -> dict:
             if not isinstance(value, dict):
                 errors.append(f"[{key}] must be a table")
                 continue
-            out[key] = _merge(defaults[key], value, key, errors)
+            # [repos] holds the user's own names, not keys of Rite's
+            out[key] = dict(value) if key == "repos" and not where else _merge(defaults[key], value, key, errors)
         else:
             out[key] = value
     return out
@@ -160,6 +175,18 @@ def load(root: Path | None = None, *, start: Path | None = None) -> Config:
     if not file.is_file():
         raise NoConfig(f"no {CONFIG_NAME} in {root} (run /rite:init)")
     return parse(root, file.read_text(encoding="utf-8"))
+
+
+def load_for_hook(cwd: Path) -> Config:
+    """The config a hook enforces: found from the event's cwd, else from the session's project folder —
+    a session started in Rite's documents that `cd`s into an external repository keeps its guards."""
+    try:
+        return load(start=cwd)
+    except NoConfig:
+        project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+        if not project_dir:
+            raise
+        return load(start=Path(project_dir))
 
 
 def parse(root: Path, text: str) -> Config:
@@ -187,6 +214,14 @@ def parse(root: Path, text: str) -> Config:
         errors.append("[commit].ticket_format must be a string containing {ticket}")
     if not isinstance(data["commit"]["co_author_footer"], bool):
         errors.append("[commit].co_author_footer must be true or false")
+    for name, value in data["repos"].items():
+        if not REPO_NAME.match(name):
+            errors.append(f"[repos].{name}: a name is letters, digits, '.', '_' or '-', "
+                          "starting with a letter or digit")
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"[repos].{name} must be the path of a git repository")
+    if not isinstance(data["paths"]["default_repo"], str):
+        errors.append("[paths].default_repo must be a repository name")
     for gen in data["guards"]["generated"]:
         if not isinstance(gen, dict) or "paths" not in gen or "generator" not in gen:
             errors.append("[[guards.generated]] entries need 'paths' and 'generator'")

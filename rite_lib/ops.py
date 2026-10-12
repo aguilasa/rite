@@ -35,16 +35,22 @@ def commit_refs(project: Project, cycle: Cycle, item: Item | None = None) -> dic
     """
     fmt = project.cfg["commit"]["ticket_format"]
     ticket = cycle.ticket
-    trailers = [f"Refs: {item.id}"] if item and not cycle.local else []
+    # a repository outside the root holds none of Rite's documents: the ID would point nowhere there
+    external = bool(item) and project.is_external(item)
+    trailers = [f"Refs: {item.id}"] if item and not cycle.local and not external else []
     subject_template = "{subject}"
     if ticket:
         if "{subject}" in fmt:
             subject_template = fmt.replace("{ticket}", ticket)
         else:
             trailers.append(fmt.replace("{ticket}", ticket))
-    return {"local": cycle.local, "ticket": ticket, "repo": item.repo if item else None,
+    refs = {"local": cycle.local, "ticket": ticket, "repo": project.repo_of(item) if item else None,
             "subject_template": subject_template, "trailers": trailers,
             "co_author_footer": project.cfg["commit"]["co_author_footer"]}
+    if project.repo_map:
+        refs["external"] = external
+        refs["repo_dir"] = project.work_dir(item).as_posix()
+    return refs
 
 
 def compose_message(refs: dict, subject: str, body: str = "") -> str:
@@ -122,10 +128,14 @@ def _head(project: Project, item: Item) -> str | None:
 
 
 def _check_repo(project: Project, repo: str | None) -> str | None:
-    repo = (repo or "").strip().strip("/") or None
-    if repo and not project.is_git((project.root / repo).resolve()):
-        raise RiteError(f"repo {repo!r} is not a git repository under {project.root} "
-                        f"(repositories here: {', '.join(project.repos()) or 'none'})")
+    """The repository a new item names, checked: the given one, else `[paths].default_repo` — written
+    into the item, so changing the default later does not move the work an item already recorded."""
+    repo = (repo or "").strip().strip("/") or project.default_repo
+    if repo and not project.is_git(project.repo_dir(repo)):
+        where = (f"{project.repo_map[repo]} ([repos].{repo})" if repo in project.repo_map
+                 else f"under {project.root}")
+        raise RiteError(f"repo {repo!r} is not a git repository {where} "
+                        f"(repositories here: {', '.join(project.repo_names()) or 'none'})")
     return repo
 
 
@@ -181,7 +191,7 @@ def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, d
     repo = _check_repo(project, repo)
     if project.workspace and not repo:
         raise RiteError("rite.toml is outside git (a workspace): pass --repo, the repository the task's work "
-                        f"lands in ({', '.join(project.repos()) or 'none found'})")
+                        f"lands in ({', '.join(project.repo_names()) or 'none found'})")
     slug = slug or slugify(title)
     naming = project.naming
     n, path, fd = _allocate(lambda k: cycle.path / naming.task_file(cycle.prefix, k, slug), _max_n(cycle.tasks) + 1)
@@ -353,7 +363,7 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     root = project.git_root(item)
     if not gitutil.is_repo(root):
         raise RiteError("close needs git: done_on and the file list come from the work commit")
-    where = f" in {item.repo}" if item.repo else ""
+    where = f" in {project.repo_of(item)}" if project.repo_of(item) else ""
     full = gitutil.resolve(root, sha)
     if not full:
         raise RiteError(f"{sha!r} is not a commit{where}")
@@ -366,7 +376,8 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     updates = {"status": "done", "done_on": date, "done_commit": short}
     if item.kind == "task":
         updates["reviewed_on"] = "pending"
-    git_c = f"git -C {item.repo}" if item.repo else "git"
+    label = project.repo_label(item)
+    git_c = f"git -C {label}" if label else "git"
     log = [f"- **Closed** — commit `{short}`{where} ({date}): {subj}",
            f"  - Files (`{git_c} show --name-status {short}`):"]
     log += [f"    - `{st} {p}`" for st, p in files] or ["    - *(none)*"]
@@ -377,7 +388,7 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
         log += [f"    - `{p}`" for p in outside]
     _write_item(item, updates, "\n".join(log), project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
-    return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": short, "work_subject": subj,
+    return {"id": item.id, "repo": project.repo_of(item), "done_on": date, "done_commit": short, "work_subject": subj,
             "outside_files": outside, **result}
 
 
@@ -417,7 +428,8 @@ def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: st
     _write_item(item, updates, f"- **Closed** — no work commit ({date}): {reason.strip()}",
                 project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
-    return {"id": item.id, "repo": item.repo, "done_on": date, "done_commit": NO_COMMIT, "work_subject": None,
+    return {"id": item.id, "repo": project.repo_of(item), "done_on": date, "done_commit": NO_COMMIT,
+            "work_subject": None,
             **result}
 
 
@@ -509,7 +521,7 @@ def rebind(project: Project, cycle: Cycle, item: Item, *, sha: str, commit: bool
         raise RiteError("rebind needs git")
     full = gitutil.resolve(root, sha)
     if not full:
-        raise RiteError(f"{sha!r} is not a commit" + (f" in {item.repo}" if item.repo else ""))
+        raise RiteError(f"{sha!r} is not a commit" + (f" in {project.repo_of(item)}" if project.repo_of(item) else ""))
     subj = gitutil.subject(root, full)
     if is_bookkeeping(subj):
         raise RiteError(f"{sha} is a bookkeeping commit ({subj!r}); pass the work commit")

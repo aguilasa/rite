@@ -62,14 +62,31 @@ def _is_state(cfg: Config, rel: str) -> bool:
     return False
 
 
+def _external(cfg: Config, path: Path) -> tuple[str, str] | None:
+    """(name, path relative to it) of the `[repos]` repository holding an absolute ``path``."""
+    if not path.is_absolute():
+        return None
+    for name, repo in cfg.repo_paths().items():
+        rel = relative(repo, path)
+        if rel is not None:
+            return name, rel
+    return None
+
+
 def classify(cfg: Config, path: Path) -> dict:
     rel = relative(cfg.root, path)
-    verdict = {"path": rel or str(path), "blocked": False, "kind": None, "pattern": None,
+    shown = rel
+    external = _external(cfg, path) if cfg["repos"] else None
+    if external and (rel is None or external[1].count("/") < rel.count("/")):
+        # a repository of [repos] (the innermost, when one holds the other): the guards match the path
+        # as that repository sees it
+        rel, shown = external[1], f"{external[0]}:{external[1]}"
+    verdict = {"path": shown or str(path), "blocked": False, "kind": None, "pattern": None,
                "generator": None, "check": None, "message": ""}
     if rel is None:
         return verdict
     guards = cfg["guards"]
-    if _is_state(cfg, rel):
+    if not external and _is_state(cfg, rel):
         verdict.update(blocked=True, kind="state", pattern=Path(rel).name,
                        message=f"rite guard: {rel} is Rite's state; only the CLI writes it (rite set, set-cycle, "
                                "mark, close, mark-reviewed, mark-stale, rebind) — never edit it by hand.")
@@ -78,13 +95,13 @@ def classify(cfg: Config, path: Path) -> dict:
     if pat:
         reason = guards.get("read_only_reason") or "declared read-only in rite.toml [guards].read_only"
         verdict.update(blocked=True, kind="read_only", pattern=pat,
-                       message=f"rite guard: {rel} is read-only ({pat}): {reason}")
+                       message=f"rite guard: {shown} is read-only ({pat}): {reason}")
         return verdict
     for gen in guards["generated"]:
         pat = matches(rel, gen["paths"])
         if pat:
             check = gen.get("check")
-            msg = (f"rite guard: {rel} is generated ({pat}). Edit the generator {gen['generator']} "
+            msg = (f"rite guard: {shown} is generated ({pat}). Edit the generator {gen['generator']} "
                    "and regenerate" + (f", then run `{check}`" if check else "") + " — never edit the output.")
             verdict.update(blocked=True, kind="generated", pattern=pat, generator=gen["generator"],
                            check=check, message=msg)

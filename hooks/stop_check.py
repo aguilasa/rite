@@ -21,7 +21,7 @@ def main() -> int:
     except (json.JSONDecodeError, ValueError):
         event = {}
     try:
-        cfg = config.load(start=Path(event.get("cwd") or "."))
+        cfg = config.load_for_hook(Path(event.get("cwd") or "."))
     except config.ConfigError:
         return 0
     if not cfg["hooks"]["stop_check"]:

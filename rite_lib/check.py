@@ -162,7 +162,7 @@ class Checker:
         self.findings: list[Finding] = []
         self.git = not project.workspace and not quick
         # a workspace with no repository under it has nothing to check commits against
-        self.bare = project.workspace and not project.repos()
+        self.bare = project.workspace and not project.repo_names()
 
     def err(self, path: Path, msg: str, line: int | None = None) -> None:
         self.findings.append(Finding("error", display(self.p.root, path), msg, line))
@@ -174,6 +174,8 @@ class Checker:
     def run(self, cycles: list[Cycle]) -> list[Finding]:
         if self.bare and not self.quick:
             self.warn(self.p.root / "rite.toml", "not a git repository and none under it; commit checks skipped")
+        if not self.quick:
+            self.check_repos()
         all_cycles = self.p.all_cycles()
         owner = {i.id: c for c in all_cycles for i in c.items}
         seen: dict[tuple[str, str], Path] = {}
@@ -186,6 +188,37 @@ class Checker:
         for cycle in cycles:
             self.check_cycle(cycle, owner)
         return self.findings
+
+    def check_repos(self) -> None:
+        """`[repos]` and `[paths].default_repo` name repositories that exist, and Rite's documents and the
+        product's code stay in separate repositories."""
+        toml = self.p.root / "rite.toml"
+        root = self.p.root
+        subs = set(self.p.repos())
+        for name, path in self.p.repo_map.items():
+            if not path.is_dir():
+                self.err(toml, f"[repos].{name}: {path} does not exist")
+                continue
+            if not self.p.is_git(path):
+                self.err(toml, f"[repos].{name}: {path} is not a git repository")
+                continue
+            if name in subs:
+                self.warn(toml, f"[repos].{name} has the name of a sub-folder of the root; items naming "
+                                f"{name!r} land in {path}")
+            if path == root:
+                self.err(toml, f"[repos].{name} is the root itself; an item names it with repo: '.'")
+            elif root in path.parents and not self.p.workspace:
+                self.warn(toml, f"[repos].{name}: {path} sits inside rite.toml's repository; its files "
+                                "would show in both")
+            elif path in root.parents:
+                tracked = gitutil.run(path, "ls-files", "--", str(root.relative_to(path)), check=False).strip()
+                self.warn(toml, f"rite.toml sits inside [repos].{name} ({path})"
+                          + ("; that repository tracks Rite's documents" if tracked else
+                             "; keep Rite's documents out of it (ignore the folder)"))
+        default = self.p.default_repo
+        if default and default != "." and default not in self.p.repo_map and default not in subs:
+            self.err(toml, f"[paths].default_repo = {default!r} names no repository "
+                           f"(repositories here: {', '.join(self.p.repo_names()) or 'none'})")
 
     def check_cycle(self, cycle: Cycle, owner: dict[str, Cycle]) -> None:
         meta = cycle.progress_state_path
@@ -320,7 +353,7 @@ class Checker:
             return
         repo = item.fields.get("repo")
         if repo is not None and not isinstance(repo, str):
-            self.err(item.path, f"'repo' must be a folder name, not {repo!r}")
+            self.err(item.path, f"'repo' must be a repository name, not {repo!r}")
             return
         try:
             self.p.git_root(item)
@@ -345,7 +378,7 @@ class Checker:
             elif (root := self.git_root(item)) is None:
                 pass
             elif not gitutil.resolve(root, str(sha)):
-                self.err(item.path, f"done_commit {sha} is not a commit in {item.repo or 'this repository'} "
+                self.err(item.path, f"done_commit {sha} is not a commit in {self.p.repo_of(item) or 'this repository'} "
                          f"(rewritten by a squash or rebase? rite.py rebind {item.id} --sha <commit>)")
             elif not gitutil.is_ancestor(root, str(sha), "HEAD"):
                 # a warning: the commit may sit on another branch; a rewritten one lingers until gc

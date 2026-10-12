@@ -26,15 +26,6 @@ BULLET = re.compile(r"^\s*[-*+]\s")
 
 
 # --- shared helpers ------------------------------------------------------------
-def _repo_dir(project: Project, item: Item | None) -> Path:
-    if item is None:
-        return project.root
-    try:
-        return project.git_root(item)
-    except RiteError:
-        return project.root
-
-
 def _cycle_digest(project: Project, cycle: Cycle) -> dict:
     """What `rite.toml` says that changes how an item is worked on — no prose, no defaults to re-read."""
     cfg = project.cfg
@@ -58,9 +49,10 @@ def _item_facts(project: Project, item: Item) -> dict:
     return {
         "id": item.id, "kind": item.kind, "path": display(project.root, item.path),
         "title": item.title, "status": item.status, "type": f.get("type"), "phase": f.get("phase"),
-        "severity": f.get("severity"), "origin": f.get("origin"), "repo": item.repo,
+        "severity": f.get("severity"), "origin": f.get("origin"), "repo": project.repo_of(item),
         "source_of_truth": f.get("source_of_truth"), "files": f.get("files") or [],
         "resources": f.get("resources") or [], "depends_on": item.depends_on,
+        **({"repo_dir": project.work_dir(item).as_posix()} if project.repo_map else {}),
     }
 
 
@@ -109,7 +101,7 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
     if claim and kind in ("task", "fix") and item.status == "pending":
         ops.mark(project, cycle, item, "in-progress")
         taken = True
-    repo_dir = _repo_dir(project, item)
+    repo_dir = project.work_dir(item)
     return {
         "cycle": cycle.name, "kind": kind, "reason": reason, "taken": taken,
         "paths": {
@@ -124,7 +116,7 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
             "plan": cycle.meta.get("plan"),
         },
         "prefix": cycle.prefix, "ticket": cycle.ticket, "local": cycle.local,
-        "workspace": project.workspace, "repos": project.repos() if project.workspace else [],
+        **project.layout(),
         "item": _item_facts(project, item),
         "commit": ops.commit_refs(project, cycle, item),
         "config": _cycle_digest(project, cycle),
@@ -251,7 +243,7 @@ def context(project: Project, *, item_id: str, cycle_name: str | None = None) ->
                 parts.append({"name": f"{rel} § {checks[0]} ({label} {phase})",
                               "text": "\n".join(w.strip() for w in wanted)})
     terms = [*(str(f) for f in (item.fields.get("files") or [])),
-             str(item.fields.get("type") or ""), item.repo or "",
+             str(item.fields.get("type") or ""), project.repo_of(item) or "",
              *(f"{label} {item.fields.get('phase')}" for label in project.section_titles("phase_label"))]
     if cycle.pitfalls_path.is_file():
         entries = _pitfall_entries(cycle.pitfalls_path.read_text(encoding="utf-8", errors="replace"), terms)
@@ -272,7 +264,7 @@ def context(project: Project, *, item_id: str, cycle_name: str | None = None) ->
             part["read_rest"] = f"sed -n '{part.get('lines', [1, 1])[0]},$p' {where}"
             cut.append({"part": part["name"], "bytes": dropped, "command": part["read_rest"]})
         used += len(part["text"].encode("utf-8"))
-    return {"id": item.id, "cycle": cycle.name, "repo": item.repo, "item": _item_facts(project, item),
+    return {"id": item.id, "cycle": cycle.name, "repo": project.repo_of(item), "item": _item_facts(project, item),
             "parts": parts, "bytes": used, "budget": budget, "truncated": cut}
 
 
@@ -317,7 +309,7 @@ def gates(project: Project, *, cycle_name: str | None, item_id: str | None, tail
     item = None
     if item_id:
         _, item = project.find_item(item_id, cycle)
-    where = _repo_dir(project, item)
+    where = project.work_dir(item)
     commands = [*project.cfg["gates"]["global"], *profile_gates(project, cycle)]
     shell = project_shell(project)
     results = []
@@ -652,7 +644,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                     "id": fix.id, "path": display(project.root, fix.path), "runnable": False,
                     "source": None, "heading": None, "why": "blocked", "blocked": True,
                     "unblocked_by": command or None,
-                    "unblock": run(command, _repo_dir(project, fix)) if command else None,
+                    "unblock": run(command, project.work_dir(fix)) if command else None,
                     "resources": fix.fields.get("resources") or [],
                     "recorded": [], "commands": [], "held_bytes": 0, "over_limit": False,
                     "missing_path": [], "timed_out": False, "cannot_decide": False,
@@ -662,7 +654,7 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                 continue
             found = evidence_commands(fix.path.read_text(encoding="utf-8", errors="replace"),
                                       project.section_titles("evidence"), project.section_titles("verification"))
-            repo = _repo_dir(project, fix)
+            repo = project.work_dir(fix)
             where = repo
             if scratch and found["commands"]:
                 if repo not in copies:

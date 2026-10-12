@@ -61,7 +61,8 @@ class Item:
 
     @property
     def repo(self) -> str | None:
-        """Folder (under the root) of the git repository this item's work lands in."""
+        """The git repository this item's work lands in: a name in `[repos]`, a folder under the root,
+        or `.` for the root's own repository."""
         value = self.fields.get("repo")
         return str(value).strip().strip("/") or None if value is not None else None
 
@@ -160,6 +161,9 @@ class Project:
         self.fixes_state = cfg["naming"]["fixes_state"]
         # a workspace: rite.toml in a plain folder whose sub-folders are git repositories
         self.workspace = not gitutil.is_repo(self.root)
+        # repositories outside the root, by name; an item without `repo:` lands in default_repo
+        self.repo_map = cfg.repo_paths()
+        self.default_repo = str(cfg["paths"]["default_repo"]).strip().strip("/") or None
         self._git_ok: dict[Path, bool] = {}
 
     # --- section titles ----------------------------------------------------
@@ -178,23 +182,86 @@ class Project:
             return []
         return [p.name for p in sorted(self.root.iterdir()) if p.is_dir() and (p / ".git").exists()]
 
+    def repo_names(self) -> list[str]:
+        """The repositories an item may name: those of `[repos]`, then a workspace's sub-folders."""
+        subs = [r for r in self.repos() if r not in self.repo_map] if self.workspace else []
+        return [*self.repo_map, *subs]
+
+    def repo_dirs(self) -> dict[str, str]:
+        """Each nameable repository's absolute folder — where its commands and git run."""
+        return {name: self.repo_dir(name).as_posix() for name in self.repo_names()}
+
+    def layout(self) -> dict:
+        """The repositories an agent works in, as `rite begin` and `resolve-cycle` report them. The
+        `[repos]` keys appear only when there are external repositories: `split` (Rite's documents in
+        the root's repository, the work in others) and each repository's absolute folder."""
+        out = {"workspace": self.workspace, "repos": self.repo_names()}
+        if self.repo_map:
+            out["split"] = not self.workspace
+            out["default_repo"] = self.default_repo
+            out["repo_dirs"] = self.repo_dirs()
+        return out
+
+    def repo_dir(self, name: str) -> Path:
+        """The folder a repository name stands for: `.` the root, a `[repos]` name its path, else a
+        sub-folder of the root."""
+        if name in self.repo_map:
+            return self.repo_map[name]
+        return (self.root / name).resolve()
+
     def is_git(self, path: Path) -> bool:
         if path not in self._git_ok:
             self._git_ok[path] = path.is_dir() and gitutil.is_repo(path)
         return self._git_ok[path]
 
+    def repo_of(self, item: Item) -> str | None:
+        """The repository name an item's work lands in: its own `repo:`, else `[paths].default_repo`."""
+        return item.repo or self.default_repo
+
     def git_root(self, item: Item) -> Path:
-        """The repository an item's work commits live in: its `repo:` folder, or the root itself."""
-        if item.repo:
-            path = (self.root / item.repo).resolve()
+        """The repository an item's work commits live in: its `repo:` (or the default repository), or
+        the root itself."""
+        name = self.repo_of(item)
+        if name:
+            path = self.repo_dir(name)
             if not self.is_git(path):
-                raise RiteError(f"{item.id}: repo {item.repo!r} is not a git repository under "
-                                f"{self.root} (repositories here: {', '.join(self.repos()) or 'none'})")
+                where = (f"{self.repo_map[name]} ([repos].{name})" if name in self.repo_map
+                         else f"under {self.root}")
+                raise RiteError(f"{item.id}: repo {name!r} is not a git repository {where} "
+                                f"(repositories here: {', '.join(self.repo_names()) or 'none'})")
             return path
         if self.workspace:
             raise RiteError(f"{item.id} has no 'repo:'. rite.toml is outside git (a workspace), so each item "
-                            f"names the repository its work lands in: {', '.join(self.repos()) or 'none found'}")
+                            f"names the repository its work lands in: {', '.join(self.repo_names()) or 'none found'}")
         return self.root
+
+    def work_dir(self, item: Item | None) -> Path:
+        """Where an item's commands and git run: its repository, or the root when it has none it can
+        name. With no item (the cycle as a whole), the default repository."""
+        if item is None:
+            default = self.repo_dir(self.default_repo) if self.default_repo else None
+            return default if default and self.is_git(default) else self.root
+        try:
+            return self.git_root(item)
+        except RiteError:
+            return self.root
+
+    def is_external(self, item: Item) -> bool:
+        """Whether an item's work lands in a repository outside the root (one of `[repos]`): Rite's
+        documents are not there, so nothing that names them goes in its commits."""
+        try:
+            root = self.git_root(item)
+        except RiteError:
+            return False
+        return root != self.root and self.root not in root.parents
+
+    def repo_label(self, item: Item) -> str | None:
+        """How the item's repository is written for `git -C` in a document: the `[repos]` path as the
+        configuration has it (it means the same on another machine), else the folder name."""
+        name = self.repo_of(item)
+        if not name or name == ".":
+            return None
+        return str(self.cfg["repos"][name]) if name in self.repo_map else name
 
     # --- discovery -------------------------------------------------------
     def is_cycle_dir(self, path: Path) -> bool:
