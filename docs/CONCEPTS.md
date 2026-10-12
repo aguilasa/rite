@@ -125,6 +125,38 @@ projects, say. Rite detects it (the root is not a git repository) and runs in wo
 - `batch-plan` reads `files:` relative to each item's repository, so the same path in two
   repositories is not a conflict.
 
+## Split layout
+
+When Rite's documents may not enter the product's repository but still need a history, give them a
+repository of their own and name the product's in `[repos]`:
+
+```toml
+# rite.toml, at the root of the documents' repository
+[paths]
+default_repo = "product"
+[repos]
+product = "../../github/product"   # absolute, ~, or relative to this folder
+```
+
+- **Cycles are tracked** in the documents' repository: every bookkeeping commit lands there, never in
+  the product's.
+- **The work lands in the item's repository**: `new-task` writes `repo: product` (the default) into
+  the item, so a later change of `default_repo` does not move what it recorded; `--repo .` is a task
+  whose work is a document of the root's own repository. `close`, `gates`, `reproduce`, `review` and
+  `rebind` read commits and run commands there; `rite begin` gives its folder as `commit.repo_dir`.
+- **No `Refs: <ID>`** in a work commit of an external repository: the ID names a document that
+  repository does not have. The cycle's ticket still goes in. The link from item to commit is the
+  item's `done_commit` and Execution Log (`git -C ../../github/product show …`).
+- **Guards** match a path inside a `[repos]` repository relative to that repository, so
+  `read_only = ["vendor/**"]` guards the product's `vendor/` — and the root's, if it has one.
+- **Start sessions in the documents' folder** with the product added: `claude --add-dir
+  ../../github/product`. A session that `cd`s into the product keeps its guards through
+  `$CLAUDE_PROJECT_DIR`.
+- `after-each-item` pushes both repositories. `check` reports a `[repos]` path that is missing or no git
+  repository, a `default_repo` that names none, and the documents' folder sitting inside the product's
+  repository (worse when it tracks them).
+- Evidence and gates run in the product's repository: a path they cite is read from there.
+
 ## Engineering disciplines
 
 - **Measure, do not read.** Logs and ticked boxes are leads; only commands run now count.

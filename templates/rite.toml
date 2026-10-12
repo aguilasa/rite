@@ -15,6 +15,10 @@ plans_dir     = "docs/plans"
 templates_dir = ""                          # optional local overrides of the plugin templates
 link_style    = "root-absolute"             # root-absolute | relative
 default_cycle = ""                          # cycle used when none is given
+default_repo  = ""                          # repository an item without repo: works in ("" = the root)
+
+[repos]
+# product = "../../github/product"          # git repositories outside the root, by name (split layout)
 
 [naming]
 task_id       = "{prefix}-TASK-{n:02}"

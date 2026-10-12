@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Split layout: Rite's documents in a repository of their own** — for projects whose repository may
+  not hold Rite's artifacts. `[repos]` names git repositories anywhere on disk (absolute, `~` or
+  relative to `rite.toml`) and `[paths].default_repo` the one an item without `repo:` works in;
+  `new-task` and `new-fix` write it into the item. With the root a git repository, cycles stay tracked
+  there and every bookkeeping commit lands there, while work commits, `close`, `gates`, `reproduce`,
+  `rebind`, reviews and `after-each-item` pushes use the item's repository. `repo: .` is work in the
+  root's own repository. Work commits in an external repository carry no `Refs: <ID>` (the cycle's
+  ticket stays). `rite begin` and `resolve-cycle` report `repo_dirs`, `split` and the item's
+  `repo_dir`, which the commands and agents run their git in. Guards match paths inside `[repos]`
+  repositories relative to them, and the hooks fall back to `$CLAUDE_PROJECT_DIR` when the session
+  `cd`s out of the documents' folder. `check` reports a missing or non-git `[repos]` path, a
+  `default_repo` naming nothing, and the documents' folder sitting inside the product's repository.
+  `/rite:init` detects a documents-only repository and asks for the product's path. Single-repository
+  and workspace layouts behave as before (pinned by `tests/test_regression_layouts.py`); a workspace
+  now also reports `commit.repo_dir`.
+
 ## [0.16.3] — 2026-10-11
 
 ### Fixed

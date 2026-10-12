@@ -38,6 +38,26 @@ All paths are relative to the repository root.
 | `templates_dir` | `""` | Optional folder with local overrides of the plugin templates (`task.md`, `fix.md`, …). A template's frontmatter seeds the new item's JSON entry (a key of your own included); the file itself keeps only `id`. |
 | `link_style` | `"root-absolute"` | `root-absolute` (`/docs/x.md`) or `relative` (`../x.md`). `check` enforces it on every link and `source_of_truth`. |
 | `default_cycle` | `""` | Cycle used when a command gets none. Empty = flat layout if present, else the only live cycle, else ask. |
+| `default_repo` | `""` | Repository an item without `repo:` works in: a `[repos]` name, a workspace sub-folder, or `.` (the root's own). Empty = the root. `new-task` and `new-fix` write it into the item. |
+
+## `[repos]`
+
+Git repositories outside the root that items work in, by name: `name = "path"` — absolute, `~`, or
+relative to the folder of `rite.toml`. An item names one in `repo:` (`rite new-task --repo <name>`),
+or gets `[paths].default_repo`. Names are letters, digits, `.`, `_` and `-`.
+
+```toml
+[paths]
+default_repo = "product"
+
+[repos]
+product = "../../github/product"
+```
+
+With the root itself a git repository this is the [split layout](CONCEPTS.md#split-layout): Rite's
+documents and bookkeeping commits stay in the root's repository, the work commits go to the item's,
+without `Refs: <ID>`. In a workspace it adds repositories that are not sub-folders; cycles stay local.
+`check` reports a path that does not exist or is no git repository.
 
 ## `[naming]`
 
@@ -140,7 +160,9 @@ gets no ticket reference.
 
 ## `[guards]`
 
-Enforced by the plugin's `PreToolUse` hook on `Edit`, `Write` and `NotebookEdit`.
+Enforced by the plugin's `PreToolUse` hook on `Edit`, `Write` and `NotebookEdit`. Globs match the path
+relative to the repository holding it: the root, or one of `[repos]`. When the event's folder has no
+`rite.toml`, the hook reads the one of `$CLAUDE_PROJECT_DIR`.
 
 | Key | Default | Meaning |
 | --- | --- | --- |

@@ -212,3 +212,12 @@ in `[resources].serialized`.
    `rite.toml` (`[guards]`, `[gates]`, `[resources]`) and `CLAUDE.md`.
 4. Resolve the `action required` list, then run `/rite:status` and compare with the last version of the
    old tables.
+
+## Moving the documents out of the product's repository
+
+To adopt the [split layout](CONCEPTS.md#split-layout) for a repository that already holds Rite's
+documents: copy `rite.toml`, the cycles, profiles and plans into a new git repository, add `[repos]`
+with the product's path and `[paths].default_repo` naming it, then `git rm` them from the product.
+Items written before have no `repo:`, so they resolve to `default_repo` — the product's repository,
+where their `done_commit` values are — and `rite check --all` stays green. Run it to be sure: a
+`done_commit` it cannot resolve there is rebound with `rite rebind <ID> --sha <commit>`.

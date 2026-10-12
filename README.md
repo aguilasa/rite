@@ -115,7 +115,8 @@ Keep in mind:
   inconsistent.
 
 Concepts behind these choices: [local cycles](docs/CONCEPTS.md#local-cycles),
-[workspaces](docs/CONCEPTS.md#workspaces).
+[workspaces](docs/CONCEPTS.md#workspaces). Rite's documents in a repository of their own, apart from
+the product's: [split layout](docs/CONCEPTS.md#split-layout).
 
 ## Concepts
 
