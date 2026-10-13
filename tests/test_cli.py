@@ -494,6 +494,19 @@ class ComposeTest(FixtureCase):
         self.assertFalse(again["taken"])
         self.assertEqual(self.fx.git("status", "--porcelain").count("progress.json"), 1)
 
+    def test_session_language_reaches_every_entry_point(self):
+        # every command starts from begin, resolve-cycle or status: each one carries the reply language
+        def seen() -> list[str]:
+            return [self.js("begin", "task", "--cycle", "alpha")["config"]["languages"]["session_language"],
+                    self.js("resolve-cycle", "alpha")["session_language"],
+                    self.js("status", "--all")["session_language"]]
+        self.assertEqual(seen(), ["", "", ""])
+        toml = self.root / "rite.toml"
+        toml.write_text(toml.read_text(encoding="utf-8").replace(
+            'name = "fixture-subfolder"', 'name = "fixture-subfolder"\nsession_language = "pt-BR"'),
+            encoding="utf-8", newline="\n")
+        self.assertEqual(seen(), ["pt-BR", "pt-BR", "pt-BR"])
+
     def test_begin_no_claim_leaves_the_item_pending(self):
         # a run that only plans must not decide what the next run picks: in-progress resumes first
         fix_id = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T",

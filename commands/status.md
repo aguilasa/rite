@@ -41,3 +41,5 @@ invocation, run inside the repository or with `--root <repo>`; prefer `--json`.
 
 Exit codes: `0` ok · `1` failure or nothing selected (stderr names the rule; no `--force` unless
 asked) · `3` no `rite.toml` — stop and tell the user to run `/rite:init`.
+
+Reply in the JSON's `session_language`; empty → the session's language.

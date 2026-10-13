@@ -6,6 +6,7 @@ name = ""
 docs_language   = "en-US"   # language of tasks, fixes, profiles
 code_language   = "en-US"   # identifiers and code comments
 commit_language = "en-US"   # commit messages
+# session_language = ""    # language commands reply in; empty keeps the session's
 
 [paths]
 cycles_root   = "docs/rite/cycles"          # a cycle is any folder here holding progress_state

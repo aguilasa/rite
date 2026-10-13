@@ -30,7 +30,8 @@ def _cycle_digest(project: Project, cycle: Cycle) -> dict:
     """What `rite.toml` says that changes how an item is worked on — no prose, no defaults to re-read."""
     cfg = project.cfg
     return {
-        "languages": {k: cfg["project"][k] for k in ("docs_language", "code_language", "commit_language")},
+        "languages": {k: cfg["project"][k] for k in ("docs_language", "code_language", "commit_language",
+                                                         "session_language")},
         "link_style": cfg.link_style,
         "read_only": list(cfg["guards"]["read_only"]),
         "generated": [{"paths": g.get("paths"), "generator": g.get("generator"), "check": g.get("check")}

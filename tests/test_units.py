@@ -157,6 +157,13 @@ class CommitConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(config.ConfigError, r"co_author_footer"):
             config.parse(Path("."), '[commit]\nco_author_footer = "no"\n')
 
+    def test_session_language_is_unset_by_default_and_a_string(self):
+        self.assertEqual(config.parse(Path("."), "")["project"]["session_language"], "")
+        cfg = config.parse(Path("."), '[project]\nsession_language = "pt-BR"\n')
+        self.assertEqual(cfg["project"]["session_language"], "pt-BR")
+        with self.assertRaisesRegex(config.ConfigError, r"session_language"):
+            config.parse(Path("."), "[project]\nsession_language = 1\n")
+
 
 class SectionParsersTest(unittest.TestCase):
     def test_bare_paths_count_only_when_they_exist(self):

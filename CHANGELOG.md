@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`[project].session_language`: the language commands reply in** (#14) — reports, questions and
+  summaries. Unset (the default) keeps the language the session already uses; item files, commits and
+  identifiers keep following `docs_language`, `commit_language` and `code_language`. `rite begin`
+  (`config.languages`), `rite resolve-cycle` and `rite status --json` carry it, so every command reads
+  it from the call it already makes. `/rite:init` writes it commented out.
+
 ## [0.17.0] — 2026-10-12
 
 ### Added

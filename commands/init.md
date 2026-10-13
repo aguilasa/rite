@@ -37,7 +37,7 @@ history or its links. This command writes `rite.toml` and a short block in `CLAU
 3. **Ask** only what detection left open: which layout to use, which paths are read-only, which gates
    every item must pass, docs language when mixed.
 4. **Write `rite.toml`** from `${CLAUDE_PLUGIN_ROOT}/templates/rite.toml`, keeping only the keys that
-   differ from the defaults plus `[project].name`, with a first comment line pointing at the plugin's
+   differ from the defaults plus `[project].name` and a commented `# session_language = ""`, with a first comment line pointing at the plugin's
    `docs/CONFIG.md`. Map an existing backlog's names in `[paths]`, `[naming]` and `[sections]` instead
    of renaming files. With a backlog, `rite sections --all` proposes `[sections]` from the titles its
    items and profiles already use, with the evidence of each; `--write` merges what matched. A key it
@@ -73,6 +73,8 @@ invocation, run inside the repository or with `--root <repo>`; prefer `--json`.
 
 Exit codes: `0` ok · `1` failure or nothing selected (stderr names the rule; no `--force` unless
 asked) · `3` no `rite.toml` — stop and tell the user to run `/rite:init`.
+
+Reply in the JSON's `session_language`; empty → the session's language.
 
 ## Asking the user
 

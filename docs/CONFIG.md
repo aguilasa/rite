@@ -24,6 +24,7 @@ Where things are decided:
 | `docs_language` | `"en-US"` | Language for tasks, fixes, profiles and generated prose. |
 | `code_language` | `"en-US"` | Language for identifiers and code comments. |
 | `commit_language` | `"en-US"` | Language for commit messages. |
+| `session_language` | `""` | Language commands reply in: reports, questions and summaries. Empty keeps the language the session already uses. Item files, commits and identifiers follow the three keys above. |
 
 ## `[paths]`
 

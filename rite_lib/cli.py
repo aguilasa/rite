@@ -58,6 +58,7 @@ def cmd_resolve_cycle(project: Project, args) -> int:
         "pitfalls": display(project.root, c.pitfalls_path), "pitfalls_exists": c.pitfalls_path.is_file(),
         "plan": c.meta.get("plan"), "archived": c.archived, "ticket": c.ticket, "local": c.local,
         "commit": ops.commit_refs(project, c), **project.layout(),
+        "session_language": project.cfg["project"]["session_language"],
     }
     _emit(args, data, "\n".join(f"{k}: {v}" for k, v in data.items()))
     return EXIT_OK
@@ -388,7 +389,8 @@ def cmd_status(project: Project, args) -> int:
         ]))
     if not cycles:
         texts.append(f"no live cycle under {display(project.root, project.cycles_root)} (run /rite:new-cycle)")
-    _emit(args, {"cycles": out}, "\n\n".join(texts))
+    _emit(args, {"cycles": out, "session_language": project.cfg["project"]["session_language"]},
+          "\n\n".join(texts))
     return EXIT_OK
 
 
