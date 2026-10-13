@@ -215,3 +215,10 @@ gh issue create --recover <file>            # recover the input of a failed run
 
 After opening, adjust labels with `gh issue edit <N> --add-label "area: hooks"` or
 `--remove-label`, and find issues with `gh issue list --label design-gap --state all`.
+
+## Triage
+
+Open issues are triaged with `/triage-issues [numbers | type label]`, a project command in
+[.claude/commands/](../.claude/commands/triage-issues.md). It verifies each issue against HEAD the
+way its type asks for, proposes missing labels and `blocked by` links, and ends in a plan to
+approve. It changes nothing on GitHub by itself.
