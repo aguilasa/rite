@@ -1,0 +1,39 @@
+name: Documentation
+description: A doc is wrong, missing, stale or unclear — README, docs/, command text or templates.
+labels: [documentation]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: File and line, or section heading.
+      placeholder: "docs/CONFIG.md:131"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Wrong — contradicts what rite does
+        - Missing — behaviour not documented
+        - Stale — describes an older version
+        - Unclear — correct but hard to follow
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: What it says now
+      description: Quote the text.
+      render: markdown
+
+  - type: textarea
+    id: should-say
+    attributes:
+      label: What it should say
+      description: Proposed text, or the facts it should state and where they come from.
+    validations:
+      required: true

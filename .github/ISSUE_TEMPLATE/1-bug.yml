@@ -1,0 +1,82 @@
+name: Bug
+description: Rite does something wrong — a command, the CLI, a hook or an agent misbehaves.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report what you measured, not what you suspect. Paste the exact command and its output.
+        If rite works as designed and the design itself falls short, use **Design gap** instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Rite version
+      description: From `.claude-plugin/plugin.json` or the plugin cache path.
+      placeholder: "0.17.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - "cli — bin/, rite_lib/"
+        - "commands — commands/, parts/"
+        - "agents — agents/"
+        - "hooks — hooks/"
+        - "config — rite.toml, docs/CONFIG.md"
+        - "templates — templates/, examples/"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: origin
+    attributes:
+      label: Origin
+      options:
+        - Found running rite on another repository
+        - Found reading rite's own code or docs
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where it was observed
+      description: Repository, cycle and item IDs, when it came from use.
+      placeholder: "new-we2002-editor, cycle kits, CORR-KITS-089"
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The commands you ran and what rite did.
+    validations:
+      required: true
+
+  - type: textarea
+    id: measured
+    attributes:
+      label: Measured
+      description: Exact output, exit codes, counts or timings. Shortest decisive excerpt.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What rite should have done, and where that is stated (doc, command text, code).
+    validations:
+      required: true
+
+  - type: textarea
+    id: ask
+    attributes:
+      label: Ask
+      description: Suggested fix, if you have one.

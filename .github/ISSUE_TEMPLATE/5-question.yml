@@ -1,0 +1,16 @@
+name: Question
+description: How rite is meant to be used, when the docs do not answer it.
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What you are trying to do, and which docs you already read.
