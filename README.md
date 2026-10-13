@@ -173,6 +173,11 @@ See [docs/CONFIG.md](docs/CONFIG.md). A commented default file is in [templates/
 Adopting an existing backlog: [docs/MIGRATING.md](docs/MIGRATING.md). Where the tokens go, subagents
 included: [docs/TOKENS.md](docs/TOKENS.md).
 
+## Issues
+
+Report bugs, design gaps and requests through the issue forms, or from the terminal with `gh`:
+[docs/ISSUES.md](docs/ISSUES.md) lists the labels and gives an example for each kind of issue.
+
 ## Development
 
 ```sh
