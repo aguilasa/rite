@@ -192,7 +192,8 @@ Portuguese layout) and run the CLI against them, including planted defects that 
 ### Releasing
 
 Changes go into `CHANGELOG.md` under `## [Unreleased]` as they land. To release, run the **Release**
-workflow on `main` from the Actions tab (or `gh workflow run release.yml -f bump=minor`) with `patch`,
+workflow on `main` from the Actions tab (or `gh workflow run release.yml -f bump=minor`, or `/release`
+in Claude Code, which also waits for it and reports the published release) with `patch`,
 `minor`, `major` or an explicit `X.Y.Z`. It runs the tests, bumps the version in every file that
 carries it, renames `[Unreleased]` to the new version and date, commits `chore(release): X.Y.Z`, tags
 `vX.Y.Z` and publishes the GitHub release with that section as its notes. The bump alone runs locally
