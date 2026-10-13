@@ -1,0 +1,77 @@
+# Release: run from the Actions tab ("Run workflow" on main) with patch, minor, major or X.Y.Z.
+# It runs the tests, bumps the version everywhere, renames CHANGELOG.md's [Unreleased] section to the
+# new version, commits `chore(release): X.Y.Z`, tags vX.Y.Z, pushes both and publishes the GitHub
+# release with that section as its notes. Pushing a vX.Y.Z tag by hand publishes the release only.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "patch, minor, major or an explicit X.Y.Z"
+        required: true
+        default: patch
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TZ: America/Sao_Paulo
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Releases are cut from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::run the release from main, not ${GITHUB_REF_NAME}"
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests
+        run: |
+          python -m unittest discover tests
+          python tools/build_commands.py --check
+
+      - name: Bump, commit, tag and push
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          version=$(python tools/release.py bump "$BUMP")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(release): $version"
+          git tag "v$version"
+          git push --atomic origin HEAD:main "v$version"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Version from the tag
+        if: github.event_name == 'push'
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          written=$(python tools/release.py current)
+          if [ "$version" != "$written" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but the code says $written"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Publish the GitHub release
+        run: |
+          python tools/release.py notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "v$VERSION" --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag

@@ -189,6 +189,16 @@ Tests build throw-away git repositories in three layouts (sub-folder cycles, fla
 Portuguese layout) and run the CLI against them, including planted defects that `check` must catch.
 `tests/test_rite_is_agnostic.py` fails if a command names a concrete project, tool or absolute path.
 
+### Releasing
+
+Changes go into `CHANGELOG.md` under `## [Unreleased]` as they land. To release, run the **Release**
+workflow on `main` from the Actions tab (or `gh workflow run release.yml -f bump=minor`) with `patch`,
+`minor`, `major` or an explicit `X.Y.Z`. It runs the tests, bumps the version in every file that
+carries it, renames `[Unreleased]` to the new version and date, commits `chore(release): X.Y.Z`, tags
+`vX.Y.Z` and publishes the GitHub release with that section as its notes. The bump alone runs locally
+with `python tools/release.py bump <patch|minor|major|X.Y.Z>`; pushing a `vX.Y.Z` tag publishes the
+release of a version already committed.
+
 ## Examples
 
 | Example | Stack | Gate | Generated artifact |

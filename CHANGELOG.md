@@ -20,6 +20,11 @@ All notable changes to this project are documented here. Versions follow [SemVer
   the fixes that go back to them (fixes of fixes counted against the root task, as `rite stats` does),
   what is pending or blocked and on what, and the suggested next command. Gate results are not stored
   as data, so they are read from the logs, never invented.
+- **Release workflow** — the Actions workflow `Release`, run on `main` with `patch`, `minor`, `major`
+  or `X.Y.Z`, runs the tests, bumps the version everywhere it is written, dates the `[Unreleased]`
+  section, commits `chore(release): X.Y.Z`, tags it and publishes the GitHub release with that section
+  as notes. `tools/release.py` does the bump and extracts the notes; pushing a `vX.Y.Z` tag publishes
+  the release of a version already committed.
 
 ## [0.17.0] — 2026-10-12
 
