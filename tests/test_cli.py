@@ -244,6 +244,43 @@ class LoopTest(FixtureCase):
         self.assertEqual(self.fx.rite("guard", "src/app.py")[0], 0)
 
 
+class PhaseTest(FixtureCase):
+    """rite phase: one phase's tasks, commits, fixes and logs, finished or in progress."""
+
+    def test_phase_reports_what_it_delivered_and_what_remains(self):
+        code, _, err = self.fx.rite("phase", "alpha")
+        self.assertEqual(code, 1)  # nothing done yet: no default phase
+        self.assertIn("--phase", err)
+
+        self.ok("mark", "ALP-TASK-01", "in-progress")
+        sha = self.fx.work_commit("src/harness.py", "x = 1\n", "feat: harness")
+        self.ok("close", "ALP-TASK-01")
+        self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "Off by one",
+                "--severity", "high")
+        self.js("new-fix", "--cycle", "alpha", "--origin", "FIX-ALP-001", "--title", "Regression",
+                "--severity", "low")
+
+        data = self.js("phase", "alpha")
+        self.assertEqual((data["phase"], data["phases"]), ("1", ["1", "2"]))  # the last phase with a task done
+        self.assertEqual([t["id"] for t in data["tasks"]], ["ALP-TASK-01", "ALP-TASK-02"])
+        first = data["tasks"][0]
+        self.assertEqual((first["status"], first["done_commit"]), ("done", sha))
+        self.assertIn("src/harness.py", first["log"]["text"])  # the Execution Log, as written
+        # a fix of a fix counts against the root task's phase
+        self.assertEqual([f["id"] for f in data["fixes"]], ["FIX-ALP-001", "FIX-ALP-002"])
+        self.assertEqual((data["pending"], data["blocked"]), (["ALP-TASK-02"], {}))
+        self.assertFalse(data["finished"])
+        self.assertEqual(data["next"]["command"], "fix")  # a high fix is open
+
+        later = self.js("phase", "alpha", "--phase", "2")
+        self.assertEqual((later["fixes"], later["pending"]), ([], []))
+        self.assertEqual(later["blocked"], {"ALP-TASK-03": ["ALP-TASK-02"]})
+
+        code, _, err = self.fx.rite("phase", "alpha", "--phase", "9")
+        self.assertEqual(code, 1)
+        self.assertIn("phases: 1, 2", err)
+
+
 class CheckRedTest(FixtureCase):
     """Planted defects must turn `check` red."""
 

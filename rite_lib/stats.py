@@ -7,7 +7,7 @@ import statistics
 
 from . import markdown
 from .config import FIX_STATUSES, SEVERITIES, TASK_STATUSES
-from .model import Cycle, Project, display
+from .model import Cycle, Item, Project, display
 
 
 def _days(a, b) -> int | None:
@@ -15,6 +15,14 @@ def _days(a, b) -> int | None:
         return (dt.date.fromisoformat(str(b)) - dt.date.fromisoformat(str(a))).days
     except ValueError:
         return None
+
+
+def root_task(fix: Item, index: dict[str, Item]) -> Item | None:
+    """The task a fix goes back to: fixes of fixes count against the root task."""
+    origin = index.get(str(fix.fields.get("origin")))
+    while origin is not None and origin.kind == "fix":
+        origin = index.get(str(origin.fields.get("origin")))
+    return origin
 
 
 def cycle_stats(project: Project, cycle: Cycle) -> dict:
@@ -37,9 +45,7 @@ def cycle_stats(project: Project, cycle: Cycle) -> dict:
         ph = str(t.fields.get("phase"))
         by_phase.setdefault(ph, {"tasks": 0, "fixes": 0})["tasks"] += 1
     for f in fixes:
-        origin = index.get(str(f.fields.get("origin")))
-        while origin is not None and origin.kind == "fix":  # fixes of fixes count against the root task
-            origin = index.get(str(origin.fields.get("origin")))
+        origin = root_task(f, index)
         if origin is not None:
             by_phase.setdefault(str(origin.fields.get("phase")), {"tasks": 0, "fixes": 0})["fixes"] += 1
     log_titles = project.section_titles("execution_log")

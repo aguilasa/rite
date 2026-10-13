@@ -484,6 +484,15 @@ def cmd_anchors(project: Project, args) -> int:
     return EXIT_OK
 
 
+def cmd_phase(project: Project, args) -> int:
+    from . import phase
+    cycle = project.resolve_cycle(args.name)
+    data = phase.phase_report(project, cycle, args.phase,
+                              review_age_days=int(project.cfg["status"]["review_age_days"]))
+    _emit(args, data, phase.render_text(data))
+    return EXIT_OK
+
+
 def cmd_stats(project: Project, args) -> int:
     from . import stats
     cycle = project.resolve_cycle(args.name)
@@ -817,6 +826,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("anchors", parents=[common], help="list a document's headings as source_of_truth links")
     s.add_argument("file")
     s.set_defaults(fn=cmd_anchors)
+
+    s = sub.add_parser("phase", parents=[common], help="one phase of a cycle: tasks, commits, fixes, logs")
+    s.add_argument("name", nargs="?")
+    s.add_argument("--phase", help="the phase to report (default: the last one with a task done)")
+    s.set_defaults(fn=cmd_phase)
 
     s = sub.add_parser("stats", parents=[common], help="numbers for a retro: tasks, fixes, review latency")
     s.add_argument("name")
