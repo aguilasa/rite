@@ -11,6 +11,10 @@ All notable changes to this project are documented here. Versions follow [SemVer
   identifiers keep following `docs_language`, `commit_language` and `code_language`. `rite begin`
   (`config.languages`), `rite resolve-cycle` and `rite status --json` carry it, so every command reads
   it from the call it already makes. `/rite:init` writes it commented out.
+- **`/rite:phase [cycle] [phase]`: an account of one phase** (#15) — read-only, at most 15 lines:
+  what each task delivered, taken from its Execution Log rather than re-told from the plan, the fixes
+  opened against the phase, the last gate result the logs record (`no gate recorded` otherwise), and,
+  in progress, what is pending or blocked with the next command. Built on `rite phase`.
 - **`rite phase`: what one phase of a cycle delivered** (#15) — finished or in progress (default: the
   last phase with a task done). Its tasks with status, work commit and the tail of their Execution Log,
   the fixes that go back to them (fixes of fixes counted against the root task, as `rite stats` does),

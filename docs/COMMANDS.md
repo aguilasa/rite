@@ -22,6 +22,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `/rite:new-cycle <name> [--prefix X] [--plan P] [--copy-plan] [--ticket KEY] [--local]` | `rite new-cycle`: folder, views, profile skeleton, pitfalls file — a copy of the last cycle's that has entries, when confirmed (`--pitfalls-from`); seeds the profile only with facts. Asks for the tracker ticket and whether the cycle is local ([CONCEPTS.md](CONCEPTS.md#local-cycles)), and whether to copy a plan outside `plans_dir` into it (`--copy-plan`; a plan outside the repository is refused without it). |
 | `/rite:plan-to-tasks <plan> [cycle] [--dry-run]` | Proposes phases, tasks with anchored `source_of_truth` (from `rite anchors`), verifiable criteria, `depends_on`, a closing task per phase, a graph (rendered from `depends_on`, not written) and phase checks; writes after confirmation; `rite check` must pass. |
 | `/rite:status [cycle]` | Read-only summary and the suggested next command. |
+| `/rite:phase [cycle] [phase]` | Read-only account of one phase, finished or in progress (default: the last with a task done): what each task delivered, from its Execution Log via `rite phase`; its fixes; the last gate result the logs record; what is pending or blocked and the next command. |
 | `/rite:close-cycle <cycle>` | `rite archive --dry-run` blockers, else archive with link rewriting. |
 | `/rite:retro <cycle>` | `rite stats` numbers, fixes grouped by root cause; proposes keep / promote / report / prune; applies what the user approves. |
 

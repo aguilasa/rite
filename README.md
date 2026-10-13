@@ -142,6 +142,7 @@ the product's: [split layout](docs/CONCEPTS.md#split-layout).
 | `/rite:new-cycle <name>` | create a cycle: folder, views, profile, pitfalls |
 | `/rite:plan-to-tasks <plan>` | break a plan into tasks with anchored sources of truth and verifiable criteria |
 | `/rite:status [cycle]` | where things stand; the next command to run |
+| `/rite:phase [cycle] [phase]` | what a phase delivered, finished or in progress |
 | `/rite:execute [cycle] [ID]` | one task, two commits |
 | `/rite:execute-batch [cycle] [N]` | N tasks in conflict-free waves |
 | `/rite:review [cycle] [ID]` | independent review by the `rite-reviewer` agent; opens fixes |
