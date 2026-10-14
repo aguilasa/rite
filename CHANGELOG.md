@@ -12,6 +12,13 @@ All notable changes to this project are documented here. Versions follow [SemVer
   (or Verification) commands on the item's own tree, right before its commit, and records that output;
   workers write no command output into the item.
 
+- **Heading slugs keep code-span text; `check` resolves the plan's links** (#16): `rite anchors` and
+  `check` dropped inline code from headings (`i-escritas-em` where GitHub gives `i-escritas-em-2007`),
+  while `rite context` kept it, so `check` rejected a correct anchor that `context` resolved. Slugs now
+  also keep underscores inside words (`rite_lib`), as GitHub does. `check` now validates a live cycle's
+  `plan` link and every link and anchor inside the plan; a plan with a stale link fails `check` until
+  it is fixed.
+
 ## [0.18.0] — 2026-10-13
 
 ### Added

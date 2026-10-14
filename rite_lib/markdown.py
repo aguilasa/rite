@@ -14,8 +14,8 @@ _EXPLICIT_ID_RE = re.compile(r"""(?:<a\s+(?:name|id)=["']([^"']+)["']|\{#([^}\s]
 _SECTION_NO_RE = re.compile(r"^(\d+(?:\.\d+)*)\.?(?:\s|$)")
 
 
-def prose_lines(text: str):
-    """Yield (line_no, line) outside fenced code blocks, with inline code blanked."""
+def unfenced_lines(text: str):
+    """Yield (line_no, line) outside fenced code blocks."""
     fence = None
     for n, line in enumerate(text.splitlines(), start=1):
         m = _FENCE_RE.match(line)
@@ -26,32 +26,49 @@ def prose_lines(text: str):
                 fence = None
             continue
         if fence is None:
-            yield n, _INLINE_CODE_RE.sub("", line)
+            yield n, line
+
+
+def prose_lines(text: str):
+    """Yield (line_no, line) outside fenced code blocks, with inline code blanked."""
+    for n, line in unfenced_lines(text):
+        yield n, _INLINE_CODE_RE.sub("", line)
+
+
+def heading_lines(text: str) -> list[tuple[int, int, str]]:
+    """[(line_no, level, title)] outside fenced code; a title keeps its code spans, as GitHub's slugs do."""
+    out = []
+    for n, line in unfenced_lines(text):
+        m = _HEADING_RE.match(line)
+        if m:
+            out.append((n, len(m.group(1)), m.group(2)))
+    return out
 
 
 def headings(text: str) -> list[tuple[int, str]]:
-    out = []
-    for _, line in prose_lines(text):
-        m = _HEADING_RE.match(line)
-        if m:
-            out.append((len(m.group(1)), m.group(2)))
+    return [(level, title) for _, level, title in heading_lines(text)]
+
+
+def anchored_headings(text: str) -> list[tuple[int, int, str, str, str | None]]:
+    """[(line_no, level, title, unique slug, section number or None)] in document order."""
+    out, counts = [], {}
+    for n, level, title in heading_lines(text):
+        slug = github_slug(title)
+        dup = counts.get(slug, 0)
+        counts[slug] = dup + 1
+        num = _SECTION_NO_RE.match(title.strip())
+        out.append((n, level, title, slug if dup == 0 else f"{slug}-{dup}", num.group(1) if num else None))
     return out
 
 
 def heading_anchors(text: str) -> list[tuple[int, str, str, str | None]]:
     """[(level, title, unique slug, section number or None)] in document order."""
-    out, counts = [], {}
-    for level, title in headings(text):
-        slug = github_slug(title)
-        dup = counts.get(slug, 0)
-        counts[slug] = dup + 1
-        num = _SECTION_NO_RE.match(title.strip())
-        out.append((level, title, slug if dup == 0 else f"{slug}-{dup}", num.group(1) if num else None))
-    return out
+    return [entry[1:] for entry in anchored_headings(text)]
 
 
 def github_slug(heading: str) -> str:
-    text = re.sub(r"[`*_\[\]()]", "", heading).strip().lower()
+    # `_` goes only as emphasis (`_word_`); GitHub keeps it inside a word (`rite_lib`)
+    text = re.sub(r"(?<!\w)_+|_+(?!\w)", "", re.sub(r"[`*\[\]()]", "", heading)).strip().lower()
     text = re.sub(r"[^\w\- ]", "", text, flags=re.UNICODE)
     return text.replace(" ", "-")
 
@@ -60,15 +77,10 @@ def github_slug(heading: str) -> str:
 def _anchors_cached(path: str, mtime: float) -> frozenset[str]:
     text = Path(path).read_text(encoding="utf-8", errors="replace")
     anchors: set[str] = set()
-    counts: dict[str, int] = {}
-    for _, title in headings(text):
-        slug = github_slug(title)
-        dup = counts.get(slug, 0)
-        counts[slug] = dup + 1
-        anchors.add(slug if dup == 0 else f"{slug}-{dup}")
-        num = _SECTION_NO_RE.match(title.strip())
-        if num:
-            anchors.add(num.group(1))  # "#4.2" style section numbers
+    for _, _, slug, number in heading_anchors(text):
+        anchors.add(slug)
+        if number:
+            anchors.add(number)  # "#4.2" style section numbers
     for m in _EXPLICIT_ID_RE.finditer(text):
         anchors.add(m.group(1) or m.group(2))
     return frozenset(anchors)

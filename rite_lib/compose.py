@@ -130,19 +130,8 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
 def _slice_anchor(text: str, anchor: str) -> tuple[int, int] | None:
     """(first line, last line) of the anchored heading and everything under it, 1-based inclusive."""
     lines = text.splitlines()
-    heads = []  # (line index, level, slug, number)
-    seen: dict[str, int] = {}
-    for i, line in enumerate(lines):
-        m = markdown._HEADING_RE.match(line)
-        if not m:
-            continue
-        title = m.group(2)
-        slug = markdown.github_slug(title)
-        dup = seen.get(slug, 0)
-        seen[slug] = dup + 1
-        num = markdown._SECTION_NO_RE.match(title.strip())
-        heads.append((i, len(m.group(1)), slug if dup == 0 else f"{slug}-{dup}",
-                      num.group(1) if num else None))
+    # (line index, level, slug, number): the slugs `rite anchors` and `check` use
+    heads = [(n - 1, level, slug, num) for n, level, _, slug, num in markdown.anchored_headings(text)]
     want = anchor.lstrip("#").strip()
     start = level = None
     for i, lvl, slug, num in heads:

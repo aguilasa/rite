@@ -253,6 +253,7 @@ class Checker:
             self.check_closing_coverage(cycle)
         if not self.quick:
             self.check_profile(cycle)
+            self.check_plan(cycle)
             self.check_fix_sections(cycle)
             for f in [cycle.progress_path, cycle.fixes_path, *(i.path for i in cycle.items)]:
                 if f.is_file():
@@ -561,6 +562,16 @@ class Checker:
                         self.warn(fix.path, f"'{found[0]}' pipes into python a heredoc that is not Python "
                                   f"(line {exc.lineno}: {(exc.text or '').strip()[:60]!r}) — its output in "
                                   "place of its script?")
+
+    def check_plan(self, cycle: Cycle) -> None:
+        """A live cycle's plan exists, and its links resolve: tasks anchor into the documents it cites."""
+        plan = cycle.meta.get("plan")
+        if cycle.archived or not plan:
+            return
+        self.check_target(cycle.progress_state_path, str(plan), "plan", None)
+        path, _ = resolve_link(self.p.root, cycle.progress_path, str(plan))
+        if path.is_file() and path.suffix == ".md":
+            self.check_links(path)
 
     def check_profile(self, cycle: Cycle) -> None:
         # a pointer to a missing file is a mistake; the [naming] default may not exist yet (legacy)

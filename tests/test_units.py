@@ -100,6 +100,12 @@ class MarkdownTest(unittest.TestCase):
         self.assertEqual([t for _, t in markdown.links(self.TEXT)], ["/a.md"])
         self.assertEqual(markdown.github_slug("2.1 Card diff"), "21-card-diff")
 
+    def test_slugs_keep_code_spans_like_github(self):
+        text = ("# I. Escritas em `$2007`\n## I. Escritas em VRAM por `$2118`/`$2119` e por DMA\n"
+                "## `rite_lib` and _em_ **b**\n```\n# `not` a heading\n```\n")
+        self.assertEqual([s for _, _, s, _ in markdown.heading_anchors(text)],
+                         ["i-escritas-em-2007", "i-escritas-em-vram-por-21182119-e-por-dma", "rite_lib-and-em-b"])
+
     def test_section_and_append(self):
         text = "# A\n\n## Log\n\n- one\n\n## Next\n\nx\n"
         self.assertEqual(markdown.section(text, "log").strip(), "- one")

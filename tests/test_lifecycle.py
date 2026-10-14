@@ -186,6 +186,20 @@ class AnchorsAndStatsTest(FixtureCase):
                     "--source-of-truth", sot)
         self.assertEqual(self.check_errors("--all"), [])
 
+    def test_check_resolves_the_links_of_the_plan(self):
+        write(self.root / "docs/emu.md", "# Emu\n\n## I. Escritas em `$2007`\n")
+        plan = self.root / "docs/plans/PLAN-alpha.md"
+        base = plan.read_text(encoding="utf-8")
+        write(plan, base + "\n[ok](/docs/emu.md#i-escritas-em-2007)\n")
+        self.assertEqual(self.check_errors("--cycle", "alpha"), [])
+        write(plan, base + "\n[broken](/docs/emu.md#i-escritas-em)\n")
+        errors = self.check_errors("--cycle", "alpha")
+        self.assertTrue(any("no heading/anchor '#i-escritas-em' in emu.md" in e for e in errors), errors)
+        plan.unlink()
+        errors = self.check_errors("--cycle", "alpha")
+        self.assertTrue(any("plan '/docs/plans/PLAN-alpha.md' points to a missing file" in e for e in errors),
+                        errors)
+
     def test_stats(self):
         finish_cycle(self, "alpha", ["ALP-TASK-01"])
         self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "a", "--severity", "high")
