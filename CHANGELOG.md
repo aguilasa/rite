@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Criterion counts recorded in a batch reproduce at the item's commit** (#17): the #12 fix remeasured
+  gates only, so a worker still wrote a done-criterion count measured while other workers edited the
+  tree (`333 of 333` recorded, `330` at the commit). The main thread now reruns each item's criterion
+  (or Verification) commands on the item's own tree, right before its commit, and records that output;
+  workers write no command output into the item.
+
 ## [0.18.0] — 2026-10-13
 
 ### Added

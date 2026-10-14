@@ -176,8 +176,10 @@ item at a time. Default size 2; never "all" for tasks.
 
 Gates are measured twice. Once on the combined tree, to abort a wave that breaks the build. Then per
 item, with the later items' files stashed, right before its commit: that tree is the commit, so the gate
-result an item records reproduces there. A worker's own gate run is only a check — other workers are
-editing the same tree. A wave of n items runs its gates n + 1 times.
+result an item records reproduces there. The item's criterion (or Verification) commands are rerun on
+that same tree, and their output is the only measured output its Notes record. A worker's own runs are
+only a check — other workers are editing the same tree — so it writes no counts. A wave of n items runs
+its gates n + 1 times.
 
 ## Delegation cost
 

@@ -428,10 +428,11 @@ class PlanWritesNothingTest(unittest.TestCase):
     def test_batch_gates_each_item_on_its_own_commit_tree(self):
         text = self.read("parts/batch.md")
         step = text[text.index("**Serially, in item order**"):]
-        at = [step.index(t) for t in ("git stash push", "rite gates --id", "rite finish", "git stash pop")]
+        at = [step.index(t) for t in ("git stash push", "rite gates --id", "`CRITERIA` commands", "rite finish",
+                                      "git stash pop")]
         self.assertEqual(at, sorted(at))
         worker = self.read("agents/rite-worker.md")
-        self.assertIn("never gate results or the counts they print", worker)
+        self.assertIn("never command output or the counts it prints (gates, criteria, Verification)", worker)
 
     def test_execute_batch_plan_marks_nothing(self):
         body = (self.root / "commands/_execute-batch.body.md").read_text(encoding="utf-8")

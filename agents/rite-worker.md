@@ -33,9 +33,10 @@ the serialized resources you may use. Other workers may be editing other files a
 3. Verify each done criterion (task) or the Verification command (fix) by running it.
 4. Run the gates you were given, only to catch breakage: other workers edit the same tree, so their
    counts are not this item's.
-5. Write the item's prose (Notes, results, Root cause, Verification output) into the item file body —
-   never gate results or the counts they print: the main thread measures gates for this item alone before its
-   commit and records them.
+5. Write the item's prose (Notes, Root cause) into the item file body — never command output or the
+   counts it prints (gates, criteria, Verification): other workers' files are in this tree. Put each
+   command and its decisive output in `CRITERIA`; the main thread reruns them for this item alone
+   before its commit and records that output.
 
 ## Output (exactly this format)
 
