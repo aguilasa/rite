@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Versions follow [SemVer
 
 ## [Unreleased]
 
+### Added
+
+- **`rite archive` reports the references it left to the old folder** (#18): it rewrites markdown links
+  only, so bare paths, HTML comments and code that named the old cycle folder kept pointing at it,
+  unreported. `archive` now lists every tracked line that still names that folder as
+  `unrewritten: [{path, line, text}]` (`--json`) and in its text output; `/rite:close-cycle` reports
+  them. Nothing outside links is rewritten.
+
 ### Fixed
 
 - **Criterion counts recorded in a batch reproduce at the item's commit** (#17): the #12 fix remeasured

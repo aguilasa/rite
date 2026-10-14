@@ -329,12 +329,31 @@ def _map_state_links(project: Project, data: dict, old_dir: Path, new_dir: Path,
     return changed
 
 
+def _unrewritten(project: Project, old_dir: Path, new_dir: Path) -> list[dict]:
+    """Tracked lines that still name the moved folder: bare paths, comments, code — links are rewritten,
+    these are reported only, since a path in code may be meant."""
+    if not gitutil.is_repo(project.root):
+        return []
+    old, new = display(project.root, old_dir), display(project.root, new_dir)
+    out = gitutil.run(project.root, "-c", "core.quotePath=false", "grep", "-n", "-I", "-F", "-e", old,
+                      "--", ".", f":!{new}", check=False)
+    whole = re.compile(re.escape(old) + r"(?![\w-])")  # `<cycle>-2` is another folder
+    hits = []
+    for row in out.splitlines():
+        path, _, rest = row.partition(":")
+        line, _, text = rest.partition(":")
+        if line.isdigit() and whole.search(text):
+            hits.append({"path": path, "line": int(line), "text": text.strip()[:200]})
+    return hits
+
+
 def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: bool = False) -> dict:
     blocking = blockers(project, cycle)
     old_dir = cycle.path
     new_dir = project.archive_dir / old_dir.name
     result = {"cycle": cycle.name, "from": display(project.root, old_dir),
-              "to": display(project.root, new_dir), "blockers": blocking, "rewritten": [], "commit": None}
+              "to": display(project.root, new_dir), "blockers": blocking, "rewritten": [], "unrewritten": [],
+              "commit": None}
     if blocking or dry_run:
         return result
     if old_dir == project.cycles_root:
@@ -377,6 +396,7 @@ def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: boo
     for path, text in rewrites.items():
         path.write_text(text, encoding="utf-8", newline="\n")
     result["rewritten"] = [display(project.root, p) for p in rewrites]
+    result["unrewritten"] = _unrewritten(project, old_dir, new_dir)
     result["local"] = local
     if commit:
         # git mv already staged the rename; add the rewritten files and the moved folder's untracked leftovers

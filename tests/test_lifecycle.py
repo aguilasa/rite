@@ -140,14 +140,22 @@ class ArchiveTest(FixtureCase):
                                            "\n```\n[code](/docs/rite/cycles/alpha/progress.md)\n```\n")
         self.fx.git("add", "docs/index.md")
         self.fx.git("commit", "-q", "-m", "docs: index")
+        # mentions that are not links: reported by archive, never rewritten
+        self.fx.work_commit("src/tool.py", "x = 1\n# see docs/rite/cycles/alpha/01-harness.md\n", "feat: tool")
+        self.fx.work_commit("docs/notes.md", "# Notes\n\n<!-- from docs/rite/cycles/alpha -->\n"
+                                             "docs/rite/cycles/alpha-2 is another folder\n", "docs: notes")
         finish_cycle(self, "alpha", ["ALP-TASK-01", "ALP-TASK-02", "ALP-TASK-03"])
         self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-02", "--title", "late", "--severity", "low")
         self.assertIn("is open", " ".join(json.loads(self.fx.rite("archive", "alpha", "--json")[1])["blockers"]))
         self.fx.work_commit("src/late.py", "y\n", "fix: late")
         self.ok("close", "FIX-ALP-001")
 
+        self.assertEqual(self.js("archive", "alpha", "--dry-run")["unrewritten"], [])
         res = self.js("archive", "alpha")
         self.assertEqual(res["to"], "docs/rite/cycles/archive/alpha")
+        self.assertEqual(sorted((h["path"], h["line"]) for h in res["unrewritten"]),
+                         [("docs/index.md", 6), ("docs/notes.md", 3), ("src/tool.py", 2)])
+        self.assertIn("# see docs/rite/cycles/alpha/01-harness.md", [h["text"] for h in res["unrewritten"]])
         self.assertEqual(self.log(1), ["chore(rite): archive alpha"])
         index = (self.root / "docs/index.md").read_text(encoding="utf-8")
         self.assertIn("[alpha](/docs/rite/cycles/archive/alpha/progress.md)", index)

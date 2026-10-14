@@ -455,6 +455,9 @@ def cmd_archive(project: Project, args) -> int:
         lines = [f"archived {res['cycle']}: {res['from']} -> {res['to']}"]
         if res["rewritten"]:
             lines.append(f"  links rewritten in: {', '.join(res['rewritten'])}")
+        if res["unrewritten"]:
+            lines.append(f"  not rewritten ({len(res['unrewritten'])}): still name the old folder")
+            lines += [f"    {h['path']}:{h['line']}: {h['text']}" for h in res["unrewritten"]]
         if res["commit"]:
             lines.append(f"  committed {res['commit']}")
         elif res.get("local"):

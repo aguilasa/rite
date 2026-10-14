@@ -23,7 +23,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `/rite:plan-to-tasks <plan> [cycle] [--dry-run]` | Proposes phases, tasks with anchored `source_of_truth` (from `rite anchors`), verifiable criteria, `depends_on`, a closing task per phase, a graph (rendered from `depends_on`, not written) and phase checks; writes after confirmation; `rite check` must pass. |
 | `/rite:status [cycle]` | Read-only summary and the suggested next command. |
 | `/rite:phase [cycle] [phase]` | Read-only account of one phase, finished or in progress (default: the last with a task done): what each task delivered, from its Execution Log via `rite phase`; its fixes; the last gate result the logs record; what is pending or blocked and the next command. |
-| `/rite:close-cycle <cycle>` | `rite archive --dry-run` blockers, else archive with link rewriting. |
+| `/rite:close-cycle <cycle>` | `rite archive --dry-run` blockers, else archive with link rewriting; reports the lines that still name the old folder outside a link. |
 | `/rite:retro <cycle>` | `rite stats` numbers, fixes grouped by root cause; proposes keep / promote / report / prune; applies what the user approves. |
 
 ## Agents
@@ -56,7 +56,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `set ID [--files a,b] [--resources r] [--depends-on IDs]`, `set-cycle [--order IDs] [--ticket K] [--plan P] [--pitfalls F]` | the planning fields of an item, the cycle's order, ticket, plan and pitfalls file — the only fields written outside a transition; `''` empties one |
 | `sync`, `check [--quick]`, `status` | views (rendered from `progress.json` / `fixes.json`, arrays put in execution order), validation (links and anchors of items, views, profile and a live cycle's plan), summary; `sync`/`check`/`relink` take `--include-archived` |
 | `batch-plan N\|IDs\|all [--kind task\|fix]` | inventory, conflict matrix, waves |
-| `new-cycle NAME --prefix X [--plan P] [--copy-plan] [--pitfalls-from CYCLE\|FILE] [--ticket K] [--local]`, `archive NAME [--dry-run]`, `publish NAME` | lifecycle; `publish` makes a local cycle tracked |
+| `new-cycle NAME --prefix X [--plan P] [--copy-plan] [--pitfalls-from CYCLE\|FILE] [--ticket K] [--local]`, `archive NAME [--dry-run]`, `publish NAME` | lifecycle; `archive --json` lists in `unrewritten` (`path`, `line`, `text`) the tracked lines that still name the old folder (bare paths, comments, code), which it never rewrites; `publish` makes a local cycle tracked |
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth` (GitHub's slugs, code spans kept); retro numbers |
 | `phase [name] [--phase P]` | one phase of a cycle, finished or in progress (default: the last phase with a task done): its tasks in ID order with status, `done_commit` and the last 40 lines of their Execution Log, the fixes that go back to them (fixes of fixes included), what is pending or blocked and on what, `finished`, and the suggested next command. Gate results are not data: they are in the logs. Read-only |
 | `sections [--all] [--write]` | propose `[sections]` from the titles the items and profiles use, recognised by what each section holds (fenced `$ ` lines, lists of paths, command lines, the item's last section, phases named) and never by the words of the title; each guess with its evidence, a key nothing matches reliably commented with its candidates. `--all` reads every cycle, archived too; `--write` merges only the matched keys into `rite.toml`, keeping comments, other keys and their order |

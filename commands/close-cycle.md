@@ -23,13 +23,15 @@ Arguments: `$ARGUMENTS`
 5. **Archive**: `rite archive <cycle> --json` moves the folder (`git mv`), rewrites links in prose and
    link fields but not inside code blocks, and commits `chore(rite): archive <cycle>`. It refuses when
    the index has staged changes — report that as is. A local cycle is moved on disk and nothing is
-   committed; its archive folder must be ignored by git too, or `check` warns.
+   committed; its archive folder must be ignored by git too, or `check` warns. Its `unrewritten` lists
+   the tracked lines that still name the old folder outside a link (bare paths, comments, code): report
+   each `path:line` and leave them; a path in code may be meant, so rewriting it is the user's call.
 6. **Verify**: `rite check --all --json` and `rite status --all --json`.
 
 ## Report
 
-Cycle, from → to · preconditions passed or the blockers · files whose links were rewritten · commit
-SHA · next: `/rite:retro <cycle>`.
+Cycle, from → to · preconditions passed or the blockers · files whose links were rewritten · lines
+not rewritten · commit SHA · next: `/rite:retro <cycle>`.
 
 ## The CLI
 
