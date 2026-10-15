@@ -24,7 +24,8 @@ One block per cycle, at most 20 lines: name, prefix and folder · tasks by statu
 review queue with the IDs and those older than the configured age · open fixes by severity, naming
 critical and high ones — blocked fixes included, and how many (`open_fixes_blocked`) with the command
 each waits on · what is blocked on what (`next_task.blocked_by`) · the next step, as the
-command the CLI suggests, with its reason — or, if `check` reported errors, resolving those first,
+command the CLI suggests, with its reason (`review` with more than one task in the queue →
+`/rite:review-all`) — or, if `check` reported errors, resolving those first,
 listed. Do not speculate beyond what the CLI reported.
 
 ## The CLI

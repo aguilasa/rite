@@ -1,6 +1,6 @@
 ---
 name: rite-reviewer
-description: Independent reviewer for one finished Rite task. Measures the delivered work against its source of truth, recounts every number, and returns findings with runnable evidence. Never edits the repository. Used by /rite:review.
+description: Independent reviewer for one finished Rite task. Measures the delivered work against its source of truth, recounts every number, and returns findings with runnable evidence. Never edits the repository. Used by /rite:review and /rite:review-all.
 tools: Read, Grep, Glob, Bash
 ---
 

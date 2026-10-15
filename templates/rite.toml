@@ -88,6 +88,7 @@ sweep_hits         = 40                     # cap of hits `rite sweep` prints pe
 inline_triage_max_output_kb = 7             # a fix whose reproduction prints more goes to an agent. 7 is the break-even of a
                                             # small example; a large repository usually sits an order of magnitude higher:
                                             # measure yours with `rite tokens --project "*<repo>*" --suggest-limits`
+review_parallel    = 4                      # reviewers per wave of /rite:review-all; 1 reviews one task at a time
 
 [status]
 review_age_days = 7

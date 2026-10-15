@@ -83,8 +83,9 @@ DEFAULTS: dict = {
     # a repository measures its own with `rite tokens --suggest-limits`
     # reproduce_timeout_s: a fix's command past it is killed with its children — a run that never
     # ends tells nothing, and held `rite reproduce --all` silent for half an hour
+    # review_parallel: reviewers per wave of /rite:review-all — each is a whole agent context
     "limits": {"read_kb": 8, "delegate_above_kb": 5000, "sweep_hits": 40, "inline_triage_max_output_kb": 7,
-               "reproduce_timeout_s": 300},
+               "reproduce_timeout_s": 300, "review_parallel": 4},
     "status": {"review_age_days": 7},
     "hooks": {"stop_check": False},
 }
@@ -235,6 +236,9 @@ def parse(root: Path, text: str) -> Config:
         limit = data["limits"][key]
         if isinstance(limit, bool) or not isinstance(limit, (int, float)) or limit <= 0:
             errors.append(f"[limits].{key} must be a number > 0")
+    cap = data["limits"]["review_parallel"]
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
+        errors.append("[limits].review_parallel must be an integer >= 1")
     if errors:
         raise ConfigError(f"{CONFIG_NAME}: " + "; ".join(errors))
     return Config(root=root, data=data)

@@ -399,7 +399,7 @@ class LegacyLayoutTest(FixtureCase):
         self.assertIn("ROMs originais", out)
 
 
-class BatchPlanTest(FixtureCase):
+class BatchCase(FixtureCase):
     def add(self, n: int, *, files: str, resources: str = "[]", deps: str = "[]", type_: str = "feature") -> str:
         item_id = f"BET-TASK-{n:02}"
         add_item(self.root / f"docs/rite/cycles/beta/{n:02}-t{n}.md",
@@ -417,6 +417,8 @@ class BatchPlanTest(FixtureCase):
     def plan(self, *targets: str, kind: str = "task") -> dict:
         return self.js("batch-plan", *targets, "--kind", kind, "--cycle", "beta")
 
+
+class BatchPlanTest(BatchCase):
     def test_serialized_resource_splits_waves(self):
         a = self.add(1, files="[src/a.py]", resources="[display]")
         b = self.add(2, files="[src/b.py]", resources="[display]")
@@ -468,6 +470,53 @@ class BatchPlanTest(FixtureCase):
         self.assertEqual([i["files"] for i in data["items"]], [["src/shared.py"], ["src/shared.py"]])
         self.assertEqual(data["waves"], [[ids[0]], [ids[1]]])
         self.assertIn("files: src/shared.py", data["items"][0]["conflicts"][ids[1]])
+
+
+class ReviewBatchPlanTest(BatchCase):
+    def done(self, n: int, *, files: str = "[src/x.py]", resources: str = "[]", deps: str = "[]",
+             type_: str = "feature") -> str:
+        item_id = f"BET-TASK-{n:02}"
+        text = task(item_id, f"T{n}", depends_on=deps, type_=type_, sot="/docs/plans/PLAN-alpha.md#1",
+                    status="done", extra=f"files: {files}\nresources: {resources}\n")
+        text = (text.replace("done_on: null", "done_on: 2026-10-01")
+                .replace("done_commit: null", "done_commit: abc1234")
+                .replace("reviewed_on: null", "reviewed_on: pending"))
+        add_item(self.root / f"docs/rite/cycles/beta/{n:02}-t{n}.md", text)
+        return item_id
+
+    def test_files_dependencies_and_closing_do_not_split_reviewers(self):
+        # reviewers edit nothing: what serializes executors does not serialize them
+        a = self.done(1, files="[src/lib/**]")
+        b = self.done(2, files="[src/lib/x.py]", deps="[BET-TASK-01]")
+        c = self.done(3, files="[]", type_="closing")
+        self.add(4, files="[src/d.py]")  # pending: not in the queue
+        data = self.plan("all", kind="review")
+        self.assertEqual(data["kind"], "review")
+        self.assertEqual(data["waves"], [[a, b, c]])
+        self.assertEqual(data["warnings"], [])
+
+    def test_a_serialized_resource_and_the_cap_split_waves(self):
+        ids = [self.done(n, resources="[display]" if n <= 2 else "[]") for n in range(1, 6)]
+        cfg = self.root / "rite.toml"
+        cfg.write_text(cfg.read_text(encoding="utf-8") + "\n[limits]\nreview_parallel = 2\n", encoding="utf-8")
+        data = self.plan("all", kind="review")
+        self.assertEqual(data["parallel_cap"], 2)
+        self.assertEqual(data["waves"], [[ids[0], ids[2]], [ids[1], ids[3]], [ids[4]]])
+        self.assertEqual(data["items"][0]["conflicts"], {ids[1]: ["resources: display"]})
+
+    def test_named_tasks_must_await_review(self):
+        a = self.done(1)
+        b = self.add(2, files="[src/b.py]")
+        self.assertEqual([i["id"] for i in self.plan(a, kind="review")["items"]], [a])
+        code, _, err = self.fx.rite("batch-plan", b, "--kind", "review", "--cycle", "beta")
+        self.assertEqual(code, 1)
+        self.assertIn(f"not awaiting review: {b}", err)
+
+    def test_an_empty_queue_selects_nothing(self):
+        self.add(1, files="[src/a.py]")
+        code, _, err = self.fx.rite("batch-plan", "all", "--kind", "review", "--cycle", "beta")
+        self.assertEqual(code, 1)
+        self.assertIn("no selectable review", err)
 
 
 class HookTest(FixtureCase):

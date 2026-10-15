@@ -11,6 +11,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `/rite:execute [cycle] [task]` | One task: resolve, read layers, do the work, verify each done criterion, gates, sweep. | work + `chore(rite): close` |
 | `/rite:execute-batch [cycle] [N\|IDs] [--plan]` | N tasks (default 2, max 8) in waves built by `rite batch-plan`; `rite-worker` agents edit in parallel, the main thread commits serially. `--plan` writes planning fields only (`files:`, `resources:`). | per item: work + close |
 | `/rite:review [cycle] [task]` | Delegates to the `rite-reviewer` agent in a clean context; four universal questions + the profile's phase checks; opens fixes. | `chore(rite): review <ID> (…)` — also with no finding |
+| `/rite:review-all [cycle] [IDs] [--plan]` | The review queue now, one fresh `rite-reviewer` per task: waves from `rite batch-plan all --kind review` (only shared serialized resources and `[limits].review_parallel` split them), findings screened as in `/rite:review`, one fix per root cause across reviews, bookkeeping serial per task. `--plan` shows the waves. | per task: `chore(rite): review <ID> (…)` |
 | `/rite:fix [cycle] [fix]` | Reproduce evidence → root cause → repair (in the generator if output is generated) → verify → sweep. Stale if the symptom is gone. | work + sweep + close, or `stale` |
 | `/rite:fix-all [cycle] [IDs] [--plan]` | All fixes open now: inline triage with `rite reproduce --all`, a `rite-reproducer` only for the fixes it cannot decide, then waves of `rite-worker`. `--plan` triages dry: verdicts reported, nothing marked or logged. | per item |
 
@@ -30,7 +31,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 
 | Agent | Tools | Used by |
 | --- | --- | --- |
-| `rite-reviewer` | Read, Grep, Glob, Bash — never edits | `/rite:review` |
+| `rite-reviewer` | Read, Grep, Glob, Bash — never edits | `/rite:review`, `/rite:review-all` |
 | `rite-worker` | edits; no git state, no bookkeeping | `/rite:execute-batch`, `/rite:fix-all` |
 | `rite-reproducer` | Read, Grep, Glob, Bash — never edits | `/rite:fix-all` triage residue |
 
@@ -55,7 +56,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `mark ID STATUS [--reason R]`, `mark FIX blocked --reason R --unblocked-by CMD`, `mark-reviewed ID [--fixes …]`, `mark-stale FIX --reason …` | other transitions; a blocked fix names the command that unblocks it (`unblocked_by`), and leaving `blocked` clears it |
 | `set ID [--files a,b] [--resources r] [--depends-on IDs]`, `set-cycle [--order IDs] [--ticket K] [--plan P] [--pitfalls F]` | the planning fields of an item, the cycle's order, ticket, plan and pitfalls file — the only fields written outside a transition; `''` empties one |
 | `sync`, `check [--quick]`, `status` | views (rendered from `progress.json` / `fixes.json`, arrays put in execution order), validation (links and anchors of items, views, profile and a live cycle's plan), summary; `sync`/`check`/`relink` take `--include-archived` |
-| `batch-plan N\|IDs\|all [--kind task\|fix]` | inventory, conflict matrix, waves |
+| `batch-plan N\|IDs\|all [--kind task\|fix\|review]` | inventory, conflict matrix, waves; `all` for fixes and reviews; a review wave splits only on a shared serialized resource and caps at `[limits].review_parallel` |
 | `new-cycle NAME --prefix X [--plan P] [--copy-plan] [--pitfalls-from CYCLE\|FILE] [--ticket K] [--local]`, `archive NAME [--dry-run]`, `publish NAME` | lifecycle; `archive --json` lists in `unrewritten` (`path`, `line`, `text`) the tracked lines that still name the old folder (bare paths, comments, code), which it never rewrites; `publish` makes a local cycle tracked |
 | `anchors FILE`, `stats NAME` | plan anchors for `source_of_truth` (GitHub's slugs, code spans kept); retro numbers |
 | `phase [name] [--phase P]` | one phase of a cycle, finished or in progress (default: the last phase with a task done): its tasks in ID order with status, `done_commit` and the last 40 lines of their Execution Log, the fixes that go back to them (fixes of fixes included), what is pending or blocked and on what, `finished`, and the suggested next command. Gate results are not data: they are in the logs. Read-only |

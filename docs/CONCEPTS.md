@@ -10,6 +10,7 @@ plan ──/rite:plan-to-tasks──► tasks (one file each) + progress.md + pr
                                    │
    /rite:review ─► rite-reviewer agent measures (does not read) the oldest task awaiting review
                    ─► fixes + reviewed_on: <date>, one commit
+   /rite:review-all ─► the whole queue, one reviewer per task, in parallel waves
                                    │
    /rite:fix ─► reproduce evidence ─► repair ─► sweep ─► close        (or: stale, symptom gone)
    /rite:fix-all ─► inline triage, agents for the residue, then waves

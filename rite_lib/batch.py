@@ -3,6 +3,9 @@
 A batch is not "run everything in parallel". Two items go in the same wave only when they share no
 file, no serialized resource and no dependency. The graph speaks of logical dependency, the matrix of
 physical contention — when they disagree, the matrix wins.
+
+A review batch differs: its reviewers edit nothing, so files and dependencies cannot collide — only a
+serialized resource their commands share — and `[limits].review_parallel` caps a wave.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ from pathlib import Path
 from . import markdown
 from .guard import glob_regex
 from .model import Cycle, Item, Project, RiteError, display
-from .selection import SATISFIED, open_fixes
+from .selection import SATISFIED, open_fixes, review_queue
 
 _CODE_SPAN = re.compile(r"`([^`\s]+)`")
 _BARE_BULLET = re.compile(r"(?m)^\s*[-*]\s+([^\s`\[(]+)")
@@ -122,6 +125,8 @@ def serialized_names(project: Project, cycle: Cycle) -> set[str]:
 
 def select(cycle: Cycle, kind: str, count: int | None, ids: list[str]) -> list[Item]:
     index = cycle.by_id()
+    if kind == "review":
+        return _select_reviews(cycle, count, ids)
     if ids:
         missing = [i for i in ids if i not in index]
         if missing:
@@ -151,7 +156,24 @@ def select(cycle: Cycle, kind: str, count: int | None, ids: list[str]) -> list[I
     return chosen
 
 
-def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
+def _select_reviews(cycle: Cycle, count: int | None, ids: list[str]) -> list[Item]:
+    """The review queue now, in execution order: tasks done since are not in it, or the batch never ends."""
+    queue = review_queue(cycle)
+    if not ids:
+        return queue[:count] if count else queue
+    queued = {t.id for t in queue}
+    index = cycle.by_id()
+    missing = [i for i in ids if i not in index]
+    if missing:
+        raise RiteError(f"not in cycle {cycle.name}: {', '.join(missing)}")
+    waiting = [i for i in ids if i not in queued]
+    if waiting:
+        raise RiteError(f"not awaiting review: {', '.join(waiting)} (see: rite.py next review)")
+    return [t for t in queue if t.id in set(ids)]
+
+
+def plan(project: Project, cycle: Cycle, items: list[Item], *, kind: str | None = None) -> dict:
+    review = kind == "review"
     serial = serialized_names(project, cycle)
     planned = []
     for it in items:
@@ -164,15 +186,18 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
         unknown = [r for r in p.resources if r not in serial]
         if unknown:
             warnings.append(f"{p.item.id}: resources {unknown} are not declared serialized (ignored for conflicts)")
-        if not p.files:
+        if not p.files and not review:
             warnings.append(f"{p.item.id}: no predicted files — declare `files:` in its frontmatter; "
                             "until then it runs alone")
         blocking = [d for d in p.item.depends_on if d not in in_batch and
                     (d not in cycle.by_id() or cycle.by_id()[d].status not in SATISFIED)]
-        if blocking:
+        if blocking and not review:
             warnings.append(f"{p.item.id}: depends on {blocking}, outside the batch and not done")
 
     def conflict(a: Planned, b: Planned) -> list[str]:
+        if review:  # a reviewer edits nothing: only a resource its commands hold can collide
+            res = sorted(set(a.resources) & set(b.resources) & serial)
+            return ["resources: " + ", ".join(res)] if res else []
         why = []
         if a.item.fields.get("type") == "closing" or b.item.fields.get("type") == "closing":
             why.append("closing task runs alone")
@@ -207,18 +232,20 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
         ordered.append(ready)
         remaining.remove(ready)
 
+    cap = int(project.cfg["limits"]["review_parallel"]) if review else None
     waves: list[list[Planned]] = []
     for p in ordered:
-        floor = max((in_batch[d].wave + 1 for d in p.item.depends_on if d in in_batch), default=0)
+        floor = 0 if review else max((in_batch[d].wave + 1 for d in p.item.depends_on if d in in_batch), default=0)
         w = floor
-        while w < len(waves) and any(q.item.id in p.conflicts for q in waves[w]):
+        while w < len(waves) and (any(q.item.id in p.conflicts for q in waves[w])
+                                  or (cap is not None and len(waves[w]) >= cap)):
             w += 1
         if w == len(waves):
             waves.append([])
         p.wave = w
         waves[w].append(p)
     # closing tasks go last, after every other wave
-    closers = [p for p in planned if p.item.fields.get("type") == "closing"]
+    closers = [] if review else [p for p in planned if p.item.fields.get("type") == "closing"]
     if closers:
         closer_ids = {c.item.id for c in closers}
         others = [[p for p in wave if p.item.id not in closer_ids] for wave in waves]
@@ -230,7 +257,7 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
     root = project.root
     return {
         "cycle": cycle.name,
-        "kind": items[0].kind if items else None,
+        "kind": kind or (items[0].kind if items else None),
         "items": [{
             "id": p.item.id, "title": p.item.title, "path": display(root, p.item.path), "repo": project.repo_of(p.item),
             "type": p.item.fields.get("type"), "severity": p.item.fields.get("severity"),
@@ -239,6 +266,7 @@ def plan(project: Project, cycle: Cycle, items: list[Item]) -> dict:
         } for p in planned],
         "waves": [[p.item.id for p in wave] for wave in waves],
         "serialized_resources": sorted(serial),
+        "parallel_cap": cap,
         "warnings": warnings,
     }
 

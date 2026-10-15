@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`/rite:review-all` reviews the whole queue of a cycle**: every task awaiting review when it is
+  called gets its own fresh `rite-reviewer`, in parallel waves; findings are screened as in
+  `/rite:review`, one fix is opened per root cause across reviews, and each task gets its own review
+  commit. Reviewers edit nothing, so only a shared serialized resource sends two of them to different
+  waves; `[limits].review_parallel` (default `4`, `1` = one at a time) caps a wave.
+  `rite batch-plan --kind review` builds those waves, and `all` now applies to reviews too.
+
 ## [0.19.0] — 2026-10-14
 
 ### Added
