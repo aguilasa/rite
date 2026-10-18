@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`new-cycle --pitfalls-from` titles the copy with the new cycle** (#19): the copy kept the source
+  cycle's `# …` heading, so the new pitfalls file named the old cycle. The template's heading now
+  replaces it, and the entries are copied as before.
+
 ## [0.20.0] — 2026-10-15
 
 ### Added

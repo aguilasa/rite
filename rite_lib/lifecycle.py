@@ -79,7 +79,7 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
             # a local template override may predate the {{phase_checks}} placeholder
             text = text.replace("## Phase-specific checks", "## " + project.section_title("phase_checks"))
         if tpl == "pitfalls.md" and pitfalls_source:
-            text = pitfalls_source.read_text(encoding="utf-8")
+            text = _retitle(pitfalls_source.read_text(encoding="utf-8"), text)
         if tpl == "progress.md":
             text = text.replace("## Dependency graph", "## " + project.section_title("dependency_graph"))
             # the template's frontmatter seeds progress.json; ticket and local are set, not templated:
@@ -107,6 +107,22 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
             "pitfalls_copied_from": display(project.root, pitfalls_source) if pitfalls_source else None,
             "created": [display(project.root, p) for p in created], "commit": sha,
             "ignored": _ignored(project, local_paths) if cycle.local else None}
+
+
+def _retitle(source: str, rendered: str) -> str:
+    """The source's text under the rendered template's title (#19): a copied pitfalls file kept the old
+    cycle's `# …` heading. A source without one gets the title on top; a template without one changes nothing."""
+    title = next((n for n, level, _ in markdown.heading_lines(rendered) if level == 1), None)
+    if title is None:
+        return source
+    title_line = rendered.splitlines()[title - 1]
+    lines = source.splitlines(keepends=True)
+    old = next((n for n, level, _ in markdown.heading_lines(source) if level == 1), None)
+    if old is None:
+        return title_line + "\n\n" + source
+    ending = lines[old - 1][len(lines[old - 1].rstrip("\r\n")):]
+    lines[old - 1] = title_line + ending
+    return "".join(lines)
 
 
 def _pitfalls_source(project: Project, source: str) -> Path:

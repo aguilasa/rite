@@ -231,8 +231,9 @@ class PitfallsCarryOverTest(FixtureCase):
         write(self.root / "docs/rite/profiles/alpha.pitfalls.md", self.KEPT)
         res = self.js("new-cycle", "gamma", "--prefix", "GAM", "--pitfalls-from", "alpha", "--commit")
         self.assertEqual(res["pitfalls_copied_from"], "docs/rite/profiles/alpha.pitfalls.md")
+        # the entries carry over under the new cycle's title, not the old one (#19)
         self.assertEqual((self.root / "docs/rite/profiles/gamma.pitfalls.md").read_text(encoding="utf-8"),
-                         self.KEPT)
+                         self.KEPT.replace("# Pitfalls — alpha", "# Measured pitfalls — gamma"))
         self.assertIn("docs/rite/profiles/gamma.pitfalls.md", res["created"])
         res = self.js("new-cycle", "delta", "--prefix", "DEL", "--pitfalls-from",
                       "docs/rite/profiles/alpha.pitfalls.md")
@@ -241,6 +242,13 @@ class PitfallsCarryOverTest(FixtureCase):
         self.assertEqual(code, 1)
         self.assertIn("--pitfalls-from: nope not found", err)
         self.assertFalse((self.root / "docs/rite/cycles/eps").exists())
+
+    def test_a_source_without_a_title_or_with_one_in_code_gets_the_new_title(self):
+        fenced = "```\n# not a title\n```\n\n### Kept\n"
+        write(self.root / "docs/rite/profiles/alpha.pitfalls.md", fenced)
+        self.js("new-cycle", "gamma", "--prefix", "GAM", "--pitfalls-from", "alpha")
+        self.assertEqual((self.root / "docs/rite/profiles/gamma.pitfalls.md").read_text(encoding="utf-8"),
+                         "# Measured pitfalls — gamma\n\n" + fenced)
 
     def test_set_cycle_points_at_a_pitfalls_file(self):
         write(self.root / "docs/rite/shared.pitfalls.md", self.KEPT)
