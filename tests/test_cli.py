@@ -519,6 +519,76 @@ class ReviewBatchPlanTest(BatchCase):
         self.assertIn("no selectable review", err)
 
 
+class TimingTest(FixtureCase):
+    """Active execution time of tasks and fixes, and review time of tasks, kept in the cycle's JSON."""
+
+    T0 = "2026-10-18T10:00:00-03:00"
+
+    def at(self, seconds: int) -> str:
+        import datetime as dt
+        return (dt.datetime.fromisoformat(self.T0) + dt.timedelta(seconds=seconds)).isoformat()
+
+    def run_at(self, seconds: int, *args) -> dict:
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"RITE_NOW": self.at(seconds)}):
+            return self.js(*args)
+
+    def commit_at(self, seconds: int, rel: str) -> str:
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"GIT_COMMITTER_DATE": self.at(seconds)}):
+            return self.fx.work_commit(rel, "x\n", "feat: work")
+
+    def entry(self, item_id: str) -> dict:
+        state = "progress.json" if "-TASK-" in item_id else "fixes.json"
+        data = json.loads((self.root / "docs/rite/cycles/alpha" / state).read_text(encoding="utf-8"))
+        return next(e for e in data["tasks" if state == "progress.json" else "fixes"] if e["id"] == item_id)
+
+    def test_a_task_counts_from_its_claim_to_its_work_commit_and_its_review(self):
+        self.run_at(0, "begin", "task", "--cycle", "alpha")
+        self.assertEqual(self.entry("ALP-TASK-01")["active_since"], self.at(0))
+        sha = self.commit_at(90, "src/a.py")
+        self.run_at(500, "finish", "ALP-TASK-01", "--sha", sha)  # a batch finishes later: the commit ends it
+        e = self.entry("ALP-TASK-01")
+        self.assertEqual((e["started_at"], e["active_s"], e["active_since"], e["finished_at"]),
+                         (self.at(0), 90, None, self.at(90)))
+
+        self.run_at(1000, "begin", "review", "--cycle", "alpha", "--no-claim")
+        self.assertNotIn("review_started_at", self.entry("ALP-TASK-01"))
+        self.run_at(1000, "begin", "review", "--cycle", "alpha")
+        self.run_at(1300, "mark-reviewed", "ALP-TASK-01")
+        self.assertEqual(self.entry("ALP-TASK-01")["review_s"], 300)
+        self.assertEqual(self.check_errors(), [])
+
+        stats = self.js("stats", "alpha")["durations"]
+        self.assertEqual(stats["task_active_s"], {"measured": 1, "median": 90, "max": 90, "total": 90})
+        self.assertEqual(stats["task_review_s"]["total"], 300)
+
+    def test_a_pause_does_not_count_and_a_stale_fix_is_measured(self):
+        fix = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T",
+                      "--severity", "low")["id"]
+        self.ok("commit-new", fix)
+        self.run_at(0, "begin", "fix", "--cycle", "alpha", "--id", fix)
+        self.run_at(60, "mark", fix, "blocked", "--reason", "no device", "--unblocked-by", "true")
+        self.run_at(300, "mark", fix, "pending", "--reason", "device back")
+        self.run_at(600, "begin", "fix", "--cycle", "alpha", "--id", fix)
+        self.run_at(660, "mark-stale", fix, "--reason", "gone")
+        e = self.entry(fix)
+        self.assertEqual((e["started_at"], e["active_s"], e["finished_at"]), (self.at(0), 120, self.at(660)))
+
+    def test_an_item_older_than_the_fields_gets_nothing_invented(self):
+        set_fields(self.root / "docs/rite/cycles/alpha/01-harness.md", {"status": "in-progress"})
+        sha = self.commit_at(90, "src/a.py")
+        self.run_at(100, "finish", "ALP-TASK-01", "--sha", sha)
+        e = self.entry("ALP-TASK-01")
+        self.assertNotIn("active_s", e)
+        self.assertNotIn("finished_at", e)
+
+    def test_check_flags_a_period_left_open(self):
+        self.run_at(0, "begin", "task", "--cycle", "alpha")
+        set_fields(self.root / "docs/rite/cycles/alpha/01-harness.md", {"status": "pending"})
+        self.assertTrue(any("active_since set but status is pending" in e for e in self.check_errors()))
+
+
 class HookTest(FixtureCase):
     def hook(self, script: str, event: dict) -> subprocess.CompletedProcess:
         return subprocess.run([sys.executable, str(ROOT / "hooks" / script)], input=json.dumps(event),

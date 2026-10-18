@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Time spent on each item, in the cycle's JSON**: tasks and fixes record `started_at`,
+  `active_s` and `finished_at` — active time, the periods spent `in-progress`, so a pause while
+  blocked does not count; `close` ends it at the work commit's time. Tasks also record
+  `review_started_at` (set by `rite begin review`, which `/rite:review-all` now calls per task) and
+  `review_s` (written by `mark-reviewed`). `rite stats` adds `durations` (median, max, total) for
+  task and fix execution and task review; `rite check` flags malformed time fields and a period left
+  open on an item no longer in progress. Items older than these fields are not estimated.
+
 ## [0.20.1] — 2026-10-18
 
 ### Fixed

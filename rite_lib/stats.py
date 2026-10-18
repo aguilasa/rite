@@ -17,6 +17,28 @@ def _days(a, b) -> int | None:
         return None
 
 
+def _spread(values: list[int]) -> dict:
+    return {"measured": len(values), "median": statistics.median(values) if values else None,
+            "max": max(values) if values else None, "total": sum(values)}
+
+
+def _active(items: list[Item]) -> list[int]:
+    """Active seconds of the closed items that measured them: one closed with a period still open, or
+    older than the time fields, is left out rather than guessed."""
+    return [int(i.fields["active_s"]) for i in items
+            if i.status in ("done", "stale") and i.fields.get("finished_at")
+            and not i.fields.get("active_since") and isinstance(i.fields.get("active_s"), int)]
+
+
+def _clock(seconds) -> str:
+    if seconds is None:
+        return "—"
+    seconds = int(seconds)
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}h {m:02}m" if h else (f"{m}m {s:02}s" if m else f"{s}s")
+
+
 def root_task(fix: Item, index: dict[str, Item]) -> Item | None:
     """The task a fix goes back to: fixes of fixes count against the root task."""
     origin = index.get(str(fix.fields.get("origin")))
@@ -63,6 +85,12 @@ def cycle_stats(project: Project, cycle: Cycle) -> dict:
             "max": max(latency) if latency else None,
             "reviewed": len(latency),
         },
+        "durations": {
+            "task_active_s": _spread(_active(tasks)),
+            "fix_active_s": _spread(_active(fixes)),
+            "task_review_s": _spread([int(t.fields["review_s"]) for t in tasks
+                                      if isinstance(t.fields.get("review_s"), int)]),
+        },
         "fix_files": [display(project.root, f.path) for f in fixes],
         "items_without_log": [i.id for i in cycle.items
                               if i.status in ("done", "stale")
@@ -83,6 +111,11 @@ def render_text(s: dict) -> str:
         f"  review latency (days): median {s['review_latency_days']['median']}, "
         f"max {s['review_latency_days']['max']} over {s['review_latency_days']['reviewed']} reviews",
     ]
+    for key, label in (("task_active_s", "task execution"), ("fix_active_s", "fix execution"),
+                       ("task_review_s", "task review")):
+        d = s["durations"][key]
+        lines.append(f"  {label} time: median {_clock(d['median'])}, max {_clock(d['max'])}, "
+                     f"total {_clock(d['total'])} over {d['measured']} measured")
     if s["items_without_log"]:
         lines.append("  closed without execution log: " + ", ".join(s["items_without_log"]))
     return "\n".join(lines)

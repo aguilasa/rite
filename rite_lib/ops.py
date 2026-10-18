@@ -24,6 +24,44 @@ def is_bookkeeping(subject: str) -> bool:
     return bool(_BOOKKEEPING_RE.search(subject))
 
 
+# --- time spent ------------------------------------------------------------------
+def now() -> str:
+    """The current time as ISO 8601 with offset; `RITE_NOW` overrides it (tests)."""
+    fixed = os.environ.get("RITE_NOW")
+    if fixed:
+        return dt.datetime.fromisoformat(fixed).isoformat(timespec="seconds")
+    return dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _seconds(start, end) -> int | None:
+    try:
+        return max(0, int((dt.datetime.fromisoformat(str(end)) - dt.datetime.fromisoformat(str(start)))
+                          .total_seconds()))
+    except (TypeError, ValueError):
+        return None
+
+
+def timing(item: Item, status: str, at: str) -> dict:
+    """The time fields a move to ``status`` at ``at`` writes. Only the periods spent `in-progress`
+    count: `active_since` opens one, leaving `in-progress` adds it to `active_s`. An item that never
+    opened a period (one older than these fields) gets nothing invented."""
+    f = item.fields
+    updates: dict = {}
+    if f.get("active_since") and status != "in-progress":
+        spent = _seconds(f["active_since"], at)
+        updates["active_s"] = int(f.get("active_s") or 0) + (spent or 0)
+        updates["active_since"] = None
+    elif status == "in-progress" and not f.get("active_since"):
+        updates["active_since"] = at
+        if not f.get("started_at"):
+            updates["started_at"] = at
+        if f.get("active_s") is None:
+            updates["active_s"] = 0
+    if status in ("done", "stale") and (f.get("active_since") or f.get("started_at")):
+        updates["finished_at"] = at
+    return updates
+
+
 # --- commit messages -----------------------------------------------------------
 def commit_refs(project: Project, cycle: Cycle, item: Item | None = None) -> dict:
     """How a commit of this cycle names what it belongs to — the one place that decides it.
@@ -375,6 +413,11 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     date = gitutil.commit_date(root, full)
     files = gitutil.changed_files(root, full)
     updates = {"status": "done", "done_on": date, "done_commit": short}
+    # the work commit ends the work: in a batch the `finish` calls come later, one after another
+    at = gitutil.commit_time(root, full)
+    if item.fields.get("active_since") and (_seconds(item.fields["active_since"], at) or 0) <= 0:
+        at = now()  # a commit older than the period (a rebind, a clock skew) cannot end it
+    updates.update(timing(item, "done", at))
     if item.kind == "task":
         updates["reviewed_on"] = "pending"
     label = project.repo_label(item)
@@ -423,7 +466,7 @@ def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: st
     if not reason.strip():
         raise RiteError("close --no-repo needs --reason: what was done and where (which documents)")
     date = dt.date.today().isoformat()
-    updates = {"status": "done", "done_on": date, "done_commit": NO_COMMIT}
+    updates = {"status": "done", "done_on": date, "done_commit": NO_COMMIT, **timing(item, "done", now())}
     if item.kind == "task":
         updates["reviewed_on"] = "pending"
     _write_item(item, updates, f"- **Closed** — no work commit ({date}): {reason.strip()}",
@@ -451,7 +494,7 @@ def mark(project: Project, cycle: Cycle, item: Item, status: str, *, reason: str
                         "environment is there. A block with no exit test is a lost item: nothing re-checks it")
     if blocked_fix and not reason.strip():
         raise RiteError("a blocked fix needs --reason: what is missing, and the SHA of any partial work")
-    updates: dict = {"status": status}
+    updates: dict = {"status": status, **timing(item, status, now())}
     if blocked_fix:
         updates["unblocked_by"] = unblocked_by
     elif item.kind == "fix" and item.fields.get("unblocked_by") is not None:
@@ -482,12 +525,25 @@ def mark_reviewed(project: Project, cycle: Cycle, item: Item, *, fixes: list[str
     date = date or dt.date.today().isoformat()
     head = _head(project, item)
     log = f"- **Reviewed** ({date}) at `{head}`: " + (", ".join(fixes) if fixes else "no finding")
-    _write_item(item, {"reviewed_on": date, "review_commit": head}, log,
-                project.section_titles("execution_log"))
+    updates = {"reviewed_on": date, "review_commit": head}
+    spent = _seconds(item.fields.get("review_started_at"), now())
+    if spent is not None:
+        updates["review_s"] = spent
+    _write_item(item, updates, log, project.section_titles("execution_log"))
     detail = f" ({len(fixes)} fix{'es' if len(fixes) != 1 else ''}: {', '.join(fixes)})" if fixes else " (no finding)"
     result = _finish(project, cycle, [item.path, *(f.path for f in fix_items)],
                      bookkeeping_message(project, "review", item.id, detail, cycle=cycle), commit)
-    return {"id": item.id, "reviewed_on": date, "review_commit": head, "fixes": fixes, **result}
+    return {"id": item.id, "reviewed_on": date, "review_commit": head, "fixes": fixes,
+            "review_s": updates.get("review_s"), **result}
+
+
+def mark_review_started(project: Project, cycle: Cycle, item: Item) -> str:
+    """Open a review of a task: its latest attempt is what `review_s` measures, because an interrupted
+    review is redone from scratch by a fresh agent. Writes the JSON and the views; commits nothing."""
+    at = now()
+    _write_item(item, {"review_started_at": at}, None, project.section_titles("execution_log"))
+    views.sync(project, _reload(project, cycle))
+    return at
 
 
 def mark_stale(project: Project, cycle: Cycle, item: Item, *, reason: str, commit: bool = True) -> dict:
@@ -502,7 +558,7 @@ def mark_stale(project: Project, cycle: Cycle, item: Item, *, reason: str, commi
         raise RiteError("mark-stale needs --reason: what was measured and why the symptom is gone")
     today = dt.date.today().isoformat()
     head = _head(project, item)
-    _write_item(item, {"status": "stale", "done_on": today, "done_commit": head},
+    _write_item(item, {"status": "stale", "done_on": today, "done_commit": head, **timing(item, "stale", now())},
                 f"- **Stale** ({today}) at `{head}`: {reason}", project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "stale", item.id, cycle=cycle), commit)
     return {"id": item.id, "status": "stale", **result}

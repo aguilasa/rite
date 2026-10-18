@@ -63,6 +63,13 @@ keep their history (`git mv`).
 - **Vocabulary is closed**: task status `pending | in-progress | done | blocked | skipped`; fix status
   `pending | in-progress | done | blocked | stale`; severity `critical | high | medium | low`;
   `reviewed_on` is `null` (not reviewable), `pending`, or a date.
+- **Time spent is active time.** The CLI stamps each transition (ISO 8601 with offset): `started_at`
+  is the first move to `in-progress`, `active_since` the period running now, `active_s` the seconds
+  of the closed periods — a pause (`blocked`, back to `pending`) does not count — and `finished_at`
+  its end: the work commit's time for `close` (in a batch the `finish` calls come later), the call's
+  for `mark-stale` and `--no-repo`. A task's `review_started_at` is set by `rite begin review` (each
+  attempt restarts it: a review cut short is redone from scratch) and `mark-reviewed` writes `review_s`.
+  An item older than these fields gets nothing invented; `rite stats` counts only what was measured.
 - **A blocked task waits on another task; a blocked fix waits on the environment** (an emulator, a
   credential, hardware), which Rite does not know. So a blocked fix names in `unblocked_by` the
   command that passes once the environment is there: `rite mark <FIX> blocked --reason "<what is

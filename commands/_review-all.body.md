@@ -23,7 +23,8 @@ of the queue reviewed.
    (`parallel_cap`). One wave of one task each means the run is sequential: say why (cap `1`, or
    the resource each pair shares). With `--plan`, show items, conflicts and waves, and stop: nothing
    is written.
-3. **Each wave**: one fresh `rite:rite-reviewer` per task, **in parallel, in one message** — never this
+3. **Each wave**: `rite begin review --cycle <cycle> --id <ID> --json` per task — it opens the
+   review's clock (`review_started_at`) — then one fresh `rite:rite-reviewer` per task, **in parallel, in one message** — never this
    context. Give each the facts `/rite:review` gives: the payload of `rite context <ID> --json`, the
    repository it works in (`item.repo_dir` when given, else the root), the CLI invocation, the task's
    `done_commit`, and the instruction "Review this task per your procedure and return findings in your

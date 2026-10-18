@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 import shlex
 from dataclasses import dataclass
@@ -327,6 +328,7 @@ class Checker:
                 self.err(item.path, f"origin {origin or '(empty)'} "
                          + (f"belongs to cycle {where.name}" if where else "does not exist"))
             self.check_unblocked_by(item)
+        self.check_timing(item)
 
         for dep in item.depends_on:
             if dep == item.id:
@@ -395,6 +397,24 @@ class Checker:
         elif not cycle.local and ignored:
             self.warn(cycle.progress_path, "git ignores this cycle's folder but it is not 'local: true'; "
                       "bookkeeping commits will fail (set local: true, or stop ignoring it)")
+
+    def check_timing(self, item: Item) -> None:
+        """The time fields only the CLI writes; an open period on an item not in progress means a status
+        changed by hand, and its time would be counted to the next transition."""
+        f = item.fields
+        for key in ("started_at", "active_since", "finished_at", "review_started_at"):
+            if f.get(key) is not None:
+                try:
+                    dt.datetime.fromisoformat(str(f[key]))
+                except ValueError:
+                    self.err(item.path, f"{key} {f[key]!r} is not an ISO 8601 timestamp")
+        for key in ("active_s", "review_s"):
+            value = f.get(key)
+            if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
+                self.err(item.path, f"{key} {value!r} must be a whole number of seconds >= 0")
+        if f.get("active_since") and item.status != "in-progress":
+            self.err(item.path, f"active_since set but status is {item.status}: the status changed without "
+                     "the CLI (rite mark / close / mark-stale)")
 
     def check_review_state(self, item: Item) -> None:
         rv = item.fields.get("reviewed_on")

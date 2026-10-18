@@ -45,6 +45,11 @@ def commit_date(root: Path, sha: str) -> str:
     return run(root, "show", "-s", "--format=%cs", sha).strip()
 
 
+def commit_time(root: Path, sha: str) -> str:
+    """Committer date as ISO 8601 with its offset."""
+    return run(root, "show", "-s", "--format=%cI", sha).strip()
+
+
 def subject(root: Path, sha: str) -> str:
     return run(root, "show", "-s", "--format=%s", sha).strip()
 

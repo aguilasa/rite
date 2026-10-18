@@ -76,8 +76,9 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
     """Resolve cycle and item, take the item, and hand back everything the first turn needed.
 
     Idempotent: an item already in progress is returned unchanged, so a resumed run does not rewrite
-    files or add a second log line. ``claim=False`` takes nothing: a run that only plans must not make
-    its item the one the next run resumes first.
+    files or add a second log line. A review is the exception: each begin restarts `review_started_at`,
+    since a review cut short is redone from scratch. ``claim=False`` takes nothing: a run that only
+    plans must not make its item the one the next run resumes first.
     """
     cycle = project.resolve_cycle(cycle_name)
     index = cycle.by_id()
@@ -101,6 +102,9 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
     taken = False
     if claim and kind in ("task", "fix") and item.status == "pending":
         ops.mark(project, cycle, item, "in-progress")
+        taken = True
+    elif claim and kind == "review" and item.status == "done" and item.fields.get("reviewed_on") == "pending":
+        ops.mark_review_started(project, cycle, item)  # the start of `review_s`
         taken = True
     repo_dir = project.work_dir(item)
     return {
