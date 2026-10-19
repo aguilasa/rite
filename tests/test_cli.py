@@ -589,6 +589,89 @@ class TimingTest(FixtureCase):
         self.assertTrue(any("active_since set but status is pending" in e for e in self.check_errors()))
 
 
+class DeleteTest(FixtureCase):
+    """`rite delete`: an item created by mistake goes, and its ID is never handed out again."""
+
+    ALPHA = "docs/rite/cycles/alpha"
+
+    def state(self, name: str = "progress.json") -> dict:
+        return json.loads((self.root / self.ALPHA / name).read_text(encoding="utf-8"))
+
+    def refused(self, *args) -> str:
+        code, _, err = self.fx.rite("delete", *args)
+        self.assertEqual(code, 1)
+        return err
+
+    def test_a_pending_task_goes_with_its_file_and_leaves_its_id(self):
+        res = self.js("delete", "ALP-TASK-03", "--reason", "duplicate of ALP-TASK-02")
+        self.assertFalse((self.root / self.ALPHA / "03-close-phase.md").exists())
+        self.assertNotIn("ALP-TASK-03", [t["id"] for t in self.state()["tasks"]])
+        self.assertEqual(self.state()["deleted"][0]["id"], "ALP-TASK-03")
+        self.assertEqual(self.log(1), ["chore(rite): delete ALP-TASK-03 (duplicate of ALP-TASK-02)"])
+        self.assertEqual(self.fx.git("status", "--porcelain"), "")
+        self.assertEqual(res["commit"], self.fx.git("rev-parse", "--short", "HEAD").strip())
+        self.assertEqual(self.check_errors(), [])
+        again = self.js("new-task", "--cycle", "alpha", "--title", "Again", "--type", "feature",
+                        "--phase", "2", "--source-of-truth", "/docs/plans/PLAN-alpha.md#3")
+        self.assertEqual(again["id"], "ALP-TASK-04")
+
+    def test_work_already_done_or_started_is_given_up_not_deleted(self):
+        self.js("begin", "task", "--cycle", "alpha")
+        self.assertIn("mark it skipped", self.refused("ALP-TASK-01", "--reason", "x"))
+        fix = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T",
+                      "--severity", "low")["id"]
+        self.ok("commit-new", fix)
+        self.ok("mark-stale", fix, "--reason", "gone")
+        self.assertIn("mark-stale it", self.refused(fix, "--reason", "x"))
+
+    def test_dependents_detach_but_an_origin_and_a_link_always_block(self):
+        err = self.refused("ALP-TASK-02", "--reason", "x")
+        self.assertIn("ALP-TASK-03 depends_on ALP-TASK-02", err)
+        plan = self.js("delete", "ALP-TASK-02", "--dry-run")
+        self.assertFalse(plan["eligible"])
+        self.assertEqual(self.fx.git("status", "--porcelain"), "")
+
+        fix = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-02", "--title", "T",
+                      "--severity", "low")["id"]
+        self.ok("commit-new", fix)
+        self.assertIn(f"{fix} has origin ALP-TASK-02", self.refused("ALP-TASK-02", "--reason", "x", "--detach"))
+        self.js("delete", fix, "--reason", "opened by mistake")  # never committed work: it goes first
+
+        note = self.root / self.ALPHA / "01-harness.md"
+        note.write_text(note.read_text(encoding="utf-8") + "\nSee [the report](02-report.md).\n", encoding="utf-8")
+        self.assertIn(f"{self.ALPHA}/01-harness.md:", self.refused("ALP-TASK-02", "--reason", "x", "--detach"))
+        note.write_text(note.read_text(encoding="utf-8").replace("See [the report](02-report.md).", ""),
+                        encoding="utf-8")
+        self.fx.git("commit", "-qam", "docs: drop link")
+
+        self.js("delete", "ALP-TASK-02", "--reason", "merged into ALP-TASK-01", "--detach")
+        self.assertEqual(next(t for t in self.state()["tasks"] if t["id"] == "ALP-TASK-03")["depends_on"], [])
+        self.assertEqual(self.check_errors(), [])
+
+    def test_a_fix_never_committed_is_removed_and_its_number_kept(self):
+        fix = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T",
+                      "--severity", "low")["id"]
+        self.js("delete", fix, "--reason", "created by mistake")
+        self.assertEqual(self.state("fixes.json")["deleted"][0]["id"], fix)
+        nxt = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "U",
+                      "--severity", "low")["id"]
+        self.assertNotEqual(nxt, fix)
+
+    def test_a_local_cycle_writes_and_commits_nothing(self):
+        set_fields(self.root / self.ALPHA / "progress.md", {"local": True})
+        res = self.js("delete", "ALP-TASK-03", "--reason", "dup")
+        self.assertIsNone(res["commit"])
+        self.assertFalse((self.root / self.ALPHA / "03-close-phase.md").exists())
+
+    def test_a_reason_is_required_and_check_flags_a_deleted_id_reused(self):
+        self.assertIn("needs --reason", self.refused("ALP-TASK-03"))
+        self.js("delete", "ALP-TASK-03", "--reason", "dup")
+        data = self.state()
+        data["deleted"].append({"id": "ALP-TASK-01", "kind": "task", "reason": "x"})
+        (self.root / self.ALPHA / "progress.json").write_text(json.dumps(data), encoding="utf-8")
+        self.assertTrue(any("ALP-TASK-01 is listed as deleted" in e for e in self.check_errors()))
+
+
 class HookTest(FixtureCase):
     def hook(self, script: str, event: dict) -> subprocess.CompletedProcess:
         return subprocess.run([sys.executable, str(ROOT / "hooks" / script)], input=json.dumps(event),

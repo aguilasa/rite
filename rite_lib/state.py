@@ -16,6 +16,9 @@ from pathlib import Path
 
 SCHEMA = 1
 TASKS, FIXES = "tasks", "fixes"
+# IDs of deleted items, kept so a number is never handed out twice: `git log --grep <ID>` and `Refs:`
+# would mix two items
+DELETED = "deleted"
 LOCK_TIMEOUT_S = 10.0
 
 
@@ -119,7 +122,7 @@ def new_fixes(cycle: str) -> dict:
 
 
 def meta_of(progress: dict) -> dict:
-    return {k: v for k, v in progress.items() if k not in ("schema", TASKS)}
+    return {k: v for k, v in progress.items() if k not in ("schema", TASKS, DELETED)}
 
 
 # --- items -----------------------------------------------------------------------
@@ -143,10 +146,25 @@ def add_item(path: Path, kind: str, entry: dict, default: dict) -> None:
     edit(path, change, default)
 
 
+def remove_item(path: Path, kind: str, item_id: str, tombstone: dict) -> None:
+    """Drop an item's entry and record its ID under `deleted`, in one write. The item array stays last."""
+    def change(data: dict) -> None:
+        key = array_key(kind)
+        entry = find_entry(data, kind, item_id)
+        items = [e for e in data.get(key) or [] if e is not entry]
+        data.pop(key, None)
+        data[DELETED] = [*(data.get(DELETED) or []), tombstone]
+        data[key] = items
+    edit(path, change)
+
+
 def update_meta(path: Path, updates: dict) -> None:
     def change(data: dict) -> None:
+        deleted = data.pop(DELETED, None)
         tasks = data.pop(TASKS, [])
         data.update(updates)
+        if deleted is not None:
+            data[DELETED] = deleted
         data[TASKS] = tasks  # the item array stays last
     edit(path, change)
 

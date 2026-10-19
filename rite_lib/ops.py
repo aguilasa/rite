@@ -7,7 +7,7 @@ import os
 import re
 from pathlib import Path
 
-from . import frontmatter, gitutil, state, views
+from . import frontmatter, gitutil, markdown, state, views
 from .config import FIX_STATUSES, NO_COMMIT, SEVERITIES, TASK_STATUSES
 from .guard import glob_regex
 from .markdown import append_to_section
@@ -182,21 +182,23 @@ def _reload(project: Project, cycle: Cycle) -> Cycle:
     return project.load_cycle(cycle.path, archived=cycle.archived)
 
 
-def _commit(project: Project, cycle: Cycle, paths: list[Path], message: str) -> str:
+def _commit(project: Project, cycle: Cycle, paths: list[Path], message: str, removed: list[Path] = ()) -> str:
     if not gitutil.is_repo(project.root):
         raise RiteError("not a git repository; bookkeeping needs git (use --no-commit to only write files)")
     existing = [p for p in dict.fromkeys(paths) if p.exists()]
-    return gitutil.commit_paths(project.root, existing, message)
+    return gitutil.commit_paths(project.root, [*existing, *removed], message)
 
 
-def _finish(project: Project, cycle: Cycle, item_paths: list[Path], message: str, commit: bool) -> dict:
+def _finish(project: Project, cycle: Cycle, item_paths: list[Path], message: str, commit: bool,
+            removed: list[Path] = ()) -> dict:
+    """Sync the views and commit. ``removed``: tracked files deleted on purpose, whose removal is staged."""
     cycle = _reload(project, cycle)
     views.sync(project, cycle)
     paths = [*item_paths, cycle.progress_state_path, cycle.fixes_state_path, cycle.progress_path, cycle.fixes_path]
     # a local cycle's documents are not in git (usually ignored, where `git add` would fail):
     # the state is written to the files and that is the whole record
     commit = commit and not cycle.local
-    sha = _commit(project, cycle, paths, message) if commit else None
+    sha = _commit(project, cycle, paths, message, removed) if commit else None
     return {"commit": sha, "message": message if commit else None, "local": cycle.local,
             "files": [display(project.root, p) for p in paths if p.exists()]}
 
@@ -214,8 +216,19 @@ def _allocate(path_for_n, start: int) -> tuple[int, Path, int]:
             n += 1
 
 
-def _max_n(items: list[Item]) -> int:
-    return max((i.n for i in items), default=0)
+def _max_n(items: list[Item], deleted_ids: list[str] = (), project: Project | None = None) -> int:
+    """The highest number in use — deleted IDs included: a number is never handed out twice."""
+    numbers = [i.n for i in items]
+    for item_id in deleted_ids:
+        parsed = project.naming.parse_id(item_id) if project else None
+        if parsed and str(parsed[1].get("n") or "").isdigit():
+            numbers.append(int(parsed[1]["n"]))
+    return max(numbers, default=0)
+
+
+def _deleted_ids(cycles: list[Cycle], kind: str) -> list[str]:
+    return [str(d.get("id")) for c in cycles for d in c.deleted
+            if isinstance(d, dict) and d.get("kind", "task") == kind]
 
 
 # --- creation ----------------------------------------------------------------
@@ -233,7 +246,7 @@ def new_task(project: Project, cycle: Cycle, *, title: str, type_: str, phase, d
                         f"lands in ({', '.join(project.repo_names()) or 'none found'})")
     slug = slug or slugify(title)
     naming = project.naming
-    n, path, fd = _allocate(lambda k: cycle.path / naming.task_file(cycle.prefix, k, slug), _max_n(cycle.tasks) + 1)
+    n, path, fd = _allocate(lambda k: cycle.path / naming.task_file(cycle.prefix, k, slug), _max_n(cycle.tasks, _deleted_ids([cycle], "task"), project) + 1)
     item_id = naming.task_id(cycle.prefix, n)
     rendered = render(project, "task.md", {
         "id": item_id, "title": frontmatter.dump_value(title), "title_text": title,
@@ -256,10 +269,11 @@ def new_fix(project: Project, cycle: Cycle, *, origin: str, title: str, severity
     if project.workspace and not repo:
         raise RiteError(f"rite.toml is outside git (a workspace) and {origin} names no repo: pass --repo")
     # fix numbers are unique per prefix across every cycle, archived ones included
-    same_prefix = [f for c in project.all_cycles() if c.prefix == cycle.prefix for f in c.fixes]
+    prefixed = [c for c in project.all_cycles() if c.prefix == cycle.prefix]
+    same_prefix = [f for c in prefixed for f in c.fixes]
     slug = slug or slugify(title)
     naming = project.naming
-    n, path, fd = _allocate(lambda k: cycle.path / naming.fix_file(cycle.prefix, k, slug), _max_n(same_prefix) + 1)
+    n, path, fd = _allocate(lambda k: cycle.path / naming.fix_file(cycle.prefix, k, slug), _max_n(same_prefix, _deleted_ids(prefixed, "fix"), project) + 1)
     item_id = naming.fix_id(cycle.prefix, n)
     origin_item = cycle.by_id()[origin]
     rendered = render(project, "fix.md", {
@@ -562,6 +576,90 @@ def mark_stale(project: Project, cycle: Cycle, item: Item, *, reason: str, commi
                 f"- **Stale** ({today}) at `{head}`: {reason}", project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "stale", item.id, cycle=cycle), commit)
     return {"id": item.id, "status": "stale", **result}
+
+
+DELETABLE = ("pending", "blocked", "skipped")
+
+
+def _outside_views(text: str) -> str:
+    """The text with each generated region blanked, line numbers kept: the views re-render without
+    the item, so their links are not the user's to rewrite."""
+    out, inside = [], False
+    for line in text.split("\n"):
+        if line.strip().startswith("<!-- rite:begin "):
+            inside = True
+        out.append("" if inside else line)
+        if inside and line.strip() == "<!-- rite:end -->":
+            inside = False
+    return "\n".join(out)
+
+
+def _inbound_links(project: Project, cycle: Cycle, item: Item) -> list[str]:
+    """`path:line` of every markdown link to the item's file from the cycle's documents, its profile,
+    pitfalls and plan: prose the user rewrites, never Rite."""
+    files = [p for p in sorted(cycle.path.rglob("*.md")) if p != item.path]
+    files += [cycle.profile_path, cycle.pitfalls_path]
+    if cycle.meta.get("plan"):
+        files.append(resolve_link(project.root, cycle.progress_path, str(cycle.meta["plan"]))[0])
+    target = item.path.resolve()
+    found = []
+    for path in dict.fromkeys(files):
+        if not path.is_file():
+            continue
+        for line, link in markdown.links(_outside_views(path.read_text(encoding="utf-8"))):
+            if markdown.is_external(link):
+                continue
+            if resolve_link(project.root, path, link)[0] == target:
+                found.append(f"{display(project.root, path)}:{line}")
+    return found
+
+
+def delete_item(project: Project, cycle: Cycle, item: Item, *, reason: str, detach: bool = False,
+                dry_run: bool = False, commit: bool = True) -> dict:
+    """Remove an item created by mistake: its file, its entry, and — with `detach` — its place in other
+    items' `depends_on`. Only an item never worked on: one with a work commit has a history, and giving
+    it up is `mark skipped` (task) or `mark-stale` (fix). Its ID is kept under `deleted`."""
+    if item.status not in DELETABLE or item.fields.get("done_commit"):
+        way_out = "mark it skipped" if item.kind == "task" else "mark-stale it"
+        raise RiteError(f"{item.id} has status {item.status!r}: only items never worked on ({', '.join(DELETABLE)}) "
+                        f"are deleted; to give it up, {way_out}")
+    origins = [f.id for f in cycle.fixes if str(f.fields.get("origin")) == item.id]
+    dependents = [i.id for i in cycle.items if i.id != item.id and item.id in i.depends_on]
+    links = _inbound_links(project, cycle, item)
+    blockers = ([f"{fid} has origin {item.id}: delete that fix first" for fid in origins]
+                + ([] if detach else [f"{d} depends_on {item.id}: pass --detach to drop it" for d in dependents])
+                + [f"{where} links to {display(project.root, item.path)}: rewrite that link" for where in links])
+    in_order = item.id in (cycle.meta.get("order") or [])
+    result = {"id": item.id, "kind": item.kind, "title": item.title, "status": item.status,
+              "file": display(project.root, item.path), "blockers": blockers,
+              "detach": dependents, "order": in_order}
+    if dry_run:
+        return {**result, "eligible": not blockers}
+    if blockers:
+        raise RiteError(f"{item.id} cannot be deleted:\n  " + "\n  ".join(blockers))
+    if not reason.strip():
+        raise RiteError("delete needs --reason: why the item should not exist (a duplicate, created by mistake)")
+    index = cycle.by_id()
+    for dep_id in dependents:
+        dep = index[dep_id]
+        _write_item(dep, {"depends_on": [d for d in dep.depends_on if d != item.id]}, None, [])
+    if in_order:
+        state.update_meta(cycle.progress_state_path,
+                          {"order": [i for i in cycle.meta["order"] if i != item.id]})
+    today = dt.date.today().isoformat()
+    tombstone = {"id": item.id, "kind": item.kind, "title": item.title, "reason": reason.strip(),
+                 "deleted_on": today}
+    try:
+        state.remove_item(item.state_path, item.kind, item.id, tombstone)
+    except state.StateError as exc:
+        raise RiteError(str(exc)) from exc
+    root = project.root
+    tracked = gitutil.is_repo(root) and gitutil.is_tracked(root, item.path)
+    item.path.unlink()
+    touched = [index[d].path for d in dependents]
+    message = bookkeeping_message(project, "delete", item.id, f" ({reason.strip()})", cycle=cycle)
+    res = _finish(project, cycle, touched, message, commit, removed=[item.path] if tracked else [])
+    return {**result, "deleted_on": today, "reason": reason.strip(), **res}
 
 
 def rebind(project: Project, cycle: Cycle, item: Item, *, sha: str, commit: bool = True) -> dict:

@@ -85,6 +85,7 @@ class Cycle:
     profile_path: Path
     pitfalls_path: Path
     items: list[Item] = field(default_factory=list)
+    deleted: list = field(default_factory=list)  # tombstones of deleted items, both state files
     workspace: bool = False  # rite.toml lives outside git; every cycle is then local
 
     @property
@@ -350,6 +351,7 @@ class Project:
         )
         cycle.items = [self._item_from_entry(cycle, "task", e) for e in progress.get(state.TASKS) or []] \
             + [self._item_from_entry(cycle, "fix", e) for e in fixes.get(state.FIXES) or []]
+        cycle.deleted = [*(progress.get(state.DELETED) or []), *(fixes.get(state.DELETED) or [])]
         return cycle
 
     def _item_from_entry(self, cycle: Cycle, kind: str, entry) -> Item:

@@ -234,6 +234,7 @@ class Checker:
         if not cycle.fixes_state_path.is_file():
             self.err(cycle.fixes_state_path, "missing (an empty one: {\"schema\": 1, \"fixes\": []})")
         self.check_item_files(cycle)
+        self.check_deleted(cycle, meta)
         if self.git:
             self.check_tracking(cycle)
         task_ids = {t.id for t in cycle.tasks}
@@ -397,6 +398,17 @@ class Checker:
         elif not cycle.local and ignored:
             self.warn(cycle.progress_path, "git ignores this cycle's folder but it is not 'local: true'; "
                       "bookkeeping commits will fail (set local: true, or stop ignoring it)")
+
+    def check_deleted(self, cycle: Cycle, meta: Path) -> None:
+        """`deleted` keeps the IDs `rite delete` removed; one back among the items was recreated by hand,
+        and its commits would mix with the deleted item's."""
+        live = {i.id for i in cycle.items}
+        for entry in cycle.deleted:
+            if not isinstance(entry, dict) or not entry.get("id") or not entry.get("reason"):
+                self.err(meta, f"'deleted' entry {entry!r} needs an 'id' and a 'reason'")
+            elif entry["id"] in live:
+                self.err(meta, f"{entry['id']} is listed as deleted and is an item again: give it a new ID "
+                         "(rite new-task / new-fix)")
 
     def check_timing(self, item: Item) -> None:
         """The time fields only the CLI writes; an open period on an item not in progress means a status

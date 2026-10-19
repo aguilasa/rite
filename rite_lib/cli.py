@@ -330,6 +330,20 @@ def cmd_mark_stale(project: Project, args) -> int:
     return EXIT_OK
 
 
+def cmd_delete(project: Project, args) -> int:
+    cycle, item = _item(project, args, args.id)
+    res = ops.delete_item(project, cycle, item, reason=args.reason or "", detach=args.detach,
+                          dry_run=args.dry_run, commit=not args.no_commit)
+    if args.dry_run:
+        text = [f"{res['id']} ({res['status']}): " + ("can be deleted" if res["eligible"] else "cannot be deleted")]
+        text += [f"  blocker: {b}" for b in res["blockers"]]
+        text += [f"  detach from: {d}" for d in res["detach"]] if args.detach else []
+        _emit(args, res, "\n".join(text))
+    else:
+        _emit(args, res, _result_text("deleted", res))
+    return EXIT_OK
+
+
 def _target_cycles(project: Project, args) -> list:
     if getattr(args, "all", False) or (not args.cycle and len(project.live_cycles()) != 1
                                        and not project.cfg["paths"]["default_cycle"]):
@@ -770,6 +784,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--reason", required=True)
     s.add_argument("--no-commit", action="store_true")
     s.set_defaults(fn=cmd_mark_stale)
+
+    s = sub.add_parser("delete", parents=[common],
+                       help="delete an item never worked on (created by mistake); its ID is never reused")
+    s.add_argument("id")
+    s.add_argument("--reason", help="why the item should not exist (required unless --dry-run)")
+    s.add_argument("--detach", action="store_true", help="drop the item from other items' depends_on")
+    s.add_argument("--dry-run", action="store_true", help="report eligibility and blockers; write nothing")
+    s.add_argument("--no-commit", action="store_true")
+    s.set_defaults(fn=cmd_delete)
 
     s = sub.add_parser("set", parents=[common],
                        help="set an item's planning fields (files, resources, depends_on)")

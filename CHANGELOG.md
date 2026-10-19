@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite delete` and `/rite:delete` remove items created by mistake**: a task or fix never worked on
+  (`pending`, `blocked` or `skipped`, no work commit) goes with its file, its JSON entry and its place
+  in `order`, in one commit `chore(rite): delete <ID> (<reason>)`. `--detach` drops it from other
+  items' `depends_on`; a fix with it as `origin` or a document linking to its file blocks the
+  deletion, listed by `--dry-run`. The ID is kept under `deleted` in the state file and never handed
+  out again; `rite check` flags a deleted ID that is an item again. The command confirms every
+  deletion with the user. Started or finished work is still given up with `skipped` / `stale`.
+
 ## [0.21.0] — 2026-10-18
 
 ### Added

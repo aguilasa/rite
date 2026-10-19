@@ -63,6 +63,10 @@ keep their history (`git mv`).
 - **Vocabulary is closed**: task status `pending | in-progress | done | blocked | skipped`; fix status
   `pending | in-progress | done | blocked | stale`; severity `critical | high | medium | low`;
   `reviewed_on` is `null` (not reviewable), `pending`, or a date.
+- **Deleting is for mistakes; giving up is `skipped` / `stale`.** `rite delete` removes an item never
+  worked on (a duplicate, one created by mistake) and keeps its ID under `deleted` in the state file,
+  so no later item gets that number and `git log --grep <ID>` stays one item's history. An item with
+  a work commit is given up instead: its record stays.
 - **Time spent is active time.** The CLI stamps each transition (ISO 8601 with offset): `started_at`
   is the first move to `in-progress`, `active_since` the period running now, `active_s` the seconds
   of the closed periods — a pause (`blocked`, back to `pending`) does not count — and `finished_at`
