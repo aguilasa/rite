@@ -149,6 +149,7 @@ the product's: [split layout](docs/CONCEPTS.md#split-layout).
 | `/rite:review-all [cycle]` | every task awaiting review, reviewers in parallel waves |
 | `/rite:fix [cycle] [ID]` | reproduce evidence, repair, sweep |
 | `/rite:fix-all [cycle]` | inline triage (agents only for the residue), then repairs in waves |
+| `/rite:delete [cycle] <ID>` | remove a task or fix created by mistake (never worked on); its ID is not reused |
 | `/rite:close-cycle <cycle>` | check preconditions, archive with links rewritten |
 | `/rite:retro <cycle>` | root-cause groups; keep, promote, report, prune |
 
