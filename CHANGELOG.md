@@ -8,6 +8,9 @@ All notable changes to this project are documented here. Versions follow [SemVer
 
 - **The board (`rite serve`) opens on the list of cycles again**: 0.24.0 left the root URL and an
   item's page blank — the filters read the active tab, which only the cycle view had (#22).
+- **`rite close` no longer lists the cycle's own files as outside the declared ones**: the progress
+  and fixes state and their views, which `rite set` and the other subcommands write during the work,
+  are exempt like the item's own document (#21).
 
 ## [0.24.0] — 2026-10-20
 

@@ -440,7 +440,10 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
            f"  - Files (`{git_c} show --name-status {short}`):"]
     log += [f"    - `{st} {p}`" for st, p in files] or ["    - *(none)*"]
     declared = _declared_files(item)
-    outside = _outside_declared(declared, files, display(root, item.path)) if declared else []
+    # the item's document and the cycle's state and views: what Rite itself writes during the work
+    exempt = {display(root, p) for p in (item.path, cycle.progress_state_path, cycle.fixes_state_path,
+                                         cycle.progress_path, cycle.fixes_path)}
+    outside = _outside_declared(declared, files, exempt) if declared else []
     if outside:
         log.append(f"  - **Outside declared files** ({', '.join(f'`{d}`' for d in declared)}):")
         log += [f"    - `{p}`" for p in outside]
@@ -457,15 +460,15 @@ def _declared_files(item: Item) -> list[str]:
     return [str(v) for v in value] if isinstance(value, list) else [str(value)]
 
 
-def _outside_declared(declared: list[str], files: list[tuple[str, str]], own: str) -> list[str]:
+def _outside_declared(declared: list[str], files: list[tuple[str, str]], exempt: set[str]) -> list[str]:
     """Paths of the work commit that no declared `files` entry covers — a warning, never a refusal:
     the scope was a prediction, and the review judges whether leaving it was right. A rename counts by
-    its new path; the item's own document is never outside its scope."""
+    its new path; an ``exempt`` path (the item's document, the files Rite writes) is never outside."""
     patterns = [d.strip().removeprefix("./").lstrip("/") for d in declared if d.strip()]
     outside = []
     for _, path in files:
         path = path.split(" -> ")[-1]
-        if path == own:
+        if path in exempt:
             continue
         if not any(path == d or path.startswith(d.rstrip("/") + "/") or glob_regex(d).fullmatch(path)
                    for d in patterns):

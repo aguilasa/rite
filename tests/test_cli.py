@@ -135,6 +135,17 @@ class LoopTest(FixtureCase):
         self.assertIn("**Outside declared files** (`src/*.py`, `./docs/notes/`):", text)
         self.assertIn("    - `docs/other.md`", text)
 
+    def test_close_does_not_count_the_cycles_own_files_as_outside(self):
+        path = self.root / "docs/rite/cycles/alpha/01-harness.md"
+        self.ok("set", "ALP-TASK-01", "--files", "src/a.py")
+        write(self.root / "src/a.py", "a\n")
+        cyc = "docs/rite/cycles/alpha"
+        self.fx.git("add", "--", "src/a.py", f"{cyc}/progress.json", f"{cyc}/progress.md")
+        self.fx.git("commit", "-q", "-m", "feat: a")
+        self.assertIn(f"{cyc}/progress.json", self.fx.git("show", "--name-only", "--format=", "HEAD"))
+        self.assertEqual(self.js("close", "ALP-TASK-01")["outside_files"], [])
+        self.assertNotIn("Outside declared files", path.read_text(encoding="utf-8"))
+
     def test_close_inside_the_declared_files_or_without_any_has_no_warning(self):
         set_fields(self.root / "docs/rite/cycles/alpha/01-harness.md", {"files": ["src/a.py"]})
         self.fx.work_commit("src/a.py", "a\n", "feat: a")
