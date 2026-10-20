@@ -13,7 +13,7 @@ body:
     attributes:
       label: Rite version
       description: From `.claude-plugin/plugin.json` or the plugin cache path.
-      placeholder: "0.23.0"
+      placeholder: "0.24.0"
     validations:
       required: true
 

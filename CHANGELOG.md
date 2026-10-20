@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.24.0] — 2026-10-20
 
 ### Added
 
