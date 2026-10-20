@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite serve` and `/rite:board`, a live read-only board of the cycles in the browser**: a local
+  HTTP server on the first free port from 3000 (3001, 3002… when taken) that opens the system's
+  browser once it listens. Open and closed cycles; per cycle a Tasks and a Fixes tab with the columns
+  of the markdown views; an item opens its markdown, rendered, in a new tab. A watcher polls the state
+  and item files and pushes Server-Sent Events, so open pages follow `finish`, `mark`, `archive` or
+  `new-cycle` run elsewhere without a reload. Nothing is written; the page loads Vue, Bootstrap,
+  marked and DOMPurify from cdn.jsdelivr.net. `/rite:board` starts the server in the background and
+  reports its URL.
+
 ## [0.22.0] — 2026-10-19
 
 ### Added
