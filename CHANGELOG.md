@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The board (`rite serve`) opens on the list of cycles again**: 0.24.0 left the root URL and an
+  item's page blank — the filters read the active tab, which only the cycle view had (#22).
+
 ## [0.24.0] — 2026-10-20
 
 ### Added

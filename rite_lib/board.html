@@ -175,15 +175,16 @@
   document.getElementById('offline').remove();
 
   // #/  ·  #/cycle/<folder>?tab=tasks|fixes[&<field>=<filter>…]  ·  #/item/<folder>/<id>
-  // folder and id are URI-encoded; the filters of the active tab follow the tab (see toQuery)
+  // folder and id are URI-encoded; the filters of the active tab follow the tab (see toQuery).
+  // Every view has a tab ('tasks' outside a cycle): the filter state is indexed by it.
   function parseHash() {
     const [path, query] = location.hash.replace(/^#\/?/, '').split('?');
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
     const params = new URLSearchParams(query || '');
     const tab = params.get('tab') === 'fixes' ? 'fixes' : 'tasks';
     if (parts[0] === 'cycle' && parts[1]) return { view: 'cycle', folder: parts[1], tab, params };
-    if (parts[0] === 'item' && parts[1] && parts[2]) return { view: 'item', folder: parts[1], id: parts[2] };
-    return { view: 'list' };
+    if (parts[0] === 'item' && parts[1] && parts[2]) return { view: 'item', folder: parts[1], id: parts[2], tab };
+    return { view: 'list', tab };
   }
 
   const STATUS = { done: 'text-bg-success', 'in-progress': 'text-bg-primary', blocked: 'text-bg-danger',
@@ -270,9 +271,11 @@
     data() {
       const route = parseHash();
       const filters = { tasks: emptyFilters('tasks'), fixes: emptyFilters('fixes') };
-      if (route.view === 'cycle') filters[route.tab] = fromParams(route.tab, route.params);
       const showFilters = { tasks: false, fixes: false };
-      showFilters[route.tab] = FIELDS[route.tab].some(f => isActive(f, filters[route.tab][f.key]));
+      if (route.view === 'cycle') {
+        filters[route.tab] = fromParams(route.tab, route.params);
+        showFilters[route.tab] = FIELDS[route.tab].some(f => isActive(f, filters[route.tab][f.key]));
+      }
       return { route, conn: 'connecting', error: '', cycles: null, cycle: null, item: null,
                flashing: new Set(), filters, showFilters, FIELDS, HAS_LABEL };
     },

@@ -1,8 +1,12 @@
 """`rite serve`: port fallback, the board's API, and the change events it pushes."""
 
 import json
+import os
 import queue
+import shutil
 import socket
+import subprocess
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -144,6 +148,21 @@ class BoardTest(unittest.TestCase):
         self.fx.rite("mark", "BET-TASK-01", "in-progress")
         got = [lines.get(timeout=5) for _ in range(3)]
         self.assertEqual(got[1:], ["event: change", 'data: {"folders": ["docs/rite/cycles/beta"], "cycles": false}'])
+
+    def test_every_view_mounts_in_a_browser(self):
+        """The page itself, in a real browser: needs Chrome and the CDN, so it runs only when asked."""
+        chrome = shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chromium-browser")
+        if os.environ.get("RITE_BROWSER_TESTS") != "1" or not chrome:
+            self.skipTest("set RITE_BROWSER_TESTS=1 with Chrome on PATH")
+        folder = "docs%2Frite%2Fcycles%2Falpha"
+        with tempfile.TemporaryDirectory() as profile:
+            for view in ("#/", f"#/cycle/{folder}?tab=fixes", f"#/item/{folder}/ALP-TASK-01"):
+                run = subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-sandbox",
+                                      f"--user-data-dir={profile}", "--enable-logging=stderr", "--timeout=5000",
+                                      "--dump-dom", self.url + view], capture_output=True, text=True, timeout=60)
+                self.assertNotIn("Uncaught", run.stderr, view)
+                self.assertIn('<div id="app"', run.stdout, view)
+                self.assertNotIn('<div id="app" v-cloak', run.stdout, view)
 
 
 def _free_port() -> int:
