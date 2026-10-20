@@ -77,7 +77,9 @@ class BoardTest(unittest.TestCase):
         return 200
 
     def test_page(self):
-        self.assertIn('<div id="app"', self.get("/"))
+        page = self.get("/")
+        self.assertIn('<div id="app"', page)
+        self.assertIn("data-filters", page)
 
     def test_cycles_open_and_closed(self):
         data = self.get("/api/cycles")

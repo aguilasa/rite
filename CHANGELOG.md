@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Filters in the board (`/rite:board`)**: the Tasks tab filters by phase, type, status, done on and
+  reviewed on, the Fixes tab by severity, status and done on. Values are chips with their counts
+  (several per field: any of them; across fields: all), dates take a from–to range and *has a date* /
+  *empty* — reviewed on also *pending review*, the review queue. The filters live in the URL, so a
+  link or a reload keeps them, and they stay applied while the page updates itself.
+
 ## [0.23.0] — 2026-10-20
 
 ### Added

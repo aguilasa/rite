@@ -11,6 +11,7 @@
 <style>
   [v-cloak] { display: none; }
   tr.item-row { cursor: pointer; }
+  .filter-label { min-width: 6.5rem; }
   tr.flash > * { animation: flash 2s ease-out; }
   @keyframes flash { from { background-color: var(--bs-warning-bg-subtle); } to { background-color: transparent; } }
   .markdown h1 { font-size: 1.6rem; } .markdown h2 { font-size: 1.3rem; margin-top: 1.5rem; } .markdown h3 { font-size: 1.1rem; }
@@ -72,21 +73,47 @@
       </h1>
       <p class="text-secondary"><small>{{ cycle.folder }}</small></p>
       <ul class="nav nav-tabs mb-3">
-        <li class="nav-item">
-          <a class="nav-link" :class="{ active: route.tab === 'tasks' }" :href="cycleHref(cycle.folder, 'tasks')">
-            Tasks <span class="badge text-bg-secondary">{{ cycle.tasks.length }}</span></a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" :class="{ active: route.tab === 'fixes' }" :href="cycleHref(cycle.folder, 'fixes')">
-            Fixes <span class="badge text-bg-secondary">{{ cycle.fixes.length }}</span></a>
+        <li class="nav-item" v-for="tab in ['tasks', 'fixes']" :key="tab">
+          <a class="nav-link" :class="{ active: route.tab === tab }" :href="cycleHref(cycle.folder, tab, true)">
+            {{ tab === 'tasks' ? 'Tasks' : 'Fixes' }}
+            <span class="badge text-bg-secondary">{{ activeCount(tab) ? filtered(tab).length + '/' : '' }}{{ cycle[tab].length }}</span></a>
         </li>
       </ul>
+
+      <!-- filters of the active tab: OR within a field, AND across fields -->
+      <div class="d-flex align-items-center gap-2 mb-2" data-filters>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @click="showFilters[route.tab] = !showFilters[route.tab]">
+          Filters <span v-if="activeCount(route.tab)" class="badge text-bg-primary">{{ activeCount(route.tab) }}</span>
+        </button>
+        <button v-if="activeCount(route.tab)" type="button" class="btn btn-sm btn-link" @click="clearFilters(route.tab)">Clear</button>
+        <small class="text-secondary ms-auto">showing {{ rows.length }} of {{ cycle[route.tab].length }}</small>
+      </div>
+      <div v-if="showFilters[route.tab]" class="card card-body py-2 mb-3">
+        <div v-for="f in FIELDS[route.tab]" :key="f.key" class="d-flex flex-wrap align-items-center gap-1 my-1">
+          <span class="small fw-semibold filter-label">{{ f.label }}</span>
+          <template v-if="f.kind === 'set'">
+            <button v-for="o in facets[f.key]" :key="o.value" type="button" class="btn btn-sm py-0"
+                    :class="current[f.key].includes(o.value) ? 'btn-primary' : 'btn-outline-secondary'"
+                    @click="toggle(f.key, o.value)">
+              {{ o.value === '' ? '—' : o.value }} <span class="badge rounded-pill text-bg-light ms-1">{{ o.count }}</span>
+            </button>
+          </template>
+          <template v-else>
+            <select class="form-select form-select-sm w-auto" v-model="current[f.key].has">
+              <option v-for="h in f.has" :key="h" :value="h">{{ HAS_LABEL[h] }}</option>
+            </select>
+            <input type="date" class="form-control form-control-sm w-auto" v-model="current[f.key].from" :aria-label="f.label + ' from'">
+            <span class="text-secondary">–</span>
+            <input type="date" class="form-control form-control-sm w-auto" v-model="current[f.key].to" :aria-label="f.label + ' to'">
+          </template>
+        </div>
+      </div>
 
       <div class="table-responsive" v-if="route.tab === 'tasks'">
         <table class="table table-sm table-hover align-middle">
           <thead><tr><th>ID</th><th>Title</th><th>Phase</th><th>Type</th><th>Depends on</th><th>Status</th><th>Done on</th><th>Reviewed on</th></tr></thead>
           <tbody>
-            <tr v-for="t in cycle.tasks" :key="t.id" class="item-row" :class="{ flash: flashing.has(t.id) }" @click="openItem(t.id)">
+            <tr v-for="t in rows" :key="t.id" class="item-row" :class="{ flash: flashing.has(t.id) }" @click="openItem(t.id)">
               <td class="text-nowrap"><a :href="itemHref(t.id)" target="_blank" rel="noopener" @click.stop>{{ t.id }}</a></td>
               <td>{{ cell(t.title) }}</td>
               <td>{{ cell(t.phase) }}</td>
@@ -96,7 +123,7 @@
               <td class="text-nowrap">{{ cell(t.done_on) }}</td>
               <td class="text-nowrap">{{ cell(t.reviewed_on) }}</td>
             </tr>
-            <tr v-if="!cycle.tasks.length"><td>—</td><td colspan="7"><em>(no tasks yet)</em></td></tr>
+            <tr v-if="!rows.length"><td>—</td><td colspan="7"><em>{{ cycle.tasks.length ? '(no task matches the filters)' : '(no tasks yet)' }}</em></td></tr>
           </tbody>
         </table>
       </div>
@@ -105,7 +132,7 @@
         <table class="table table-sm table-hover align-middle">
           <thead><tr><th>ID</th><th>Title</th><th>Origin</th><th>Severity</th><th>Status</th><th>Done on</th></tr></thead>
           <tbody>
-            <tr v-for="f in cycle.fixes" :key="f.id" class="item-row" :class="{ flash: flashing.has(f.id) }" @click="openItem(f.id)">
+            <tr v-for="f in rows" :key="f.id" class="item-row" :class="{ flash: flashing.has(f.id) }" @click="openItem(f.id)">
               <td class="text-nowrap"><a :href="itemHref(f.id)" target="_blank" rel="noopener" @click.stop>{{ f.id }}</a></td>
               <td>{{ cell(f.title) }}</td>
               <td>{{ cell(f.origin) }}</td>
@@ -113,7 +140,7 @@
               <td><span class="badge" :class="statusClass(f.status)">{{ cell(f.status) }}</span></td>
               <td class="text-nowrap">{{ cell(f.done_on) }}</td>
             </tr>
-            <tr v-if="!cycle.fixes.length"><td>—</td><td colspan="5"><em>(no fixes)</em></td></tr>
+            <tr v-if="!rows.length"><td>—</td><td colspan="5"><em>{{ cycle.fixes.length ? '(no fix matches the filters)' : '(no fixes)' }}</em></td></tr>
           </tbody>
         </table>
       </div>
@@ -147,12 +174,14 @@
   if (!window.Vue) return; // offline: the static notice stays
   document.getElementById('offline').remove();
 
-  // #/  ·  #/cycle/<folder>?tab=tasks|fixes  ·  #/item/<folder>/<id> — folder and id are URI-encoded
+  // #/  ·  #/cycle/<folder>?tab=tasks|fixes[&<field>=<filter>…]  ·  #/item/<folder>/<id>
+  // folder and id are URI-encoded; the filters of the active tab follow the tab (see toQuery)
   function parseHash() {
     const [path, query] = location.hash.replace(/^#\/?/, '').split('?');
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
-    const tab = new URLSearchParams(query || '').get('tab') === 'fixes' ? 'fixes' : 'tasks';
-    if (parts[0] === 'cycle' && parts[1]) return { view: 'cycle', folder: parts[1], tab };
+    const params = new URLSearchParams(query || '');
+    const tab = params.get('tab') === 'fixes' ? 'fixes' : 'tasks';
+    if (parts[0] === 'cycle' && parts[1]) return { view: 'cycle', folder: parts[1], tab, params };
     if (parts[0] === 'item' && parts[1] && parts[2]) return { view: 'item', folder: parts[1], id: parts[2] };
     return { view: 'list' };
   }
@@ -161,12 +190,107 @@
                    pending: 'text-bg-secondary', skipped: 'text-bg-light', stale: 'text-bg-light' };
   const SEVERITY = { critical: 'text-bg-danger', high: 'text-bg-warning', medium: 'text-bg-info', low: 'text-bg-secondary' };
 
+  // --- filters -------------------------------------------------------------
+  const STATUS_ORDER = ['pending', 'in-progress', 'blocked', 'done', 'skipped', 'stale'];
+  const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
+  const FIELDS = {
+    tasks: [{ key: 'phase', label: 'Phase', kind: 'set' }, { key: 'type', label: 'Type', kind: 'set' },
+            { key: 'status', label: 'Status', kind: 'set', order: STATUS_ORDER },
+            { key: 'done_on', label: 'Done on', kind: 'date', has: ['any', 'set', 'empty'] },
+            // reviewed_on is a date, or "pending" while the task waits for its review
+            { key: 'reviewed_on', label: 'Reviewed on', kind: 'date', has: ['any', 'set', 'pending', 'empty'] }],
+    fixes: [{ key: 'severity', label: 'Severity', kind: 'set', order: SEVERITY_ORDER },
+            { key: 'status', label: 'Status', kind: 'set', order: STATUS_ORDER },
+            { key: 'done_on', label: 'Done on', kind: 'date', has: ['any', 'set', 'empty'] }],
+  };
+  const HAS_LABEL = { any: 'any', set: 'has a date', pending: 'pending review', empty: 'empty' };
+  const DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const EMPTY_CHIP = '_'; // the chip of an empty value ('—') in the URL
+
+  const value = (v) => (v === null || v === undefined ? '' : String(v));
+
+  function emptyFilters(tab) {
+    return Object.fromEntries(FIELDS[tab].map(f => [f.key, f.kind === 'set' ? [] : { has: 'any', from: '', to: '' }]));
+  }
+  function isActive(f, sel) { return f.kind === 'set' ? sel.length > 0 : sel.has !== 'any' || !!sel.from || !!sel.to; }
+
+  function matches(row, tab, filters) {
+    return FIELDS[tab].every((f) => {
+      const sel = filters[f.key];
+      const v = value(row[f.key]);
+      if (f.kind === 'set') return !sel.length || sel.includes(v);
+      if (sel.has === 'set' && !DATE.test(v)) return false;
+      if (sel.has === 'empty' && v) return false;
+      if (sel.has === 'pending' && v !== 'pending') return false;
+      if ((sel.from || sel.to) && !(DATE.test(v) && (!sel.from || v >= sel.from) && (!sel.to || v <= sel.to))) return false;
+      return true;
+    });
+  }
+
+  // chips in a stable order: the lifecycle / severity order, phases by number, the rest by name; '—' last
+  function sortValues(values, order) {
+    const rank = (v) => (v === '' ? [2, 0, ''] : order && order.includes(v) ? [0, order.indexOf(v), '']
+      : !order && v !== '' && !isNaN(v) ? [0, Number(v), ''] : [1, 0, v]);
+    return values.sort((a, b) => {
+      const [x, y] = [rank(a), rank(b)];
+      return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2]);
+    });
+  }
+
+  // field=a,b (set) · field=from..to | set | empty | pending (date) — only fields with a filter
+  function toQuery(tab, filters) {
+    const out = ['tab=' + tab];
+    for (const f of FIELDS[tab]) {
+      const sel = filters[f.key];
+      if (!isActive(f, sel)) continue;
+      const text = f.kind === 'set' ? sel.map(v => encodeURIComponent(v === '' ? EMPTY_CHIP : v)).join(',')
+        : sel.from || sel.to ? sel.from + '..' + sel.to : sel.has;
+      out.push(f.key + '=' + text);
+    }
+    return out.join('&');
+  }
+  function fromParams(tab, params) {
+    const filters = emptyFilters(tab);
+    for (const f of FIELDS[tab]) {
+      const raw = params && params.get(f.key);
+      if (!raw) continue;
+      if (f.kind === 'set') {
+        filters[f.key] = raw.split(',').filter(Boolean).map(v => (v === EMPTY_CHIP ? '' : v));
+      } else if (raw.includes('..')) {
+        const [from, to] = raw.split('..');
+        Object.assign(filters[f.key], { from: DATE.test(from) ? from : '', to: DATE.test(to) ? to : '' });
+      } else if (f.has.includes(raw)) {
+        filters[f.key].has = raw;
+      }
+    }
+    return filters;
+  }
+
   Vue.createApp({
     data() {
-      return { route: parseHash(), conn: 'connecting', error: '', cycles: null, cycle: null, item: null,
-               flashing: new Set() };
+      const route = parseHash();
+      const filters = { tasks: emptyFilters('tasks'), fixes: emptyFilters('fixes') };
+      if (route.view === 'cycle') filters[route.tab] = fromParams(route.tab, route.params);
+      const showFilters = { tasks: false, fixes: false };
+      showFilters[route.tab] = FIELDS[route.tab].some(f => isActive(f, filters[route.tab][f.key]));
+      return { route, conn: 'connecting', error: '', cycles: null, cycle: null, item: null,
+               flashing: new Set(), filters, showFilters, FIELDS, HAS_LABEL };
     },
     computed: {
+      current() { return this.filters[this.route.tab]; },
+      rows() { return this.cycle ? this.filtered(this.route.tab) : []; },
+      // the values each field of the active tab takes, counted over all its rows — so a chip does not
+      // vanish when filtered out; a selected value no row has any more stays, with 0
+      facets() {
+        const out = {};
+        const all = this.cycle ? this.cycle[this.route.tab] : [];
+        for (const f of FIELDS[this.route.tab].filter(f => f.kind === 'set')) {
+          const counts = new Map(this.current[f.key].map(v => [v, 0]));
+          for (const row of all) counts.set(value(row[f.key]), (counts.get(value(row[f.key])) || 0) + 1);
+          out[f.key] = sortValues([...counts.keys()], f.order).map(v => ({ value: v, count: counts.get(v) }));
+        }
+        return out;
+      },
       markdownHtml() {
         if (!this.item || !window.marked || !window.DOMPurify) return null;
         return DOMPurify.sanitize(marked.parse(this.item.markdown || ''));
@@ -180,7 +304,25 @@
       },
       statusClass(s) { return STATUS[s] || 'text-bg-light'; },
       severityClass(s) { return SEVERITY[s] || 'text-bg-light'; },
-      cycleHref(folder, tab) { return '#/cycle/' + encodeURIComponent(folder) + (tab ? '?tab=' + tab : ''); },
+      // withFilters: the link keeps that tab's filters (the tabs of the open cycle, the address bar)
+      cycleHref(folder, tab, withFilters) {
+        const query = withFilters ? toQuery(tab, this.filters[tab]) : tab ? 'tab=' + tab : '';
+        return '#/cycle/' + encodeURIComponent(folder) + (query ? '?' + query : '');
+      },
+      filtered(tab) { return this.cycle[tab].filter(row => matches(row, tab, this.filters[tab])); },
+      activeCount(tab) { return FIELDS[tab].filter(f => isActive(f, this.filters[tab][f.key])).length; },
+      toggle(key, v) {
+        const sel = this.current[key];
+        const at = sel.indexOf(v);
+        if (at === -1) sel.push(v); else sel.splice(at, 1);
+      },
+      clearFilters(tab) { this.filters[tab] = emptyFilters(tab); },
+      // the address bar follows the filters without a history entry (and without a hashchange)
+      writeHash() {
+        if (this.route.view !== 'cycle') return;
+        const hash = this.cycleHref(this.route.folder, this.route.tab, true);
+        if (location.hash !== hash) history.replaceState(null, '', hash);
+      },
       itemHref(id) { return '#/item/' + encodeURIComponent(this.route.folder) + '/' + encodeURIComponent(id); },
       openItem(id) { window.open(this.itemHref(id), '_blank', 'noopener'); },
 
@@ -236,15 +378,28 @@
         });
       },
     },
+    watch: {
+      filters: { deep: true, handler() { this.writeHash(); } },
+    },
     mounted() {
       window.addEventListener('hashchange', () => {
         const before = this.route;
         this.route = parseHash();
-        if (this.route.view !== before.view || this.route.folder !== before.folder || this.route.id !== before.id) {
+        const moved = this.route.view !== before.view || this.route.folder !== before.folder || this.route.id !== before.id;
+        if (this.route.view === 'cycle') {
+          if (moved) {
+            this.filters = { tasks: emptyFilters('tasks'), fixes: emptyFilters('fixes') };
+            this.showFilters = { tasks: false, fixes: false };
+          }
+          this.filters[this.route.tab] = fromParams(this.route.tab, this.route.params);
+          if (this.activeCount(this.route.tab)) this.showFilters[this.route.tab] = true;
+        }
+        if (moved) {
           this.cycle = null; this.item = null; this.error = '';
           this.load();
         }
       });
+      this.writeHash();
       this.load();
       this.listen();
     },
