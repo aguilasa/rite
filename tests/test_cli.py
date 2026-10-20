@@ -146,15 +146,25 @@ class LoopTest(FixtureCase):
         self.assertEqual(self.js("close", "ALP-TASK-01")["outside_files"], [])
         self.assertNotIn("Outside declared files", path.read_text(encoding="utf-8"))
 
-    def test_close_inside_the_declared_files_or_without_any_has_no_warning(self):
+    def test_close_inside_the_declared_files_or_a_fix_without_any_has_no_warning(self):
         set_fields(self.root / "docs/rite/cycles/alpha/01-harness.md", {"files": ["src/a.py"]})
         self.fx.work_commit("src/a.py", "a\n", "feat: a")
         res = self.js("close", "ALP-TASK-01")
         self.assertEqual(res["outside_files"], [])
         self.assertNotIn("Outside declared files",
                          (self.root / "docs/rite/cycles/alpha/01-harness.md").read_text(encoding="utf-8"))
+        fix = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "t", "--severity", "low")
+        self.fx.git("add", "-A")
+        self.fx.git("commit", "-q", "-m", "chore: fix item")
+        self.fx.work_commit("src/b.py", "b\n", "fix: b")
+        self.assertEqual(self.js("close", fix["id"])["outside_files"], [])
+
+    def test_close_of_a_task_without_files_lists_its_whole_commit(self):
+        path = self.root / "docs/rite/cycles/alpha/02-report.md"
         self.fx.work_commit("src/b.py", "b\n", "feat: b")
-        self.assertEqual(self.js("close", "ALP-TASK-02")["outside_files"], [])
+        self.assertEqual(self.js("close", "ALP-TASK-02")["outside_files"], ["src/b.py"])
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("  - **No files declared** — the work commit changed:\n    - `src/b.py`", text)
 
     def test_close_without_work_commit(self):
         self.fx.work_commit("src/a.py", "a\n", "feat: unrelated")

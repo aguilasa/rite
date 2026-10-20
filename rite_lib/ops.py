@@ -443,9 +443,12 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     # the item's document and the cycle's state and views: what Rite itself writes during the work
     exempt = {display(root, p) for p in (item.path, cycle.progress_state_path, cycle.fixes_state_path,
                                          cycle.progress_path, cycle.fixes_path)}
-    outside = _outside_declared(declared, files, exempt) if declared else []
+    # a task without `files` declared no scope, so all of its commit is outside it; a fix rarely
+    # declares any, and warning on every one would be noise
+    outside = _outside_declared(declared, files, exempt) if declared or item.kind == "task" else []
     if outside:
-        log.append(f"  - **Outside declared files** ({', '.join(f'`{d}`' for d in declared)}):")
+        log.append(f"  - **Outside declared files** ({', '.join(f'`{d}`' for d in declared)}):" if declared
+                   else "  - **No files declared** — the work commit changed:")
         log += [f"    - `{p}`" for p in outside]
     _write_item(item, updates, "\n".join(log), project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)

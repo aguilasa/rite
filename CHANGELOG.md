@@ -4,6 +4,13 @@ All notable changes to this project are documented here. Versions follow [SemVer
 
 ## [Unreleased]
 
+### Changed
+
+- **`rite close` warns about a task that declares no `files`**: with no scope declared, every path of
+  its work commit (but its own document and the cycle's files) is listed under "No files declared" and
+  returned in `outside_files`. A fix without `files` still gets no warning: fixes rarely declare any
+  (#20).
+
 ### Fixed
 
 - **The board (`rite serve`) opens on the list of cycles again**: 0.24.0 left the root URL and an
