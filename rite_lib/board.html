@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rite board</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+  [v-cloak] { display: none; }
+  tr.item-row { cursor: pointer; }
+  tr.flash > * { animation: flash 2s ease-out; }
+  @keyframes flash { from { background-color: var(--bs-warning-bg-subtle); } to { background-color: transparent; } }
+  .markdown h1 { font-size: 1.6rem; } .markdown h2 { font-size: 1.3rem; margin-top: 1.5rem; } .markdown h3 { font-size: 1.1rem; }
+  .markdown pre { padding: .75rem; background: var(--bs-tertiary-bg); border-radius: .375rem; }
+  .markdown table { margin-bottom: 1rem; }
+  .markdown table td, .markdown table th { border: 1px solid var(--bs-border-color); padding: .25rem .5rem; }
+  .markdown blockquote { padding-left: 1rem; border-left: .25rem solid var(--bs-border-color); color: var(--bs-secondary-color); }
+</style>
+</head>
+<body>
+<div id="offline" style="padding: 1rem; font-family: sans-serif;">
+  This page loads Vue, Bootstrap, marked and DOMPurify from cdn.jsdelivr.net and could not reach it.
+  The data is still served as JSON under <code>/api/cycles</code>.
+</div>
+
+<div id="app" v-cloak>
+  <nav class="navbar border-bottom mb-3">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#/">Rite board</a>
+      <span class="badge" :class="conn === 'live' ? 'text-bg-success' : 'text-bg-secondary'">{{ conn }}</span>
+    </div>
+  </nav>
+
+  <main class="container-fluid pb-4">
+    <div v-if="error" class="alert alert-warning">
+      {{ error }} <a href="#/" class="alert-link">Back to the cycles</a>
+    </div>
+
+    <!-- the cycles -->
+    <template v-else-if="route.view === 'list' && cycles">
+      <section v-for="group in [['Open', cycles.open], ['Closed', cycles.closed]]" :key="group[0]" class="mb-4">
+        <h2 class="h5">{{ group[0] }} <span class="badge text-bg-secondary">{{ group[1].length }}</span></h2>
+        <p v-if="!group[1].length" class="text-secondary">No {{ group[0].toLowerCase() }} cycle.</p>
+        <div class="list-group">
+          <a v-for="c in group[1]" :key="c.folder" :href="cycleHref(c.folder)"
+             class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+            <span>
+              <strong>{{ c.name }}</strong>
+              <span v-if="c.prefix" class="text-secondary"> [{{ c.prefix }}]</span>
+              <small class="d-block text-secondary">{{ c.folder }}</small>
+              <small v-if="c.error" class="d-block text-danger">{{ c.error }}</small>
+            </span>
+            <span v-if="c.tasks">
+              <span class="badge text-bg-success me-1">{{ c.tasks.done }}/{{ c.tasks.total }} done</span>
+              <span v-if="c.tasks['in-progress']" class="badge text-bg-primary me-1">{{ c.tasks['in-progress'] }} in progress</span>
+              <span v-if="c.tasks.blocked" class="badge text-bg-danger me-1">{{ c.tasks.blocked }} blocked</span>
+              <span class="badge" :class="c.open_fixes ? 'text-bg-warning' : 'text-bg-light'">{{ c.open_fixes }} open fixes</span>
+            </span>
+          </a>
+        </div>
+      </section>
+    </template>
+
+    <!-- one cycle -->
+    <template v-else-if="route.view === 'cycle' && cycle">
+      <h1 class="h4">
+        {{ cycle.name }} <span v-if="cycle.prefix" class="text-secondary">[{{ cycle.prefix }}]</span>
+        <span v-if="cycle.archived" class="badge text-bg-secondary align-middle">closed</span>
+      </h1>
+      <p class="text-secondary"><small>{{ cycle.folder }}</small></p>
+      <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+          <a class="nav-link" :class="{ active: route.tab === 'tasks' }" :href="cycleHref(cycle.folder, 'tasks')">
+            Tasks <span class="badge text-bg-secondary">{{ cycle.tasks.length }}</span></a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" :class="{ active: route.tab === 'fixes' }" :href="cycleHref(cycle.folder, 'fixes')">
+            Fixes <span class="badge text-bg-secondary">{{ cycle.fixes.length }}</span></a>
+        </li>
+      </ul>
+
+      <div class="table-responsive" v-if="route.tab === 'tasks'">
+        <table class="table table-sm table-hover align-middle">
+          <thead><tr><th>ID</th><th>Title</th><th>Phase</th><th>Type</th><th>Depends on</th><th>Status</th><th>Done on</th><th>Reviewed on</th></tr></thead>
+          <tbody>
+            <tr v-for="t in cycle.tasks" :key="t.id" class="item-row" :class="{ flash: flashing.has(t.id) }" @click="openItem(t.id)">
+              <td class="text-nowrap"><a :href="itemHref(t.id)" target="_blank" rel="noopener" @click.stop>{{ t.id }}</a></td>
+              <td>{{ cell(t.title) }}</td>
+              <td>{{ cell(t.phase) }}</td>
+              <td>{{ cell(t.type) }}</td>
+              <td>{{ cell(t.depends_on) }}</td>
+              <td><span class="badge" :class="statusClass(t.status)">{{ cell(t.status) }}</span></td>
+              <td class="text-nowrap">{{ cell(t.done_on) }}</td>
+              <td class="text-nowrap">{{ cell(t.reviewed_on) }}</td>
+            </tr>
+            <tr v-if="!cycle.tasks.length"><td>—</td><td colspan="7"><em>(no tasks yet)</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-responsive" v-else>
+        <table class="table table-sm table-hover align-middle">
+          <thead><tr><th>ID</th><th>Title</th><th>Origin</th><th>Severity</th><th>Status</th><th>Done on</th></tr></thead>
+          <tbody>
+            <tr v-for="f in cycle.fixes" :key="f.id" class="item-row" :class="{ flash: flashing.has(f.id) }" @click="openItem(f.id)">
+              <td class="text-nowrap"><a :href="itemHref(f.id)" target="_blank" rel="noopener" @click.stop>{{ f.id }}</a></td>
+              <td>{{ cell(f.title) }}</td>
+              <td>{{ cell(f.origin) }}</td>
+              <td><span class="badge" :class="severityClass(f.severity)">{{ cell(f.severity) }}</span></td>
+              <td><span class="badge" :class="statusClass(f.status)">{{ cell(f.status) }}</span></td>
+              <td class="text-nowrap">{{ cell(f.done_on) }}</td>
+            </tr>
+            <tr v-if="!cycle.fixes.length"><td>—</td><td colspan="5"><em>(no fixes)</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <!-- one item -->
+    <template v-else-if="route.view === 'item' && item">
+      <p class="mb-1"><a :href="cycleHref(item.folder, item.kind === 'fix' ? 'fixes' : 'tasks')">{{ item.cycle }}</a></p>
+      <h1 class="h4">
+        {{ item.id }} <span class="badge align-middle" :class="statusClass(item.status)">{{ cell(item.status) }}</span>
+        <span v-if="item.severity" class="badge align-middle" :class="severityClass(item.severity)">{{ item.severity }}</span>
+      </h1>
+      <p class="text-secondary"><small>{{ item.path }}</small></p>
+      <div v-if="item.error" class="alert alert-danger">{{ item.error }}</div>
+      <article v-if="markdownHtml !== null" class="markdown" v-html="markdownHtml"></article>
+      <pre v-else class="markdown">{{ item.markdown }}</pre>
+    </template>
+
+    <p v-else class="text-secondary">Loading…</p>
+  </main>
+</div>
+
+<script>
+(function () {
+  // Bootstrap 5.3 themes itself from this attribute; follow the system setting.
+  const dark = window.matchMedia('(prefers-color-scheme: dark)');
+  const theme = () => document.documentElement.setAttribute('data-bs-theme', dark.matches ? 'dark' : 'light');
+  theme();
+  dark.addEventListener('change', theme);
+
+  if (!window.Vue) return; // offline: the static notice stays
+  document.getElementById('offline').remove();
+
+  // #/  ·  #/cycle/<folder>?tab=tasks|fixes  ·  #/item/<folder>/<id> — folder and id are URI-encoded
+  function parseHash() {
+    const [path, query] = location.hash.replace(/^#\/?/, '').split('?');
+    const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
+    const tab = new URLSearchParams(query || '').get('tab') === 'fixes' ? 'fixes' : 'tasks';
+    if (parts[0] === 'cycle' && parts[1]) return { view: 'cycle', folder: parts[1], tab };
+    if (parts[0] === 'item' && parts[1] && parts[2]) return { view: 'item', folder: parts[1], id: parts[2] };
+    return { view: 'list' };
+  }
+
+  const STATUS = { done: 'text-bg-success', 'in-progress': 'text-bg-primary', blocked: 'text-bg-danger',
+                   pending: 'text-bg-secondary', skipped: 'text-bg-light', stale: 'text-bg-light' };
+  const SEVERITY = { critical: 'text-bg-danger', high: 'text-bg-warning', medium: 'text-bg-info', low: 'text-bg-secondary' };
+
+  Vue.createApp({
+    data() {
+      return { route: parseHash(), conn: 'connecting', error: '', cycles: null, cycle: null, item: null,
+               flashing: new Set() };
+    },
+    computed: {
+      markdownHtml() {
+        if (!this.item || !window.marked || !window.DOMPurify) return null;
+        return DOMPurify.sanitize(marked.parse(this.item.markdown || ''));
+      },
+    },
+    methods: {
+      // the markdown views' rule: nothing → an em dash, a list → comma-separated
+      cell(v) {
+        if (v === null || v === undefined || v === '' || (Array.isArray(v) && !v.length)) return '—';
+        return Array.isArray(v) ? v.join(', ') : String(v);
+      },
+      statusClass(s) { return STATUS[s] || 'text-bg-light'; },
+      severityClass(s) { return SEVERITY[s] || 'text-bg-light'; },
+      cycleHref(folder, tab) { return '#/cycle/' + encodeURIComponent(folder) + (tab ? '?tab=' + tab : ''); },
+      itemHref(id) { return '#/item/' + encodeURIComponent(this.route.folder) + '/' + encodeURIComponent(id); },
+      openItem(id) { window.open(this.itemHref(id), '_blank', 'noopener'); },
+
+      async fetchJson(url) {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.status === 503) { setTimeout(() => this.load(), 500); return null; } // caught mid-write
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        return data;
+      },
+      async load() {
+        const r = this.route;
+        try {
+          if (r.view === 'list') {
+            const data = await this.fetchJson('/api/cycles');
+            if (data) { this.cycles = data; this.error = ''; document.title = 'Rite board'; }
+          } else if (r.view === 'cycle') {
+            const data = await this.fetchJson('/api/cycle?folder=' + encodeURIComponent(r.folder));
+            if (!data) return;
+            this.flash(this.cycle && this.cycle.folder === data.folder ? this.cycle : null, data);
+            this.cycle = data; this.error = '';
+            document.title = data.name + ' — Rite board';
+          } else {
+            const data = await this.fetchJson('/api/item?folder=' + encodeURIComponent(r.folder)
+                                              + '&id=' + encodeURIComponent(r.id));
+            if (data) { this.item = data; this.error = ''; document.title = data.id + ' — ' + data.title; }
+          }
+        } catch (e) {
+          this.error = r.view === 'list' ? e.message
+            : e.message + ' — the cycle may have been closed (moved to the archive) or renamed.';
+        }
+      },
+      // rows whose status changed since the last load blink for two seconds
+      flash(before, after) {
+        if (!before) return;
+        const old = new Map([...before.tasks, ...before.fixes].map(i => [i.id, i.status]));
+        const changed = [...after.tasks, ...after.fixes].filter(i => old.has(i.id) && old.get(i.id) !== i.status);
+        if (!changed.length) return;
+        this.flashing = new Set(changed.map(i => i.id));
+        setTimeout(() => { this.flashing = new Set(); }, 2000);
+      },
+      listen() {
+        const events = new EventSource('/api/events');
+        events.onopen = () => {
+          if (this.conn === 'reconnecting') this.load(); // events missed while away
+          this.conn = 'live';
+        };
+        events.onerror = () => { this.conn = 'reconnecting'; };
+        events.addEventListener('change', (e) => {
+          const change = JSON.parse(e.data);
+          const r = this.route;
+          if (r.view === 'list' || change.cycles || change.folders.includes(r.folder)) this.load();
+        });
+      },
+    },
+    mounted() {
+      window.addEventListener('hashchange', () => {
+        const before = this.route;
+        this.route = parseHash();
+        if (this.route.view !== before.view || this.route.folder !== before.folder || this.route.id !== before.id) {
+          this.cycle = null; this.item = null; this.error = '';
+          this.load();
+        }
+      });
+      this.load();
+      this.listen();
+    },
+  }).mount('#app');
+})();
+</script>
+</body>
+</html>

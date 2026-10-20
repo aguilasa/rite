@@ -408,6 +408,12 @@ def cmd_status(project: Project, args) -> int:
     return EXIT_OK
 
 
+def cmd_serve(project: Project, args) -> int:
+    from . import board
+    return board.serve(project.root, host=args.host, port=args.port, tries=args.tries, poll=args.poll,
+                       open_browser=not args.no_browser, as_json=args.json)
+
+
 def cmd_batch_plan(project: Project, args) -> int:
     from . import batch
     cycle = project.resolve_cycle(args.cycle)
@@ -824,6 +830,15 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("status", parents=[common], help="summarise cycles and suggest the next command")
     s.add_argument("--all", action="store_true")
     s.set_defaults(fn=cmd_status)
+
+    s = sub.add_parser("serve", parents=[common],
+                       help="read-only board of the cycles in the browser, live (Ctrl+C stops)")
+    s.add_argument("--port", type=int, default=3000, help="first port to try; taken → the next (default 3000)")
+    s.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1)")
+    s.add_argument("--tries", type=int, default=100, help="how many ports to try from --port (default 100)")
+    s.add_argument("--poll", type=float, default=1.0, help="seconds between looks for changes (default 1)")
+    s.add_argument("--no-browser", action="store_true", help="only print the URL")
+    s.set_defaults(fn=cmd_serve)
 
     s = sub.add_parser("batch-plan", parents=[common], help="inventory, conflict matrix and waves for a batch")
     s.add_argument("targets", nargs="*", help="a count (default 2), item IDs, or 'all' (fixes and reviews)")
