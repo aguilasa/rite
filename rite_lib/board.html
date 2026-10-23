@@ -111,7 +111,7 @@
 
       <div class="table-responsive" v-if="route.tab === 'tasks'">
         <table class="table table-sm table-hover align-middle">
-          <thead><tr><th>ID</th><th>Title</th><th>Phase</th><th>Type</th><th>Depends on</th><th>Status</th><th>Done on</th><th>Reviewed on</th><th>Review</th></tr></thead>
+          <thead><tr><th>ID</th><th>Title</th><th>Phase</th><th>Type</th><th>Depends on</th><th>Status</th><th>Done on</th><th>Review</th><th>Reviewed on</th></tr></thead>
           <tbody>
             <tr v-for="t in rows" :key="t.id" class="item-row" :class="{ flash: flashing.has(t.id) }" @click="openItem(t.id)">
               <td class="text-nowrap"><a :href="itemHref(t.id)" target="_blank" rel="noopener" @click.stop>{{ t.id }}</a></td>
@@ -121,8 +121,8 @@
               <td>{{ cell(t.depends_on) }}</td>
               <td><span class="badge" :class="statusClass(t.status)">{{ cell(t.status) }}</span></td>
               <td class="text-nowrap">{{ cell(t.done_on) }}</td>
-              <td class="text-nowrap">{{ cell(t.reviewed_on) }}</td>
               <td><span class="badge" :class="reviewClass(t.review)">{{ cell(t.review) }}</span></td>
+              <td class="text-nowrap">{{ cell(t.reviewed_on) }}</td>
             </tr>
             <tr v-if="!rows.length"><td>—</td><td colspan="8"><em>{{ cycle.tasks.length ? '(no task matches the filters)' : '(no tasks yet)' }}</em></td></tr>
           </tbody>
@@ -204,8 +204,8 @@
             { key: 'status', label: 'Status', kind: 'set', order: STATUS_ORDER },
             { key: 'done_on', label: 'Done on', kind: 'date', has: ['any', 'set', 'empty'] },
             // reviewed_on is a date, or "pending" while the task waits for its review
-            { key: 'reviewed_on', label: 'Reviewed on', kind: 'date', has: ['any', 'set', 'pending', 'empty'] },
-            { key: 'review', label: 'Review', kind: 'set', order: REVIEW_ORDER }],
+            { key: 'review', label: 'Review', kind: 'set', order: REVIEW_ORDER },
+            { key: 'reviewed_on', label: 'Reviewed on', kind: 'date', has: ['any', 'set', 'pending', 'empty'] }],
     fixes: [{ key: 'severity', label: 'Severity', kind: 'set', order: SEVERITY_ORDER },
             { key: 'status', label: 'Status', kind: 'set', order: STATUS_ORDER },
             { key: 'done_on', label: 'Done on', kind: 'date', has: ['any', 'set', 'empty'] }],

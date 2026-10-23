@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **The board shows Review before Reviewed on**: the status first, the date after; the filter bar
+  follows the same order. The progress view keeps its columns.
+
 ## [0.25.0] — 2026-10-23
 
 ### Added
