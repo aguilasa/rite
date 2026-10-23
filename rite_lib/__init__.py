@@ -1,3 +1,3 @@
 """rite_lib — deterministic bookkeeping for the Rite Claude Code plugin (stdlib only)."""
 
-__version__ = "0.24.1"
+__version__ = "0.25.0"
