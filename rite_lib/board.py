@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from . import config
+from . import config, render_md
 from .config import OPEN_FIX_STATUSES
 from .model import Cycle, Project, RiteError, display
 
@@ -29,7 +29,7 @@ PING_SECONDS = 15
 # a port taken (or refused) means "try the next one"; 10048/10013 are their Windows codes
 _PORT_TAKEN = {errno.EADDRINUSE, errno.EACCES, 10048, 10013}
 
-TASK_COLUMNS = ("id", "title", "phase", "type", "depends_on", "status", "done_on", "reviewed_on")
+TASK_COLUMNS = ("id", "title", "phase", "type", "depends_on", "status", "done_on", "reviewed_on", "review")
 FIX_COLUMNS = ("id", "title", "origin", "severity", "status", "done_on")
 
 
@@ -81,7 +81,10 @@ class Board:
 
     def cycle(self, folder: str) -> dict:
         project, cycle = self.find(folder)
-        tasks = [{k: (t.depends_on if k == "depends_on" else t.fields.get(k)) for k in TASK_COLUMNS}
+        fix_fields = [f.fields for f in cycle.fixes]
+        derived = {"depends_on": lambda t: t.depends_on,
+                   "review": lambda t: render_md.review_status(t.fields, fix_fields)}
+        tasks = [{k: derived[k](t) if k in derived else t.fields.get(k) for k in TASK_COLUMNS}
                  for t in cycle.tasks]
         fixes = [{k: f.fields.get(k) for k in FIX_COLUMNS} for f in cycle.fixes]
         return {"name": cycle.name, "prefix": cycle.prefix, "folder": folder, "archived": cycle.archived,

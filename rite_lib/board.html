@@ -111,7 +111,7 @@
 
       <div class="table-responsive" v-if="route.tab === 'tasks'">
         <table class="table table-sm table-hover align-middle">
-          <thead><tr><th>ID</th><th>Title</th><th>Phase</th><th>Type</th><th>Depends on</th><th>Status</th><th>Done on</th><th>Reviewed on</th></tr></thead>
+          <thead><tr><th>ID</th><th>Title</th><th>Phase</th><th>Type</th><th>Depends on</th><th>Status</th><th>Done on</th><th>Reviewed on</th><th>Review</th></tr></thead>
           <tbody>
             <tr v-for="t in rows" :key="t.id" class="item-row" :class="{ flash: flashing.has(t.id) }" @click="openItem(t.id)">
               <td class="text-nowrap"><a :href="itemHref(t.id)" target="_blank" rel="noopener" @click.stop>{{ t.id }}</a></td>
@@ -122,8 +122,9 @@
               <td><span class="badge" :class="statusClass(t.status)">{{ cell(t.status) }}</span></td>
               <td class="text-nowrap">{{ cell(t.done_on) }}</td>
               <td class="text-nowrap">{{ cell(t.reviewed_on) }}</td>
+              <td><span class="badge" :class="reviewClass(t.review)">{{ cell(t.review) }}</span></td>
             </tr>
-            <tr v-if="!rows.length"><td>—</td><td colspan="7"><em>{{ cycle.tasks.length ? '(no task matches the filters)' : '(no tasks yet)' }}</em></td></tr>
+            <tr v-if="!rows.length"><td>—</td><td colspan="8"><em>{{ cycle.tasks.length ? '(no task matches the filters)' : '(no tasks yet)' }}</em></td></tr>
           </tbody>
         </table>
       </div>
@@ -190,16 +191,21 @@
   const STATUS = { done: 'text-bg-success', 'in-progress': 'text-bg-primary', blocked: 'text-bg-danger',
                    pending: 'text-bg-secondary', skipped: 'text-bg-light', stale: 'text-bg-light' };
   const SEVERITY = { critical: 'text-bg-danger', high: 'text-bg-warning', medium: 'text-bg-info', low: 'text-bg-secondary' };
+  // a task's place in review, derived by the server (render_md.review_status)
+  const REVIEW = { awaiting: 'text-bg-secondary', 'in review': 'text-bg-primary', changes: 'text-bg-warning',
+                   approved: 'text-bg-success' };
 
   // --- filters -------------------------------------------------------------
   const STATUS_ORDER = ['pending', 'in-progress', 'blocked', 'done', 'skipped', 'stale'];
   const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
+  const REVIEW_ORDER = ['awaiting', 'in review', 'changes', 'approved'];
   const FIELDS = {
     tasks: [{ key: 'phase', label: 'Phase', kind: 'set' }, { key: 'type', label: 'Type', kind: 'set' },
             { key: 'status', label: 'Status', kind: 'set', order: STATUS_ORDER },
             { key: 'done_on', label: 'Done on', kind: 'date', has: ['any', 'set', 'empty'] },
             // reviewed_on is a date, or "pending" while the task waits for its review
-            { key: 'reviewed_on', label: 'Reviewed on', kind: 'date', has: ['any', 'set', 'pending', 'empty'] }],
+            { key: 'reviewed_on', label: 'Reviewed on', kind: 'date', has: ['any', 'set', 'pending', 'empty'] },
+            { key: 'review', label: 'Review', kind: 'set', order: REVIEW_ORDER }],
     fixes: [{ key: 'severity', label: 'Severity', kind: 'set', order: SEVERITY_ORDER },
             { key: 'status', label: 'Status', kind: 'set', order: STATUS_ORDER },
             { key: 'done_on', label: 'Done on', kind: 'date', has: ['any', 'set', 'empty'] }],
@@ -307,6 +313,7 @@
       },
       statusClass(s) { return STATUS[s] || 'text-bg-light'; },
       severityClass(s) { return SEVERITY[s] || 'text-bg-light'; },
+      reviewClass(s) { return REVIEW[s] || 'text-bg-light'; },
       // withFilters: the link keeps that tab's filters (the tabs of the open cycle, the address bar)
       cycleHref(folder, tab, withFilters) {
         const query = withFilters ? toQuery(tab, this.filters[tab]) : tab ? 'tab=' + tab : '';

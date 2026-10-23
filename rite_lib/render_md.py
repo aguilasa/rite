@@ -33,6 +33,8 @@ GRAPH_REGION = "graph"
 END_MARKER = "<!-- rite:end -->"
 DEFAULT_NAMES = {"progress_file": "progress.md", "fixes_file": "fixes.md",
                  "progress_state": "progress.json", "fixes_state": "fixes.json"}
+OPEN_FIX_STATUSES = ("pending", "in-progress", "blocked")  # = config.OPEN_FIX_STATUSES (no rite_lib import here)
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def begin_marker(region: str) -> str:
@@ -58,16 +60,45 @@ def _deps(entry: dict) -> list:
     return [str(d) for d in deps] if isinstance(deps, list) else [str(deps)]
 
 
-def tasks_table(tasks: list[dict], *, md_path: Path, cycle_dir: Path, root: Path, link_style: str) -> str:
-    rows = ["| ID | Title | Phase | Type | Depends on | Status | Done on | Reviewed on |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+def review_status(task: dict, fixes: list[dict]) -> str | None:
+    """Where a task stands in review, derived from its fields and the fixes — never stored:
+    ``None`` (not done, nothing to review) · ``awaiting`` (in the queue) · ``in review`` (`rite begin
+    review` opened it, not yet recorded) · ``changes`` (reviewed, a fix that goes back to it is open,
+    fixes of fixes included) · ``approved`` (reviewed, no such fix open). A malformed ``reviewed_on``
+    gives ``None``; `rite check` reports it."""
+    if task.get("status") != "done":
+        return None
+    reviewed = task.get("reviewed_on")
+    if reviewed == "pending":
+        return "in review" if task.get("review_started_at") else "awaiting"
+    if not _DATE.match(str(reviewed or "")):
+        return None
+    origin = {str(f.get("id")): str(f.get("origin") or "") for f in fixes}
+    task_id = str(task.get("id"))
+    for f in fixes:
+        if f.get("status") not in OPEN_FIX_STATUSES:
+            continue
+        current, seen = str(f.get("id")), set()
+        while current in origin and current not in seen:  # up the origin chain; a loop ends it
+            seen.add(current)
+            current = origin[current]
+        if current == task_id:
+            return "changes"
+    return "approved"
+
+
+def tasks_table(tasks: list[dict], *, md_path: Path, cycle_dir: Path, root: Path, link_style: str,
+                fixes: list[dict] | None = None) -> str:
+    rows = ["| ID | Title | Phase | Type | Depends on | Status | Done on | Reviewed on | Review |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for t in tasks:
         link = make_link(root, md_path, cycle_dir / t["file"], link_style)
         rows.append(f"| [{t.get('id')}]({link}) | {cell(t.get('title') or '')} | {cell(t.get('phase'))} "
                     f"| {cell(t.get('type'))} | {cell(_deps(t))} | {cell(t.get('status') or '')} "
-                    f"| {cell(t.get('done_on'))} | {cell(t.get('reviewed_on'))} |")
+                    f"| {cell(t.get('done_on'))} | {cell(t.get('reviewed_on'))} "
+                    f"| {cell(review_status(t, fixes or []))} |")
     if not tasks:
-        rows.append("| — | *(no tasks yet)* | | | | | | |")
+        rows.append("| — | *(no tasks yet)* | | | | | | | |")
     return "\n".join(rows)
 
 
@@ -153,11 +184,11 @@ def views(cycle_dir: Path, *, root: Path, link_style: str, names: dict | None = 
     fixes = read_state(cycle_dir / names["fixes_state"])
     progress_md, fixes_md = cycle_dir / names["progress_file"], cycle_dir / names["fixes_file"]
     opts = {"cycle_dir": cycle_dir, "root": root, "link_style": link_style}
-    tasks = progress.get("tasks") or []
+    tasks, fix_entries = progress.get("tasks") or [], fixes.get("fixes") or []
     return {
-        progress_md: [(TASKS_REGION, tasks_table(tasks, md_path=progress_md, **opts)),
+        progress_md: [(TASKS_REGION, tasks_table(tasks, md_path=progress_md, fixes=fix_entries, **opts)),
                       (GRAPH_REGION, dependency_graph(tasks, phase_label=phase_label))],
-        fixes_md: [(FIXES_REGION, fixes_table(fixes.get("fixes") or [], md_path=fixes_md, **opts))],
+        fixes_md: [(FIXES_REGION, fixes_table(fix_entries, md_path=fixes_md, **opts))],
     }
 
 

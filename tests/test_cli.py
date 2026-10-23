@@ -106,6 +106,28 @@ class LoopTest(FixtureCase):
         status = self.js("status", "--cycle", "alpha")["cycles"][0]
         self.assertEqual(status["suggestion"]["command"], "fix")
 
+    def test_the_review_column_follows_the_review(self):
+        progress = self.root / "docs/rite/cycles/alpha/progress.md"
+
+        def review():
+            row = next(line for line in progress.read_text(encoding="utf-8").splitlines()
+                       if line.startswith("| [ALP-TASK-01]"))
+            return row.rstrip(" |").rsplit("| ", 1)[-1]
+
+        self.assertEqual(review(), "—")
+        self.fx.work_commit("src/a.py", "a\n", "feat: a")
+        self.ok("close", "ALP-TASK-01")
+        self.assertEqual(review(), "awaiting")
+        self.ok("begin", "review", "--cycle", "alpha")
+        self.assertEqual(review(), "in review")
+        self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "Off", "--severity", "high")
+        self.ok("mark-reviewed", "ALP-TASK-01", "--fixes", "FIX-ALP-001")
+        self.assertEqual(review(), "changes")
+        self.fx.work_commit("src/a.py", "b\n", "fix: off")
+        self.ok("close", "FIX-ALP-001")
+        self.assertEqual(review(), "approved")
+        self.assertEqual(self.check_errors("--all"), [])
+
     def test_review_without_finding_commits(self):
         self.fx.work_commit("src/a.py", "a\n", "feat: a")
         self.ok("close", "ALP-TASK-01")

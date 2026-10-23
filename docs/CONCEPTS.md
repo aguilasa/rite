@@ -63,6 +63,10 @@ keep their history (`git mv`).
 - **Vocabulary is closed**: task status `pending | in-progress | done | blocked | skipped`; fix status
   `pending | in-progress | done | blocked | stale`; severity `critical | high | medium | low`;
   `reviewed_on` is `null` (not reviewable), `pending`, or a date.
+  The progress view's **Review** column (and the board's) is derived from these, never stored:
+  `awaiting` (done, `reviewed_on: pending`), `in review` (`rite begin review` set `review_started_at`),
+  `changes` (reviewed, a fix going back to the task — fixes of fixes too — is open), `approved`
+  (reviewed, none open), `—` before the task is done.
 - **Deleting is for mistakes; giving up is `skipped` / `stale`.** `rite delete` removes an item never
   worked on (a duplicate, one created by mistake) and keeps its ID under `deleted` in the state file,
   so no later item gets that number and `git log --grep <ID>` stays one item's history. An item with

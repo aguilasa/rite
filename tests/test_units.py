@@ -4,7 +4,7 @@ from pathlib import Path
 
 import fixtures  # noqa: F401  (puts the plugin root on sys.path)
 
-from rite_lib import batch, config, frontmatter, markdown
+from rite_lib import batch, config, frontmatter, markdown, render_md
 from rite_lib.guard import glob_regex
 from rite_lib.naming import Naming, slugify
 from rite_lib.config import DEFAULTS
@@ -63,6 +63,39 @@ class FrontmatterTest(unittest.TestCase):
             frontmatter.parse("---\nid: a\n")
         with self.assertRaises(frontmatter.FrontmatterError):
             frontmatter.parse("---\nid: a\nid: b\n---\n")
+
+
+class ReviewStatusTest(unittest.TestCase):
+    T = {"id": "T-1", "status": "done", "reviewed_on": "2026-10-20"}
+
+    def status(self, task: dict, *fixes: dict):
+        return render_md.review_status({**self.T, **task}, list(fixes))
+
+    def test_not_done_has_none(self):
+        self.assertIsNone(self.status({"status": "in-progress", "reviewed_on": None}))
+
+    def test_queue_and_review_in_progress(self):
+        self.assertEqual(self.status({"reviewed_on": "pending"}), "awaiting")
+        self.assertEqual(self.status({"reviewed_on": "pending", "review_started_at": "2026-10-20T10:00:00Z"}),
+                         "in review")
+
+    def test_reviewed(self):
+        self.assertEqual(self.status({}), "approved")
+        self.assertEqual(self.status({}, {"id": "F-1", "origin": "T-1", "status": "pending"}), "changes")
+        self.assertEqual(self.status({}, {"id": "F-1", "origin": "T-1", "status": "done"},
+                                     {"id": "F-2", "origin": "T-1", "status": "stale"}), "approved")
+        self.assertEqual(self.status({}, {"id": "F-1", "origin": "T-2", "status": "pending"}), "approved")
+
+    def test_a_fix_of_a_fix_counts(self):
+        self.assertEqual(self.status({}, {"id": "F-1", "origin": "T-1", "status": "done"},
+                                     {"id": "F-2", "origin": "F-1", "status": "blocked"}), "changes")
+
+    def test_an_origin_loop_ends(self):
+        self.assertEqual(self.status({}, {"id": "F-1", "origin": "F-2", "status": "pending"},
+                                     {"id": "F-2", "origin": "F-1", "status": "pending"}), "approved")
+
+    def test_malformed_reviewed_on_has_none(self):
+        self.assertIsNone(self.status({"reviewed_on": "soon"}))
 
 
 class NamingTest(unittest.TestCase):

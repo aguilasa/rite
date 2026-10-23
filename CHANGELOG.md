@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A Review column for tasks, in the progress view and the board**: where each task stands in review,
+  derived from `reviewed_on`, `review_started_at` and the fixes that go back to it — `awaiting` once
+  `close` puts it in the queue, `in review` after `rite begin review`, `changes` while a fix it got (or
+  a fix of that fix) is open, `approved` when none is, `—` before the task is done. Nothing new is
+  stored. The board shows it as a badge and filters by it (`review=` in the URL).
+
+### Changed
+
+- **Progress views gain a column**: existing `progress.md` tables are out of sync until the next state
+  change in their cycle rewrites them, and `rite check` says so; `rite sync --all` (with
+  `--include-archived` for closed cycles) refreshes them at once. Closing a fix now also rewrites the
+  progress view, since its task's Review changes.
+
 ## [0.24.1] — 2026-10-20
 
 ### Changed

@@ -98,6 +98,7 @@ class BoardTest(unittest.TestCase):
         self.assertEqual([t["id"] for t in data["tasks"]], ["ALP-TASK-01", "ALP-TASK-02", "ALP-TASK-03"])
         self.assertEqual(list(data["tasks"][0]), list(board.TASK_COLUMNS))
         self.assertEqual(data["tasks"][1]["depends_on"], ["ALP-TASK-01"])
+        self.assertIsNone(data["tasks"][0]["review"])  # pending: nothing to review yet
         self.assertEqual(list(data["fixes"][0]), list(board.FIX_COLUMNS))
         self.assertEqual((data["fixes"][0]["origin"], data["fixes"][0]["severity"]), ("ALP-TASK-01", "high"))
 
