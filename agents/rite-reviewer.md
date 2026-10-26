@@ -49,7 +49,8 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
       README, plan) reproduce with the quoted command?
    4. **Traceability** — does the Execution Log file list match `git show --stat`? Are links valid
       (`rite check --quick`)? Was guarded or generated output edited by hand (`rite guard <path>`)?
-      Were the gates run and green?
+      Were the gates run and green? A path the Execution Log lists under **Files amended**, with its
+      reason in Notes, is not a traceability finding: whether it belongs to the Scope is Q2's call.
 4. Run the profile's **Phase-specific checks** for the task's phase. If the profile has no entry for
    that phase, report it as a finding (severity `medium`).
 5. **Control before trusting a checker**: when a verdict rests on a comparison tool, show it can fail

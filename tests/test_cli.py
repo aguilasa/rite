@@ -188,6 +188,44 @@ class LoopTest(FixtureCase):
         text = path.read_text(encoding="utf-8")
         self.assertIn("  - **No files declared** — the work commit changed:\n    - `src/b.py`", text)
 
+    def test_close_amend_files_adds_the_paths_outside_the_declared_ones(self):
+        path = self.root / "docs/rite/cycles/alpha/01-harness.md"
+        set_fields(path, {"files": ["src/*.py"]})
+        write(self.root / "src/a.py", "a\n")
+        write(self.root / "docs/other.md", "o\n")
+        self.fx.git("add", "--", "src/a.py", "docs/other.md")
+        self.fx.git("commit", "-q", "-m", "feat: a")
+        res = self.js("close", "ALP-TASK-01", "--amend-files")
+        self.assertEqual(res["outside_files"], [])
+        self.assertEqual(res["amended_files"], ["docs/other.md"])
+        self.assertEqual(fields(path)["files"], ["src/*.py", "docs/other.md"])
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("  - **Files amended** — added to `files`:\n    - `docs/other.md`", text)
+        self.assertNotIn("Outside declared files", text)
+        self.assertEqual(self.log(2)[1], "feat: a")  # one bookkeeping commit on top of the work
+
+    def test_finish_amend_files_on_a_task_without_files_declares_its_commit(self):
+        path = self.root / "docs/rite/cycles/alpha/02-report.md"
+        self.fx.work_commit("src/b.py", "b\n", "feat: b")
+        closed = self.js("finish", "ALP-TASK-02", "--amend-files")["closed"]
+        self.assertEqual(closed["amended_files"], ["src/b.py"])
+        self.assertEqual(fields(path)["files"], ["src/b.py"])
+        self.assertNotIn("No files declared", path.read_text(encoding="utf-8"))
+
+    def test_close_amend_files_with_nothing_outside_changes_nothing(self):
+        path = self.root / "docs/rite/cycles/alpha/01-harness.md"
+        set_fields(path, {"files": ["src/a.py"]})
+        self.fx.work_commit("src/a.py", "a\n", "feat: a")
+        res = self.js("close", "ALP-TASK-01", "--amend-files")
+        self.assertEqual(res["amended_files"], [])
+        self.assertEqual(fields(path)["files"], ["src/a.py"])
+        self.assertNotIn("Files amended", path.read_text(encoding="utf-8"))
+
+    def test_close_amend_files_needs_a_work_commit(self):
+        code, out, err = self.fx.rite("close", "ALP-TASK-01", "--no-repo", "--reason", "doc", "--amend-files")
+        self.assertNotEqual(code, 0)
+        self.assertIn("--amend-files needs a work commit", err + out)
+
     def test_close_without_work_commit(self):
         self.fx.work_commit("src/a.py", "a\n", "feat: unrelated")
         code, _, err = self.fx.rite("close", "ALP-TASK-01", "--no-repo")

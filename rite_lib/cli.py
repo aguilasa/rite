@@ -181,7 +181,8 @@ def cmd_sweep(project: Project, args) -> int:
 
 def cmd_finish(project: Project, args) -> int:
     data = compose.finish(project, item_id=args.id, cycle_name=args.cycle, sha=args.sha,
-                          commit=not args.no_commit, no_repo=args.no_repo, reason=args.reason)
+                          commit=not args.no_commit, no_repo=args.no_repo, reason=args.reason,
+                          amend_files=args.amend_files)
     closed = data["closed"]
     lines = [_result_text("closed", closed)]
     lines.append("  check: " + ("clean" if not data["check"]["errors"]
@@ -289,13 +290,15 @@ def _result_text(verb: str, res: dict) -> str:
     if res.get("outside_files"):
         lines.append("  warning: the work commit touched files outside the declared `files`: "
                      + ", ".join(res["outside_files"]))
+    if res.get("amended_files"):
+        lines.append("  amended `files` with: " + ", ".join(res["amended_files"]))
     return "\n".join(lines)
 
 
 def cmd_close(project: Project, args) -> int:
     cycle, item = _item(project, args, args.id)
     res = ops.close(project, cycle, item, sha=args.sha, commit=not args.no_commit, force=args.force,
-                    no_repo=args.no_repo, reason=args.reason)
+                    no_repo=args.no_repo, reason=args.reason, amend_files=args.amend_files)
     _emit(args, res, _result_text("closed", res))
     return EXIT_OK
 
@@ -668,6 +671,8 @@ def _work_commit_args(s: argparse.ArgumentParser) -> None:
                    help=f"finished without a work commit (a document outside git); records done_commit: "
                         f"{config.NO_COMMIT}, needs --reason")
     s.add_argument("--reason", default="", help="with --no-repo: what was done and where")
+    s.add_argument("--amend-files", action="store_true",
+                   help="add the work commit's paths outside the declared files to them (logged as Files amended)")
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -33,7 +33,8 @@ One fix per invocation, then stop. Batches are `/rite:fix-all`.
 7. **Work commit** (`fix: …`) with the fix file's prose (Root cause, Verification).
 8. **Sweep** — its edits go in their **own commit** (`docs: sweep after <FIX>`), so a reviewer can tell
    the repair from its ripple.
-9. `rite finish <FIX> --sha <work-commit-SHA> --json`.
+9. `rite finish <FIX> --sha <work-commit-SHA> --json`; with `--amend-files` when the repair left the
+   declared `files` and Notes say why.
 
 **Unrelated problem found**: do not widen this fix. `rite new-fix --origin <FIX> …`, fill its body with
 evidence, `rite commit-new <NEW-FIX>`, mention it in the report.

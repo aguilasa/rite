@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite finish` and `rite close` take `--amend-files`**: paths of the work commit outside the
+  declared `files` are added to them in the same bookkeeping commit, logged as **Files amended** and
+  returned in `amended_files`, so a divergence the item's Notes justify no longer costs a
+  bookkeeping-only fix. `/rite:execute` and `/rite:fix` use it; the reviewer judges amended paths
+  against the Scope only (#23).
+
 ## [0.25.1] — 2026-10-23
 
 ### Changed

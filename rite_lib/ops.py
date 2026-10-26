@@ -402,15 +402,19 @@ def set_cycle(project: Project, cycle: Cycle, updates: dict) -> dict:
 
 # --- status transitions ------------------------------------------------------
 def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None, commit: bool = True,
-          force: bool = False, no_repo: bool = False, reason: str = "") -> dict:
+          force: bool = False, no_repo: bool = False, reason: str = "", amend_files: bool = False) -> dict:
     """Record a finished item from its work commit, then commit the bookkeeping separately.
 
     With `no_repo` there is no work commit: the item's only artifact lives outside git (a workspace
     document). `done_commit` gets the NO_COMMIT sentinel and the reason goes in the Execution Log.
+    With `amend_files` the work commit's paths outside the declared `files` are added to them, in the
+    same bookkeeping commit, instead of being reported as outside.
     """
     if item.status not in ("pending", "in-progress") and not force:
         raise RiteError(f"{item.id} has status {item.status!r}; only pending/in-progress items can be closed")
     if no_repo:
+        if amend_files:
+            raise RiteError("--amend-files needs a work commit: with --no-repo there are no paths to add")
         return _close_without_commit(project, cycle, item, sha=sha, reason=reason, commit=commit)
     sha = sha or "HEAD"
     root = project.git_root(item)
@@ -446,6 +450,12 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     # a task without `files` declared no scope, so all of its commit is outside it; a fix rarely
     # declares any, and warning on every one would be noise
     outside = _outside_declared(declared, files, exempt) if declared or item.kind == "task" else []
+    amended: list[str] = []
+    if outside and amend_files:
+        amended, outside = outside, []
+        updates["files"] = list(dict.fromkeys([*declared, *amended]))
+        log.append("  - **Files amended** — added to `files`:")
+        log += [f"    - `{p}`" for p in amended]
     if outside:
         log.append(f"  - **Outside declared files** ({', '.join(f'`{d}`' for d in declared)}):" if declared
                    else "  - **No files declared** — the work commit changed:")
@@ -453,7 +463,7 @@ def close(project: Project, cycle: Cycle, item: Item, *, sha: str | None = None,
     _write_item(item, updates, "\n".join(log), project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "repo": project.repo_of(item), "done_on": date, "done_commit": short, "work_subject": subj,
-            "outside_files": outside, **result}
+            "outside_files": outside, "amended_files": amended, **result}
 
 
 def _declared_files(item: Item) -> list[str]:
@@ -493,7 +503,7 @@ def _close_without_commit(project: Project, cycle: Cycle, item: Item, *, sha: st
                 project.section_titles("execution_log"))
     result = _finish(project, cycle, [item.path], bookkeeping_message(project, "close", item.id, cycle=cycle), commit)
     return {"id": item.id, "repo": project.repo_of(item), "done_on": date, "done_commit": NO_COMMIT,
-            "work_subject": None, **result}
+            "work_subject": None, "outside_files": [], "amended_files": [], **result}
 
 
 def mark(project: Project, cycle: Cycle, item: Item, status: str, *, reason: str = "",
