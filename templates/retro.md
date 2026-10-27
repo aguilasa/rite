@@ -14,6 +14,9 @@ Date: {{date}}
 
 ## Proposals
 
+<!-- each proposal: its fix IDs, then (retro-suggest) when it came from `rite retro-suggest`,
+     (added) when the retro found it by reading -->
+
 ### Keep in next profile
 
 ### Promote to rite.toml / CLAUDE.md

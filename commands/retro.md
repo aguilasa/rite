@@ -16,24 +16,32 @@ twice belongs in the repo config, and a failure of the rite itself belongs to th
 
 1. **Resolve** the cycle (`rite resolve-cycle <cycle> --json`; archived cycles resolve too).
 2. **Numbers**: `rite stats <cycle> --json`. Every number in the retro comes from this output.
-3. **Read** every fix of the cycle (`fix_files`) — Problem, Root cause, Fix — and skim the Execution
+3. **Candidates**: `rite retro-suggest <cycle> --json` — per fix, its paths and the pitfalls entries
+   they match; entries proven in two or more cycles; entries whose paths are gone; a profile over
+   `[profile].max_kb`; profile sections the previous cycle filled and this one left empty. It measures;
+   you decide.
+4. **Read** every fix of the cycle (`fix_files`) — Problem, Root cause, Fix — and skim the Execution
    Logs of the tasks with the most fixes (`fixes_by_origin`). Read the profile and, by search, the
    pitfalls entries that those fixes touch; read earlier retros in `[paths].archive_dir` if any.
-4. **Group** fixes by root cause, not by symptom: one line and a count per group, each marked
+5. **Group** fixes by root cause, not by symptom: one line and a count per group, each marked
    **bookkeeping** (state, links, logs) or **engineering** (code, data, numbers). The bookkeeping and
    engineering totals are the sums of these counts — `rite stats` does not classify fixes.
-5. **Propose**, every proposal carrying its fix IDs as evidence:
+6. **Propose**, every proposal carrying its fix IDs as evidence, starting from the candidates and
+   marked `(retro-suggest)`, or `(added)` when it is yours:
    - **Keep** — pitfalls, in the template's format, written to this cycle's pitfalls file: the next
      cycle does not exist yet, and `/rite:new-cycle` starts its file as a copy of it (`--pitfalls-from`).
+     A fix whose `suggest` is `update-existing` extends that entry (its `proven by`, its `rule`), never
+     a second entry for the same lesson.
    - **Promote** — a rule that caused fixes here and in an earlier cycle → a line in `rite.toml`
-     (guards, gates, resources) or `CLAUDE.md`.
+     (guards, gates, resources) or `CLAUDE.md`: the `promote` entries, and each `carry_over` section
+     (content the new profile lost), promoted or copied back.
    - **Report** — a failure of the rite itself → the text of an issue for the plugin repository.
-   - **Prune** — profile or pitfall entries no fix touched and that no longer apply; profile entries
-     that should move to the pitfalls file to stay under `[profile].max_kb`.
-6. **Write** `retro.md` in the cycle folder from `${CLAUDE_PLUGIN_ROOT}/templates/retro.md`.
-7. **Ask** which proposals to apply (multi-select, grouped by kind) and apply only those. Issues are
+   - **Prune** — the `prune` candidates; profile or pitfall entries no fix touched and that no longer
+     apply; profile entries that should move to the pitfalls file to stay under `[profile].max_kb`.
+7. **Write** `retro.md` in the cycle folder from `${CLAUDE_PLUGIN_ROOT}/templates/retro.md`.
+8. **Ask** which proposals to apply (multi-select, grouped by kind) and apply only those. Issues are
    drafted in `retro.md`; open them (`gh issue create`) only if the user explicitly asks.
-8. **Validate** `rite check --all --json`, then commit the retro and the applied edits:
+9. **Validate** `rite check --all --json`, then commit the retro and the applied edits:
    `docs(rite): retro <cycle>`.
 
 ## Report

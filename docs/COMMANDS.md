@@ -27,7 +27,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `/rite:board [--port P] [--no-browser]` | Read-only board in the browser: `rite serve` in the background, then the URL. Open and closed cycles; per cycle a Tasks and a Fixes tab with the columns of the markdown views; filters by phase, type, status, severity and dates, kept in the URL; an item opens its markdown in a new tab. Updates itself when the state changes. |
 | `/rite:delete [cycle] <ID…> [--detach]` | Removes tasks or fixes created by mistake: `rite delete --dry-run` first, then a confirmation per item (never assumed, `--yes` included). Only items never worked on; a fix with the item as `origin` or a link to its file blocks; `--detach` drops it from other items' `depends_on`. Giving work up is `skipped` / `stale`, not this. |
 | `/rite:close-cycle <cycle>` | `rite archive --dry-run` blockers, else archive with link rewriting; reports the lines that still name the old folder outside a link. |
-| `/rite:retro <cycle>` | `rite stats` numbers, fixes grouped by root cause; proposes keep / promote / report / prune; applies what the user approves. |
+| `/rite:retro <cycle>` | `rite stats` numbers, `rite retro-suggest` candidates, fixes grouped by root cause; proposes keep / promote / report / prune; applies what the user approves. |
 
 ## Agents
 
