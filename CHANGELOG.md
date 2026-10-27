@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite retro-suggest <cycle>`**: deterministic Keep / Promote / Prune candidates and carry-over
+  warnings for a retro, each with its evidence — a fix's paths and the pitfalls they match, entries
+  proven in two or more cycles, entries whose paths are gone, a profile over `[profile].max_kb`,
+  profile sections the previous cycle filled and this one left empty (#24).
+
 ## [0.25.2] — 2026-10-26
 
 ### Added

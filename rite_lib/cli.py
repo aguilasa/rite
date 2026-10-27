@@ -529,6 +529,13 @@ def cmd_stats(project: Project, args) -> int:
     return EXIT_OK
 
 
+def cmd_retro_suggest(project: Project, args) -> int:
+    from . import retro
+    data = retro.suggest(project, project.resolve_cycle(args.name), previous=args.previous)
+    _emit(args, data, retro.render_text(data))
+    return EXIT_OK
+
+
 def cmd_relink(project: Project, args) -> int:
     from . import lifecycle
     cycles = _target_cycles(project, args)
@@ -883,6 +890,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("stats", parents=[common], help="numbers for a retro: tasks, fixes, review latency")
     s.add_argument("name")
     s.set_defaults(fn=cmd_stats)
+
+    s = sub.add_parser("retro-suggest", parents=[common],
+                       help="Keep / Promote / Prune candidates for a retro, with their evidence")
+    s.add_argument("name")
+    s.add_argument("--previous", help="the cycle before this one (default: the one that finished last before it)")
+    s.set_defaults(fn=cmd_retro_suggest)
 
     s = sub.add_parser("relink", parents=[common], help="rewrite links in cycle files to [paths].link_style")
     s.add_argument("--all", action="store_true")
