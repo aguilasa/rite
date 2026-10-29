@@ -54,7 +54,7 @@ of the queue reviewed.
 ## Report
 
 Waves with their task IDs, and why the run was parallel or sequential (cap, shared resources) · per
-task: `done_commit`, the four universal verdicts in one line, phase checks, fixes opened, the commit
+task: `done_commit`, the four universal verdicts in one line, phase checks (pending ones with the task they wait on), fixes opened, the commit
 SHA or "local cycle" · merged fixes and the tasks behind each · dropped findings with reasons · tasks
 left in the queue, if any · what to run next (usually `/rite:fix-all`).
 

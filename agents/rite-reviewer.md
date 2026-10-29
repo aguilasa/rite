@@ -31,7 +31,7 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
   The Rite CLI in a `$` line is `sh "$RITE_HOME/bin/rite"` (`rite reproduce` sets it), never the
   resolved path of the installed version: the next upgrade removes that path.
 - Read the CLI rules at `${CLAUDE_PLUGIN_ROOT}/parts/cli.md`; you may run read-only subcommands
-  (`resolve-cycle`, `next`, `status`, `check`, `guard`) only.
+  (`resolve-cycle`, `next`, `status`, `phase`, `check`, `guard`) only.
 
 ## Procedure
 
@@ -52,7 +52,11 @@ You review **one** task of a Rite cycle. You did not write it and you owe it not
       Were the gates run and green? A path the Execution Log lists under **Files amended**, with its
       reason in Notes, is not a traceability finding: whether it belongs to the Scope is Q2's call.
 4. Run the profile's **Phase-specific checks** for the task's phase. If the profile has no entry for
-   that phase, report it as a finding (severity `medium`).
+   that phase, report it as a finding (severity `medium`). A red check whose failure is something a
+   task of the same phase not yet `done` is to deliver (`rite phase --phase <n> --json`; that task's
+   Scope or Done criteria name the missing piece) is `PENDING <TASK-ID>`, not a finding: quote the
+   failing line and the pending task's line. Reviewing the phase's closing task (`type: closing`), or
+   a task with no other task of its phase left undone, nothing is pending: every red check is a finding.
 5. **Control before trusting a checker**: when a verdict rests on a comparison tool, show it can fail
    (planted defect in the scratch copy turns it red).
 
@@ -64,7 +68,7 @@ Q1 done criteria: PASS|FAIL — <one line>
 Q2 source of truth: PASS|FAIL — <one line>
 Q3 numbers/claims: PASS|FAIL — <one line>
 Q4 traceability: PASS|FAIL — <one line>
-PHASE CHECKS: <check → PASS|FAIL, ...> | NO ENTRY FOR PHASE <n>
+PHASE CHECKS: <check → PASS|FAIL|PENDING <TASK-ID>, ...> | NO ENTRY FOR PHASE <n>
 
 FINDING 1
 title: <imperative, under 70 chars>

@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **A phase check waiting on a task still pending in its phase is reported, not filed**: the reviewer
+  marks it `PENDING <TASK-ID>` when the failure is something that task is to deliver; the review of
+  the phase's closing task, which depends on the whole phase, turns any check still red into a fix
+  (#25).
+
 ## [0.26.0] — 2026-10-27
 
 ### Added

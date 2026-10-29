@@ -176,6 +176,9 @@ product = "../../github/product"   # absolute, ~, or relative to this folder
 ## Engineering disciplines
 
 - **Measure, do not read.** Logs and ticked boxes are leads; only commands run now count.
+- **A phase check is due when its phase is.** One that fails on what a task of its phase still pending
+  is to deliver is reported `PENDING`, not filed; the review of the phase's closing task, which depends
+  on the whole phase, makes any check still red a fix.
 - **Every number has a tool** versioned in the repository.
 - **Control before test**: show a checker can fail before trusting it.
 - **Reproduce before fixing**; a fix whose symptom is gone is **stale**, not fixed.

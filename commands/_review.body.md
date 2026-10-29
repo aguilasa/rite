@@ -35,7 +35,7 @@ blind spots, so the review happens in a separate context that **measures instead
 ## Report
 
 Task and `done_commit` · the reviewer's verdict on each of its four universal questions, one line
-each · phase checks, pass/fail or "no entry for phase N" · fixes opened (ID, severity, title) ·
-dropped findings with reasons · the commit SHA, or "local cycle" · what to run next.
+each · phase checks, pass/fail/pending (the task each waits on) or "no entry for phase N" · fixes
+opened (ID, severity, title) · dropped findings with reasons · the commit SHA, or "local cycle" · what to run next.
 
 <!-- rite:parts -->
