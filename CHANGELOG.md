@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite archive --rewrite-bare`**: rewrites the bare paths, comments and code lines outside the
+  archived folder that `unrewritten` lists; `--dry-run` now previews them, and `/rite:close-cycle`
+  asks once whether to rewrite them (#26).
+
+### Changed
+
+- **`rite archive` rewrites the old folder in the cycle's own files**: its profile, its pitfalls file
+  and `retro.md`, which Rite wrote, now point at the archived folder, comments and code blocks
+  included, and are listed in `bare_rewritten` (#26).
+
 ## [0.26.1] — 2026-10-29
 
 ### Changed

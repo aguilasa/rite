@@ -17,19 +17,22 @@ Arguments: `$ARGUMENTS`
    work in a hurry.
 3. **Consistency**: `rite check --cycle <cycle> --json` must be clean. Errors → report and stop.
 4. **Confirm** with the user: the folder moves to `[paths].archive_dir` and links pointing into it are
-   rewritten across the repository. With `--yes` the invocation is the confirmation: the move is what
-   was asked for, not an option to decline.
-5. **Archive**: `rite archive <cycle> --json` moves the folder (`git mv`), rewrites links in prose and
-   link fields but not inside code blocks, and commits `chore(rite): archive <cycle>`. It refuses when
+   rewritten across the repository. When the dry-run's `unrewritten` is not empty (bare paths, comments,
+   code outside the folder that would still name it), list each `path:line` and ask once, with the
+   move, whether to rewrite them too. With `--yes` the invocation is the confirmation of the move, not
+   of those lines: they are left and reported, since a path in code may be meant.
+5. **Archive**: `rite archive <cycle> [--rewrite-bare] --json` (the flag only when the user said yes in
+   step 4) moves the folder (`git mv`), rewrites links in prose and link fields but not inside code
+   blocks, rewrites the old folder everywhere in the cycle's profile, pitfalls file and `retro.md`
+   (`bare_rewritten`), and commits `chore(rite): archive <cycle>`. It refuses when
    the index has staged changes — report that as is. A local cycle is moved on disk and nothing is
    committed; its archive folder must be ignored by git too, or `check` warns. Its `unrewritten` lists
-   the tracked lines that still name the old folder outside a link (bare paths, comments, code): report
-   each `path:line` and leave them; a path in code may be meant, so rewriting it is the user's call.
+   the tracked lines still naming the old folder: report each `path:line` and leave them.
 6. **Verify**: `rite check --all --json` and `rite status --all --json`.
 
 ## Report
 
-Cycle, from → to · preconditions passed or the blockers · files whose links were rewritten · lines
+Cycle, from → to · preconditions passed or the blockers · files whose links were rewritten · bare paths rewritten · lines
 not rewritten · commit SHA · next: `/rite:retro <cycle>`.
 
 <!-- rite:parts -->

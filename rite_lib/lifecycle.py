@@ -345,15 +345,21 @@ def _map_state_links(project: Project, data: dict, old_dir: Path, new_dir: Path,
     return changed
 
 
-def _unrewritten(project: Project, old_dir: Path, new_dir: Path) -> list[dict]:
+def _bare_pattern(old: str) -> re.Pattern:
+    # `/docs/...` and `./docs/...` name it too; `<cycle>-2` is another folder
+    return re.compile(r"(?<![\w.-])" + re.escape(old) + r"(?![\w-])")
+
+
+def _unrewritten(project: Project, old_dir: Path, new_dir: Path, *, exclude: Path | None = None) -> list[dict]:
     """Tracked lines that still name the moved folder: bare paths, comments, code — links are rewritten,
-    these are reported only, since a path in code may be meant."""
+    these only with --rewrite-bare, since a path in code may be meant. ``exclude`` (default: the new
+    folder) is left out: what the archived folder says is its history."""
     if not gitutil.is_repo(project.root):
         return []
-    old, new = display(project.root, old_dir), display(project.root, new_dir)
+    old = display(project.root, old_dir)
     out = gitutil.run(project.root, "-c", "core.quotePath=false", "grep", "-n", "-I", "-F", "-e", old,
-                      "--", ".", f":!{new}", check=False)
-    whole = re.compile(re.escape(old) + r"(?![\w-])")  # `<cycle>-2` is another folder
+                      "--", ".", f":!{display(project.root, exclude or new_dir)}", check=False)
+    whole = _bare_pattern(old)
     hits = []
     for row in out.splitlines():
         path, _, rest = row.partition(":")
@@ -363,27 +369,34 @@ def _unrewritten(project: Project, old_dir: Path, new_dir: Path) -> list[dict]:
     return hits
 
 
-def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: bool = False) -> dict:
-    blocking = blockers(project, cycle)
-    old_dir = cycle.path
-    new_dir = project.archive_dir / old_dir.name
-    result = {"cycle": cycle.name, "from": display(project.root, old_dir),
-              "to": display(project.root, new_dir), "blockers": blocking, "rewritten": [], "unrewritten": [],
-              "commit": None}
-    if blocking or dry_run:
-        return result
-    if old_dir == project.cycles_root:
-        raise RiteError("a flat single-cycle layout cannot be archived into itself; move it by hand")
-    if new_dir.exists():
-        raise RiteError(f"{display(project.root, new_dir)} already exists")
-    local = cycle.local
-    commit = commit and not local
-    if not local and not gitutil.is_repo(project.root):
-        raise RiteError("archive needs git (git mv keeps history)")
-    if commit and gitutil.run(project.root, "diff", "--cached", "--name-only").strip():
-        raise RiteError("the index has staged changes; commit or unstage them first (archive commits the index)")
+def _rewrite_bare(path: Path, old: str, new: str) -> int:
+    """Replace the old folder by the new one in ``path``, line endings and all else kept. Lines changed."""
+    if not path.is_file():
+        return 0
+    raw = path.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return 0
+    pattern = _bare_pattern(old)
+    lines = text.splitlines(keepends=True)
+    changed = [pattern.sub(new, line) for line in lines]
+    count = sum(a != b for a, b in zip(lines, changed))
+    if count:
+        path.write_bytes("".join(changed).encode("utf-8"))
+    return count
 
-    # compute rewrites from the old layout, then move, then write
+
+def _own_files(project: Project, cycle: Cycle, old_dir: Path, new_dir: Path) -> list[Path]:
+    """The files Rite writes for a cycle outside its state: profile, pitfalls file, retro — after the move."""
+    out = []
+    for p in (cycle.profile_path, cycle.pitfalls_path, old_dir / "retro.md"):
+        out.append(new_dir / p.relative_to(old_dir) if old_dir in p.parents else p)
+    return list(dict.fromkeys(out))
+
+
+def _link_rewrites(project: Project, old_dir: Path, new_dir: Path) -> dict[Path, str]:
+    """The text of every file whose links the move changes, keyed by where it lives after the move."""
     rewrites: dict[Path, str] = {}
     for f in _md_files(project.root):
         text = f.read_text(encoding="utf-8", errors="replace")
@@ -404,6 +417,42 @@ def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: boo
 
             if _map_state_links(project, data, c.path, here, fix_field):
                 rewrites[here / path.name] = state.dumps(data)
+    return rewrites
+
+
+def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: bool = False,
+            rewrite_bare: bool = False) -> dict:
+    blocking = blockers(project, cycle)
+    old_dir = cycle.path
+    new_dir = project.archive_dir / old_dir.name
+    result = {"cycle": cycle.name, "from": display(project.root, old_dir),
+              "to": display(project.root, new_dir), "blockers": blocking, "rewritten": [], "unrewritten": [],
+              "bare_rewritten": [], "commit": None}
+    if blocking:
+        return result
+    if dry_run:
+        # what --rewrite-bare would touch: outside the folder, and not the own files archive rewrites anyway
+        own = {display(project.root, p) for p in _own_files(project, cycle, old_dir, old_dir)}
+        rewrites = {display(project.root, p): t.splitlines() for p, t in _link_rewrites(project, old_dir, new_dir).items()}
+        whole = _bare_pattern(display(project.root, old_dir))
+        # a line whose link the move rewrites is not left behind
+        result["unrewritten"] = [h for h in _unrewritten(project, old_dir, new_dir, exclude=old_dir)
+                                 if h["path"] not in own and (h["path"] not in rewrites
+                                     or whole.search(rewrites[h["path"]][h["line"] - 1]))]
+        return result
+    if old_dir == project.cycles_root:
+        raise RiteError("a flat single-cycle layout cannot be archived into itself; move it by hand")
+    if new_dir.exists():
+        raise RiteError(f"{display(project.root, new_dir)} already exists")
+    local = cycle.local
+    commit = commit and not local
+    if not local and not gitutil.is_repo(project.root):
+        raise RiteError("archive needs git (git mv keeps history)")
+    if commit and gitutil.run(project.root, "diff", "--cached", "--name-only").strip():
+        raise RiteError("the index has staged changes; commit or unstage them first (archive commits the index)")
+
+    # compute rewrites from the old layout, then move, then write
+    rewrites = _link_rewrites(project, old_dir, new_dir)
     new_dir.parent.mkdir(parents=True, exist_ok=True)
     if local:
         shutil.move(old_dir, new_dir)  # nothing of a local cycle is in git to move
@@ -412,11 +461,22 @@ def archive(project: Project, cycle: Cycle, *, commit: bool = True, dry_run: boo
     for path, text in rewrites.items():
         path.write_text(text, encoding="utf-8", newline="\n")
     result["rewritten"] = [display(project.root, p) for p in rewrites]
+    old, new = display(project.root, old_dir), display(project.root, new_dir)
+    targets = _own_files(project, cycle, old_dir, new_dir)
+    if rewrite_bare:
+        targets += [project.root / h["path"] for h in _unrewritten(project, old_dir, new_dir)]
+    bare = {}
+    for path in dict.fromkeys(targets):
+        n = _rewrite_bare(path, old, new)
+        if n:
+            bare[path] = n
+    result["bare_rewritten"] = [{"path": display(project.root, p), "lines": n} for p, n in bare.items()]
     result["unrewritten"] = _unrewritten(project, old_dir, new_dir)
     result["local"] = local
     if commit:
         # git mv already staged the rename; add the rewritten files and the moved folder's untracked leftovers
-        paths = [str(new_dir.relative_to(project.root)), *(str(p.relative_to(project.root)) for p in rewrites)]
+        paths = [str(new_dir.relative_to(project.root)),
+                 *(str(p.relative_to(project.root)) for p in [*rewrites, *bare])]
         gitutil.run(project.root, "add", "--", *paths)
         gitutil.run(project.root, "commit", "-q", "-m", bookkeeping_message(project, "archive", cycle.name, cycle=cycle))
         result["commit"] = gitutil.short(project.root, "HEAD")

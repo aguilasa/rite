@@ -150,12 +150,15 @@ class ArchiveTest(FixtureCase):
         self.fx.work_commit("src/late.py", "y\n", "fix: late")
         self.ok("close", "FIX-ALP-001")
 
-        self.assertEqual(self.js("archive", "alpha", "--dry-run")["unrewritten"], [])
+        preview = self.js("archive", "alpha", "--dry-run")["unrewritten"]
+        self.assertEqual(sorted((h["path"], h["line"]) for h in preview),
+                         [("docs/index.md", 6), ("docs/notes.md", 3), ("src/tool.py", 2)])
         res = self.js("archive", "alpha")
         self.assertEqual(res["to"], "docs/rite/cycles/archive/alpha")
         self.assertEqual(sorted((h["path"], h["line"]) for h in res["unrewritten"]),
                          [("docs/index.md", 6), ("docs/notes.md", 3), ("src/tool.py", 2)])
         self.assertIn("# see docs/rite/cycles/alpha/01-harness.md", [h["text"] for h in res["unrewritten"]])
+        self.assertEqual(res["bare_rewritten"], [])
         self.assertEqual(self.log(1), ["chore(rite): archive alpha"])
         index = (self.root / "docs/index.md").read_text(encoding="utf-8")
         self.assertIn("[alpha](/docs/rite/cycles/archive/alpha/progress.md)", index)
@@ -165,6 +168,38 @@ class ArchiveTest(FixtureCase):
         self.assertEqual(self.check_errors("--all"), [])
         status = self.js("status", "--all")
         self.assertEqual([c["cycle"] for c in status["cycles"]], ["beta"])
+
+
+    def test_archive_rewrites_bare_paths_in_own_files_and_with_the_flag_elsewhere(self):
+        profiles = self.root / "docs/rite/profiles"
+        with (profiles / "alpha.md").open("a", encoding="utf-8", newline="") as fh:
+            fh.write("\r\n<!-- retro: /docs/rite/cycles/alpha/retro.md -->\r\n")
+        write(profiles / "alpha.pitfalls.md", "# Pitfalls\n\n<!-- new in alpha (docs/rite/cycles/alpha/retro.md) -->\n")
+        write(self.root / "docs/rite/cycles/alpha/retro.md",
+              "# Retro\n\n```\npython3 -c \"open('docs/rite/cycles/alpha/fixes.json')\"\n```\n")
+        write(self.root / "docs/rite/cycles/alpha/01-harness.md",
+              (self.root / "docs/rite/cycles/alpha/01-harness.md").read_text() + "\nran in docs/rite/cycles/alpha\n")
+        self.fx.work_commit("src/tool.py", "# see docs/rite/cycles/alpha/01-harness.md\n", "feat: tool")
+        self.fx.work_commit("docs/notes.md", "docs/rite/cycles/alpha-2 and ./docs/rite/cycles/alpha/\n", "docs: notes")
+        self.fx.git("add", "-A")
+        self.fx.git("commit", "-q", "-m", "docs: retro")
+        finish_cycle(self, "alpha", ["ALP-TASK-01", "ALP-TASK-02", "ALP-TASK-03"])
+        preview = self.js("archive", "alpha", "--dry-run")["unrewritten"]
+        self.assertEqual(sorted(h["path"] for h in preview), ["docs/notes.md", "src/tool.py"])  # own files: always
+
+        res = self.js("archive", "alpha", "--rewrite-bare")
+        new = "docs/rite/cycles/archive/alpha"
+        self.assertEqual(sorted(b["path"] for b in res["bare_rewritten"]),
+                         ["docs/notes.md", f"{new}/retro.md", "docs/rite/profiles/alpha.md",
+                          "docs/rite/profiles/alpha.pitfalls.md", "src/tool.py"])
+        self.assertEqual(res["unrewritten"], [])
+        self.assertIn(f"\r\n<!-- retro: /{new}/retro.md -->\r\n", (profiles / "alpha.md").read_text(newline=""))
+        self.assertIn(f"open('{new}/fixes.json')", (self.root / new / "retro.md").read_text())
+        self.assertEqual((self.root / "docs/notes.md").read_text(),
+                         f"docs/rite/cycles/alpha-2 and ./{new}/\n")
+        self.assertIn("ran in docs/rite/cycles/alpha\n", (self.root / new / "01-harness.md").read_text())  # history
+        self.assertEqual(self.log(1), ["chore(rite): archive alpha"])
+        self.assertEqual(self.fx.git("status", "--porcelain"), "")
 
 
 class ArchiveRelativeTest(FixtureCase):

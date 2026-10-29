@@ -471,15 +471,22 @@ def cmd_publish(project: Project, args) -> int:
 def cmd_archive(project: Project, args) -> int:
     from . import lifecycle
     cycle = project.resolve_cycle(args.name)
-    res = lifecycle.archive(project, cycle, commit=not args.no_commit, dry_run=args.dry_run)
+    res = lifecycle.archive(project, cycle, commit=not args.no_commit, dry_run=args.dry_run,
+                            rewrite_bare=args.rewrite_bare)
     if res["blockers"]:
         lines = [f"cycle {res['cycle']} cannot close:"] + [f"  - {b}" for b in res["blockers"]]
     elif args.dry_run:
         lines = [f"cycle {res['cycle']} can close: {res['from']} -> {res['to']}"]
+        if res["unrewritten"]:
+            lines.append(f"  would stay naming the old folder ({len(res['unrewritten'])}; --rewrite-bare rewrites them):")
+            lines += [f"    {h['path']}:{h['line']}: {h['text']}" for h in res["unrewritten"]]
     else:
         lines = [f"archived {res['cycle']}: {res['from']} -> {res['to']}"]
         if res["rewritten"]:
             lines.append(f"  links rewritten in: {', '.join(res['rewritten'])}")
+        if res["bare_rewritten"]:
+            lines.append("  bare paths rewritten in: " + ", ".join(f"{b['path']} ({b['lines']})"
+                                                               for b in res["bare_rewritten"]))
         if res["unrewritten"]:
             lines.append(f"  not rewritten ({len(res['unrewritten'])}): still name the old folder")
             lines += [f"    {h['path']}:{h['line']}: {h['text']}" for h in res["unrewritten"]]
@@ -874,8 +881,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("archive", parents=[common], help="check a cycle can close; move it to archive_dir")
     s.add_argument("name")
-    s.add_argument("--dry-run", action="store_true", help="only report blockers")
+    s.add_argument("--dry-run", action="store_true", help="only report blockers and the bare paths left")
     s.add_argument("--no-commit", action="store_true")
+    s.add_argument("--rewrite-bare", action="store_true",
+                   help="also rewrite the bare paths, comments and code lines naming the old folder")
     s.set_defaults(fn=cmd_archive)
 
     s = sub.add_parser("anchors", parents=[common], help="list a document's headings as source_of_truth links")
