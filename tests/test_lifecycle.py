@@ -232,7 +232,7 @@ class ArchiveTest(FixtureCase):
                          ["docs/notes.md", f"{new}/retro.md", "docs/rite/profiles/alpha.md",
                           "docs/rite/profiles/alpha.pitfalls.md", "src/tool.py"])
         self.assertEqual(res["unrewritten"], [])
-        self.assertIn(f"\r\n<!-- retro: /{new}/retro.md -->\r\n", (profiles / "alpha.md").read_text(newline=""))
+        self.assertIn(f"\r\n<!-- retro: /{new}/retro.md -->\r\n", (profiles / "alpha.md").read_bytes().decode("utf-8"))
         self.assertIn(f"open('{new}/fixes.json')", (self.root / new / "retro.md").read_text())
         self.assertEqual((self.root / "docs/notes.md").read_text(),
                          f"docs/rite/cycles/alpha-2 and ./{new}/\n")
