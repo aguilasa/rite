@@ -56,7 +56,7 @@ def cmd_resolve_cycle(project: Project, args) -> int:
         "fixes_state": display(project.root, c.fixes_state_path),
         "profile": display(project.root, c.profile_path), "profile_exists": c.profile_path.is_file(),
         "pitfalls": display(project.root, c.pitfalls_path), "pitfalls_exists": c.pitfalls_path.is_file(),
-        "plan": c.meta.get("plan"), "archived": c.archived, "ticket": c.ticket, "local": c.local,
+        "plan": c.meta.get("plan"), "archived": c.archived, "ticket": c.ticket, "local": c.local, "seq": c.seq,
         "commit": ops.commit_refs(project, c), **project.layout(),
         "session_language": project.cfg["project"]["session_language"],
     }
@@ -255,8 +255,10 @@ def cmd_set_cycle(project: Project, args) -> int:
         updates["plan"] = args.plan.strip() or None
     if args.pitfalls is not None:
         updates["pitfalls"] = args.pitfalls.strip() or None
+    if args.seq is not None:
+        updates["seq"] = int(args.seq) if args.seq.strip().isdigit() else args.seq
     if not updates:
-        raise RiteError("rite set-cycle needs --order, --ticket, --plan and/or --pitfalls")
+        raise RiteError("rite set-cycle needs --order, --ticket, --plan, --pitfalls and/or --seq")
     res = ops.set_cycle(project, cycle, updates)
     _emit(args, res, f"set {', '.join(updates)} of cycle {cycle.name} in {res['file']}")
     return EXIT_OK
@@ -383,14 +385,14 @@ def cmd_status(project: Project, args) -> int:
     age = int(project.cfg["status"]["review_age_days"])
     out, texts = [], []
     for c in cycles:
-        s = selection.summary(c, review_age_days=age)
+        s = {"seq": c.seq, **selection.summary(c, review_age_days=age)}
         for key in ("next_task", "next_review", "next_fix"):
             s[key] = s[key].as_dict(project.root)
         out.append(s)
         t = s["tasks"]
         fx = s["open_fixes"]
         texts.append("\n".join([
-            f"cycle {c.name} [{c.prefix or 'no prefix'}] — {display(project.root, c.path)}",
+            f"cycle {c.name}{f' #{c.seq}' if c.seq else ''} [{c.prefix or 'no prefix'}] — {display(project.root, c.path)}",
             f"  tasks: {t['done']} done, {t['in-progress']} in-progress, {t['pending']} pending, "
             f"{t['blocked']} blocked, {t['skipped']} skipped ({t['total']} total)",
             f"  review queue: {len(s['review_queue'])}"
@@ -828,11 +830,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="item IDs of the cycle, replacing the list (repeat or comma-separate; '' empties)")
     s.set_defaults(fn=cmd_set)
 
-    s = sub.add_parser("set-cycle", parents=[common], help="set a cycle's order, ticket, plan or pitfalls file")
+    s = sub.add_parser("set-cycle", parents=[common], help="set a cycle's order, ticket, plan, pitfalls file or seq")
     s.add_argument("--order", action="append", help="task IDs in execution order (repeat or comma-separate)")
     s.add_argument("--ticket", help="external tracker key ('' clears it)")
     s.add_argument("--plan", help="plan link, in [paths].link_style ('' clears it)")
     s.add_argument("--pitfalls", help="an existing pitfalls file, repo-relative ('' back to [naming])")
+    s.add_argument("--seq", help="the cycle's place among all cycles (1 runs first)")
     s.set_defaults(fn=cmd_set_cycle)
 
     s = sub.add_parser("sync", parents=[common], help="regenerate progress/fixes tables from the JSON state")

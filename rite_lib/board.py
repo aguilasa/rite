@@ -66,7 +66,7 @@ class Board:
                 counts = {s: 0 for s in ("pending", "in-progress", "done", "blocked", "skipped")}
                 for t in cycle.tasks:
                     counts[t.status] = counts.get(t.status, 0) + 1
-                entry |= {"name": cycle.name, "prefix": cycle.prefix, "tasks": counts | {"total": len(cycle.tasks)},
+                entry |= {"name": cycle.name, "prefix": cycle.prefix, "seq": cycle.seq, "tasks": counts | {"total": len(cycle.tasks)},
                           "open_fixes": sum(1 for f in cycle.fixes if f.status in OPEN_FIX_STATUSES)}
             out["closed" if archived else "open"].append(entry)
         return out

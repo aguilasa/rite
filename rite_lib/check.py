@@ -186,6 +186,20 @@ class Checker:
                 if key in seen and seen[key] != i.path:
                     self.err(i.path, f"duplicate ID {i.id} (also {display(self.p.root, seen[key])})")
                 seen.setdefault(key, i.path)
+        by_seq: dict[int, list[Cycle]] = {}
+        for c in all_cycles:
+            if c.seq is not None:
+                by_seq.setdefault(c.seq, []).append(c)
+        targets = {c.path for c in cycles}
+        for c in all_cycles:
+            if c.path not in targets:
+                continue
+            if c.seq is None:
+                self.warn(c.progress_state_path, "no seq: the cycles' order is unknown "
+                          "(rite migrate --from cycle-order, or rite set-cycle --seq N)")
+            elif len(by_seq[c.seq]) > 1:
+                others = ", ".join(o.name for o in by_seq[c.seq] if o.path != c.path)
+                self.warn(c.progress_state_path, f"seq {c.seq} is also cycle {others}'s (rite set-cycle --seq N)")
         for cycle in cycles:
             self.check_cycle(cycle, owner)
         return self.findings

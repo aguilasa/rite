@@ -9,6 +9,11 @@ All notable changes to this project are documented here. Versions follow [SemVer
 - **`rite archive --rewrite-bare`**: rewrites the bare paths, comments and code lines outside the
   archived folder that `unrewritten` lists; `--dry-run` now previews them, and `/rite:close-cycle`
   asks once whether to rewrite them (#26).
+- **Cycles keep their order in `seq`**: a positive integer in each cycle's `progress.json`, set by
+  `rite new-cycle` to one more than every cycle's, live or archived, and moved with the cycle when it
+  is archived. `status`, `check`, the board (which shows it as `#N`) and `retro-suggest` (the previous
+  cycle) follow it instead of folder names; `rite set-cycle --seq N` moves a cycle. A cycle without
+  one sorts last, by name, and `rite check` warns about it and about two cycles sharing a `seq`.
 
 ### Changed
 

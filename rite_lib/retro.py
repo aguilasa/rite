@@ -78,7 +78,10 @@ def _done_dates(cycle: Cycle) -> list[str]:
 
 def previous_cycle(project: Project, cycle: Cycle, cycles: list[Cycle]) -> Cycle | None:
     """The cycle before this one: of the others, the one that finished last, no later than this one
-    started. Cycles record no "follows" link; the dates their items were done are what there is."""
+    started — or, when this cycle has a `seq`, the one with the highest lower `seq`."""
+    if cycle.seq is not None:
+        earlier = [c for c in cycles if c.seq is not None and c.seq < cycle.seq]
+        return max(earlier, key=lambda c: c.seq) if earlier else None
     dates = _done_dates(cycle)
     start = dates[0] if dates else "9999-12-31"
     best: tuple[str, Cycle] | None = None

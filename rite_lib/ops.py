@@ -11,7 +11,7 @@ from . import frontmatter, gitutil, markdown, state, views
 from .config import FIX_STATUSES, NO_COMMIT, SEVERITIES, TASK_STATUSES
 from .guard import glob_regex
 from .markdown import append_to_section
-from .model import Cycle, Item, Project, RiteError, display, make_link, resolve_link
+from .model import Cycle, Item, Project, RiteError, display, make_link, resolve_link, seq_value
 from .naming import slugify
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -140,7 +140,7 @@ def _write_item(item: Item, updates: dict, log_line: str | None, log_titles: lis
 
 # planning fields: what the model fills in after creating an item; every other field is the CLI's
 PLANNING_FIELDS = ("files", "resources", "depends_on")
-CYCLE_FIELDS = ("order", "ticket", "plan", "pitfalls")
+CYCLE_FIELDS = ("order", "ticket", "plan", "pitfalls", "seq")
 
 
 def seed(text: str, item_id: str) -> tuple[dict, str]:
@@ -376,7 +376,7 @@ def repo_file(project: Project, path: str, what: str) -> Path:
 
 
 def set_cycle(project: Project, cycle: Cycle, updates: dict) -> dict:
-    """Set the cycle's `order`, `ticket`, `plan` or `pitfalls`."""
+    """Set the cycle's `order`, `ticket`, `plan`, `pitfalls` or `seq` (its place among the cycles)."""
     bad = [k for k in updates if k not in CYCLE_FIELDS]
     if bad:
         raise RiteError(f"rite set-cycle writes {list(CYCLE_FIELDS)} only, not {', '.join(bad)}")
@@ -388,6 +388,8 @@ def set_cycle(project: Project, cycle: Cycle, updates: dict) -> dict:
             raise RiteError(f"order lists {', '.join(unknown)}, not tasks of cycle {cycle.name}")
         if len(set(order)) != len(order):
             raise RiteError("order lists a task twice")
+    if "seq" in updates and seq_value(updates["seq"]) is None:
+        raise RiteError(f"seq must be a positive integer, not {updates['seq']!r}")
     if updates.get("pitfalls"):
         updates["pitfalls"] = make_link(project.root, cycle.progress_path,
                                         repo_file(project, updates["pitfalls"], "pitfalls file"),

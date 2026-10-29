@@ -15,6 +15,11 @@ class RiteError(Exception):
     """User-facing error; the CLI prints it and exits non-zero."""
 
 
+
+def seq_value(value) -> int | None:
+    """A stored `seq`, if it is one: a positive integer (a bool is not)."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
 @dataclass
 class Item:
     kind: str  # "task" | "fix"
@@ -87,6 +92,11 @@ class Cycle:
     items: list[Item] = field(default_factory=list)
     deleted: list = field(default_factory=list)  # tombstones of deleted items, both state files
     workspace: bool = False  # rite.toml lives outside git; every cycle is then local
+
+    @property
+    def seq(self) -> int | None:
+        """The cycle's place among all cycles (1 runs first), or None for one made before it existed."""
+        return seq_value(self.meta.get("seq"))
 
     @property
     def prefix(self) -> str:
@@ -278,15 +288,28 @@ class Project:
         """A cycle from before the JSON state: progress markdown with frontmatter, no progress JSON."""
         return (path / self.progress_name).is_file() and not (path / self.progress_state).is_file()
 
+    def cycle_seq(self, path: Path) -> int | None:
+        """A cycle folder's `seq`, read from its progress JSON alone (None: none, or no JSON yet)."""
+        try:
+            return seq_value(state.read(path / self.progress_state).get("seq"))
+        except (FileNotFoundError, state.StateError):
+            return None
+
+    def by_seq(self, dirs) -> list[Path]:
+        """Cycle folders in their order: by `seq`, those without one last, ties and the rest by name."""
+        def key(p: Path):
+            n = self.cycle_seq(p)
+            return (n is None, n or 0, p.name)
+        return sorted(dirs, key=key)
+
     def _cycle_dirs(self, base: Path) -> list[Path]:
         if not base.is_dir():
             return []
         found = []
         if self.is_cycle_dir(base) and base != self.archive_dir:
             found.append(base)
-        for child in sorted(base.iterdir()):
-            if child.is_dir() and child.resolve() != self.archive_dir and self.is_cycle_dir(child):
-                found.append(child)
+        found += self.by_seq(child for child in base.iterdir()
+                             if child.is_dir() and child.resolve() != self.archive_dir and self.is_cycle_dir(child))
         return found
 
     def live_cycles(self) -> list[Cycle]:
@@ -297,7 +320,7 @@ class Project:
             return []
         # a legacy archive folder may itself be one closed cycle
         dirs = [self.archive_dir] if self.is_cycle_dir(self.archive_dir) else []
-        return dirs + [p for p in sorted(self.archive_dir.iterdir()) if p.is_dir() and self.is_cycle_dir(p)]
+        return dirs + self.by_seq(p for p in self.archive_dir.iterdir() if p.is_dir() and self.is_cycle_dir(p))
 
     def archived_cycles(self) -> list[Cycle]:
         return [self.load_cycle(p, archived=True) for p in self.archived_dirs()]

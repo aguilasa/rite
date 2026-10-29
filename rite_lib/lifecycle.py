@@ -58,6 +58,8 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
         plan_link = make_link(project.root, path / project.progress_name, plan_path, project.cfg.link_style)
 
     pitfalls_source = _pitfalls_source(project, pitfalls_from) if pitfalls_from else None
+    # after every cycle, live or archived: like a fix ID, never reused
+    seq = max((c.seq or 0 for c in project.all_cycles()), default=0) + 1
     naming = project.cfg["naming"]
     profiles = project.cfg.path("profiles_dir")
     profile = profiles / naming["profile_file"].format(cycle=name)
@@ -85,7 +87,7 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
             # the template's frontmatter seeds progress.json; ticket and local are set, not templated:
             # a local template override may predate these keys
             meta, body = frontmatter.parse(text)
-            meta = {**meta, "ticket": ticket or None, "local": bool(local)}
+            meta = {**meta, "ticket": ticket or None, "local": bool(local), "seq": seq}
             state.write(path / project.progress_state, state.new_progress(meta))
             created.append(path / project.progress_state)
             text = body.lstrip("\n")
@@ -101,7 +103,7 @@ def new_cycle(project: Project, name: str, prefix: str, *, plan: str | None = No
         sha = gitutil.commit_paths(project.root, created,
                                    bookkeeping_message(project, "new cycle", name, cycle=cycle))
     local_paths = [path, profile, pitfalls] + ([plan_path] if copy_from else [])
-    return {"cycle": name, "prefix": prefix, "path": display(project.root, path), "ticket": cycle.ticket,
+    return {"cycle": name, "prefix": prefix, "seq": seq, "path": display(project.root, path), "ticket": cycle.ticket,
             "local": cycle.local, "plan": display(project.root, plan_path) if plan_path else None,
             "plan_copied_from": copied_from,
             "pitfalls_copied_from": display(project.root, pitfalls_source) if pitfalls_source else None,

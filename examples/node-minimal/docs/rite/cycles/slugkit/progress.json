@@ -3,6 +3,7 @@
   "cycle": "slugkit",
   "prefix": "SLG",
   "plan": "/docs/plans/PLAN-slugkit.md",
+  "seq": 1,
   "tasks": [
     {
       "id": "SLG-TASK-01",

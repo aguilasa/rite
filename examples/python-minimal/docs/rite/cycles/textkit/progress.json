@@ -3,6 +3,7 @@
   "cycle": "textkit",
   "prefix": "TXT",
   "plan": "/docs/plans/PLAN-textkit.md",
+  "seq": 1,
   "tasks": [
     {
       "id": "TXT-TASK-01",

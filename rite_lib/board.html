@@ -49,6 +49,7 @@
           <a v-for="c in group[1]" :key="c.folder" :href="cycleHref(c.folder)"
              class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
             <span>
+              <span v-if="c.seq" class="text-secondary">#{{ c.seq }} </span>
               <strong>{{ c.name }}</strong>
               <span v-if="c.prefix" class="text-secondary"> [{{ c.prefix }}]</span>
               <small class="d-block text-secondary">{{ c.folder }}</small>

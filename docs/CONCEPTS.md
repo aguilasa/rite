@@ -39,11 +39,15 @@ keep their history (`git mv`).
 ## State
 
 - **The JSON is the only state.** Each cycle holds `progress.json` — its meta (`cycle`, `prefix`,
-  `plan`, `ticket`, `local`, `order`, …) and one entry per task — and `fixes.json`, one entry per fix.
-  An entry holds the item's fields (`title`, `type`, `phase`, `depends_on`, `source_of_truth`,
+  `plan`, `ticket`, `local`, `order`, `seq`, …) and one entry per task — and `fixes.json`, one entry
+  per fix. An entry holds the item's fields (`title`, `type`, `phase`, `depends_on`, `source_of_truth`,
   `files`, `resources`, `repo`, `status`, `done_on`, `done_commit`, `reviewed_on`, `review_commit`,
   `origin`, `severity`, `unblocked_by`, and any key of your own) and `file`, its markdown file relative
   to the cycle. The arrays are kept in execution order.
+- **Cycles have an order.** `seq` (1 runs first) is set by `new-cycle` after every cycle, live or
+  archived, and moves with the cycle when it is archived; `status`, `check`, the board and
+  `retro-suggest` follow it. A cycle without one (made before 0.27) sorts last, by name, until
+  `rite migrate --from cycle-order` numbers it; `rite set-cycle --seq N` moves one.
 - **Item files are prose.** A task or fix file keeps its body and `id:` in its frontmatter, nothing
   else; `check` reports a field written back into it, an item file no entry lists, an entry whose
   file is gone.

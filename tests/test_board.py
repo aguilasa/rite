@@ -91,6 +91,13 @@ class BoardTest(unittest.TestCase):
         self.assertEqual([c["folder"] for c in data["closed"]], ["docs/rite/cycles/archive/old"])
         alpha = data["open"][0]
         self.assertEqual((alpha["prefix"], alpha["tasks"]["total"], alpha["open_fixes"]), ("ALP", 3, 0))
+        self.assertIsNone(alpha["seq"])
+
+    def test_cycles_follow_seq_not_their_names(self):
+        code, _, err = self.fx.rite("set-cycle", "--cycle", "beta", "--seq", "1")
+        self.assertEqual(code, 0, err)
+        self.assertEqual([(c["name"], c["seq"]) for c in self.get("/api/cycles")["open"]],
+                         [("beta", 1), ("alpha", None)])
 
     def test_cycle_has_the_columns_of_the_markdown_views(self):
         self.fx.rite("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "Broken", "--severity", "high")

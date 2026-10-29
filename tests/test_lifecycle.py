@@ -40,6 +40,45 @@ class NewCycleTest(FixtureCase):
         self.assertEqual(self.fx.rite("new-cycle", "bad name", "--prefix", "X")[0], 1)
 
 
+class CycleSeqTest(FixtureCase):
+    """Cycles keep their order in `seq`; listings follow it, not folder names."""
+
+    def seq(self, cycle: str) -> int | None:
+        return fields(self.root / f"docs/rite/cycles/{cycle}/progress.md").get("seq")
+
+    def test_new_cycles_are_numbered_after_every_cycle_archived_included(self):
+        arch = self.root / "docs/rite/cycles/archive/old"
+        write(arch / "progress.json", '{"schema": 1, "cycle": "old", "prefix": "OLD", "seq": 4, "tasks": []}')
+        self.assertEqual(self.js("new-cycle", "gamma", "--prefix", "GAM")["seq"], 5)
+        self.assertEqual(self.js("new-cycle", "aaa", "--prefix", "AAA")["seq"], 6)
+        self.assertEqual(self.seq("gamma"), 5)
+        # without seq last, by name; then by seq whatever the name
+        self.assertEqual([c["cycle"] for c in self.js("status", "--all")["cycles"]], ["gamma", "aaa", "alpha", "beta"])
+        self.assertEqual(self.js("resolve-cycle", "aaa")["seq"], 6)
+
+    def test_set_cycle_seq_reorders_and_check_warns_missing_and_duplicate(self):
+        self.ok("set-cycle", "--cycle", "beta", "--seq", "1")
+        self.ok("set-cycle", "--cycle", "alpha", "--seq", "2")
+        self.assertEqual([c["cycle"] for c in self.js("status", "--all")["cycles"]], ["beta", "alpha"])
+        for bad in ("0", "x"):
+            self.assertNotEqual(self.fx.rite("set-cycle", "--cycle", "beta", "--seq", bad)[0], 0)
+        self.ok("set-cycle", "--cycle", "alpha", "--seq", "1")
+        warnings = [f["message"] for f in self.js("check", "--all")["findings"] if f["level"] == "warn"]
+        self.assertIn("seq 1 is also cycle beta's (rite set-cycle --seq N)", warnings)
+        self.ok("set-cycle", "--cycle", "alpha", "--seq", "2")
+        write(self.root / "docs/rite/cycles/archive/old/progress.json",
+              '{"schema": 1, "cycle": "old", "prefix": "OLD", "tasks": []}')
+        out = json.loads(self.fx.rite("check", "--all", "--include-archived", "--json")[1])
+        warnings = [f["message"] for f in out["findings"] if f["level"] == "warn"]
+        self.assertTrue(any(w.startswith("no seq") for w in warnings), warnings)
+
+    def test_retro_suggest_previous_follows_seq(self):
+        self.ok("set-cycle", "--cycle", "beta", "--seq", "1")
+        self.ok("set-cycle", "--cycle", "alpha", "--seq", "2")
+        self.assertEqual(self.js("retro-suggest", "alpha")["previous"], "beta")
+        self.assertIsNone(self.js("retro-suggest", "beta")["previous"])
+
+
 class NewCycleCopyPlanTest(FixtureCase):
     def setUp(self):
         super().setUp()

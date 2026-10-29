@@ -40,7 +40,8 @@ class PtBrBacklogTest(unittest.TestCase):
     def test_check_warns_instead_of_staying_silent(self):
         found = self.js("check", "--cycle", "wte")
         self.assertEqual(found["errors"], 0, found)
-        messages = [(f["path"], f["message"]) for f in found["findings"] if f["level"] == "warn"]
+        messages = [(f["path"], f["message"]) for f in found["findings"]
+                    if f["level"] == "warn" and not f["message"].startswith("no seq")]
         self.assertIn("no section titled 'Gates'", messages[0][1])
         self.assertEqual([p for p, m in messages if "'Evidence' / 'Verification'" in m],
                          ["docs/tasks/wte/CORR-WTE-001.md", "docs/tasks/wte/CORR-WTE-002.md"])
