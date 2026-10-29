@@ -14,6 +14,10 @@ All notable changes to this project are documented here. Versions follow [SemVer
   is archived. `status`, `check`, the board (which shows it as `#N`) and `retro-suggest` (the previous
   cycle) follow it instead of folder names; `rite set-cycle --seq N` moves a cycle. A cycle without
   one sorts last, by name, and `rite check` warns about it and about two cycles sharing a `seq`.
+- **`rite migrate --from cycle-order`** numbers the cycles of a project started before `seq`: by the
+  first commit of each progress file (archived ones followed through their move), else the first
+  `done_on`, else the name; `--order a,b,c` takes the order the plan states. Dry run by default,
+  `--write --commit` for one commit (see `docs/MIGRATING.md`).
 
 ### Changed
 

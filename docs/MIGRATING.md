@@ -7,7 +7,7 @@ Two ways in:
   keep state in frontmatter with Rite's vocabulary — then `migrate --from frontmatter` moves it to JSON.
 - **Convert in place** — `rite.py migrate --from <format>` rewrites a known legacy format so the cycle's
   JSON becomes the single source of state. Today: `frontmatter` (Rite ≤ 0.13), `graph` (a hand-drawn
-  dependency graph) and `we2002`.
+  dependency graph), `cycle-order` (cycles without `seq`, Rite ≤ 0.26) and `we2002`.
 
 Always convert **on a branch**, and review the diff before merging.
 
@@ -65,6 +65,29 @@ and `depends_on` lacks is a warning, never added to the JSON — if it holds, `r
 --depends-on …`. Nodes whose name and label hold no task ID are listed, not compared. Same safety as
 `--from frontmatter`: refused over uncommitted changes in those files, idempotent (a cycle that has
 the region is skipped), a local cycle's files written but never committed.
+
+## `migrate --from cycle-order`
+
+Up to 0.26 Rite stored no order between cycles: listings and the board sorted them by folder name, and
+the real order lived only in the plan. Each cycle now has a `seq` in its `progress.json` (1 runs
+first), set by `rite new-cycle`; cycles made before have none, sort last by name, and `rite check`
+warns about each. This migration numbers them:
+
+```sh
+rite migrate --from cycle-order                              # dry run: proposed seq and where it came from
+rite migrate --from cycle-order --write --commit             # one commit: chore(rite): number the cycles in seq
+rite migrate --from cycle-order --order a,b,c --write --commit   # the order the plan states, every cycle named
+rite check --all --include-archived
+```
+
+The proposal orders the cycles without `seq` by the date their progress markdown was first committed
+(following the `git mv` of an archived cycle; the markdown, not `progress.json`, which `--from
+frontmatter` created later), else their first `done_on`, else their name — each line says which.
+Compare it with the plan before `--write`. Cycles that already have a `seq` keep it and the others
+are numbered after the highest; `--order` numbers every cycle 1..n instead, and refuses a list that
+leaves one out. One cycle out of place afterwards: `rite set-cycle --cycle <name> --seq N`. Same
+safety as the other migrations: refused over uncommitted changes in those files, idempotent, a local
+cycle's file written but never committed.
 
 ## `migrate --from we2002`
 

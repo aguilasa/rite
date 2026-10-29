@@ -576,12 +576,16 @@ def cmd_sections(project: Project, args) -> int:
 
 def cmd_migrate(args) -> int:
     from . import migrate
-    if args.source not in ("we2002", "frontmatter", "graph"):
-        raise RiteError(f"unknown source {args.source!r}; supported: frontmatter, graph, we2002")
+    if args.source not in ("we2002", "frontmatter", "graph", "cycle-order"):
+        raise RiteError(f"unknown source {args.source!r}; supported: cycle-order, frontmatter, graph, we2002")
+    if args.order and args.source != "cycle-order":
+        raise RiteError("--order is for --from cycle-order")
     if args.source == "frontmatter":
         return _migrate_frontmatter(args)
     if args.source == "graph":
         return _migrate_graph(args)
+    if args.source == "cycle-order":
+        return _migrate_cycle_order(args)
     root = Path(args.root).resolve() if args.root else Path.cwd()
     report = migrate.migrate_we2002(root, write=args.write)
     r = report.as_dict()
@@ -649,6 +653,26 @@ def _migrate_graph(args) -> int:
         lines.append("dry run: nothing written (pass --write, optionally --commit)")
     elif r["cycles"]:
         lines.append("next: rite check --all --include-archived")
+    _emit(args, r, "\n".join(lines))
+    return EXIT_OK
+
+
+def _migrate_cycle_order(args) -> int:
+    from . import migrate
+    root = config.find_root(Path(args.root) if args.root else Path.cwd())
+    report = migrate.cycle_order(root, write=args.write, commit=args.commit,
+                                 order=_ids(args.order) if args.order else None)
+    r = report.as_dict()
+    lines = [f"{'numbered' if args.write else 'would number'} {len(r['cycles'])} cycle(s):"]
+    lines += [f"  {c}" for c in r["cycles"]]
+    if r["skipped"]:
+        lines.append(f"already numbered, kept: {', '.join(r['skipped'])}")
+    lines.append(f"files {'written' if args.write else 'to write'}: {len(r['changed'])}")
+    if r["commit"]:
+        lines.append(f"committed {r['commit']}")
+    if not args.write:
+        lines.append("dry run: nothing written (pass --write, optionally --commit; "
+                     "--order a,b,c for the order the plan states)")
     _emit(args, r, "\n".join(lines))
     return EXIT_OK
 
@@ -924,9 +948,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("migrate", parents=[common], help="adopt a legacy backlog in place (run on a branch)")
     s.add_argument("--from", dest="source", required=True,
                    help="frontmatter (Rite <= 0.13: state in frontmatter, moved to JSON), graph "
-                        "(hand-drawn dependency graph replaced by the generated one) or we2002")
+                        "(hand-drawn dependency graph replaced by the generated one), cycle-order "
+                        "(Rite <= 0.26: cycles numbered in seq) or we2002")
     s.add_argument("--write", action="store_true", help="write changes (default: dry run)")
-    s.add_argument("--commit", action="store_true", help="--from frontmatter|graph: commit the result")
+    s.add_argument("--commit", action="store_true", help="--from frontmatter|graph|cycle-order: commit the result")
+    s.add_argument("--order", action="append", help="--from cycle-order: every cycle's name, first to last")
     s.set_defaults(fn=cmd_migrate, needs_project=False)
 
     s = sub.add_parser("tokens", parents=[common],

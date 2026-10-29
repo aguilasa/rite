@@ -817,3 +817,74 @@ def graph_regions(root: Path, *, write: bool, commit: bool = False) -> Report:
                                              cfg["commit"]["style"] == "conventional" else
                                              "rite: generate dependency graphs from depends_on")
     return report
+
+
+# --- cycle order (before 0.27 cycles had no `seq`) ---------------------------------
+def _first_commit_date(root: Path, path: Path) -> str | None:
+    """When ``path`` was first committed, following renames (an archived cycle was `git mv`ed)."""
+    if not gitutil.is_repo(root) or not path.exists():
+        return None
+    out = gitutil.run(root, "log", "--follow", "--diff-filter=A", "--format=%aI", "--",
+                      str(path.relative_to(root)), check=False).split()
+    return out[-1] if out else None
+
+
+def _order_evidence(project: Project, cycle: Cycle) -> tuple[str, str]:
+    """(sort key, where it came from): the progress markdown's first commit — not the JSON, which
+    `--from frontmatter` wrote later — else the first `done_on`, else nothing but the name."""
+    date = _first_commit_date(project.root, cycle.progress_path)
+    if date:
+        return date, f"first commit of {display(project.root, cycle.progress_path)}"
+    done = sorted(str(i.fields["done_on"]) for i in cycle.items
+                  if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(i.fields.get("done_on"))))
+    if done:
+        return done[0], "first done_on"
+    return "9999", "no date: by name"
+
+
+def cycle_order(root: Path, *, write: bool, commit: bool = False, order: list[str] | None = None) -> Report:
+    """Give every cycle a `seq`. Cycles that have one keep it; the others follow, by when they started.
+    ``order`` (every cycle's name) numbers them all 1..n instead: the order the plan states."""
+    root = root.resolve()
+    cfg = config.load(root)
+    project = Project(cfg)
+    report = Report()
+    dirs = project._cycle_dirs(project.cycles_root) + project.archived_dirs()
+    for d in dirs:
+        if project.is_legacy_dir(d):
+            raise RiteError(f"{display(root, d)} is a cycle from before the JSON state: run "
+                            "`rite migrate --from frontmatter --write` first")
+    cycles = [project.load_cycle(d) for d in dirs]
+    plan: list[tuple[Cycle, int, str]] = []
+    if order:
+        names = [c.name for c in cycles]
+        missing = [n for n in names if n not in order]
+        unknown = [n for n in order if n not in names]
+        if missing or unknown or len(set(order)) != len(order):
+            raise RiteError("--order must name every cycle once"
+                            + (f"; missing: {', '.join(missing)}" if missing else "")
+                            + (f"; not cycles: {', '.join(unknown)}" if unknown else ""))
+        by_name = {c.name: c for c in cycles}
+        plan = [(by_name[n], k, "--order") for k, n in enumerate(order, 1)]
+    else:
+        top = max((c.seq or 0 for c in cycles), default=0)
+        report.skipped = [c.name for c in cycles if c.seq is not None]
+        todo = sorted(((c, *_order_evidence(project, c)) for c in cycles if c.seq is None),
+                      key=lambda t: (t[1], t[0].name))
+        plan = [(c, top + k, f"{source} ({key[:10]})" if key != "9999" else source)
+                for k, (c, key, source) in enumerate(todo, 1)]
+    writes = [(c, n) for c, n, _ in plan if c.seq != n]
+    report.cycles = [f"{c.name}: seq {n} — {why}" for c, n, why in plan]
+    report.changed = [display(root, c.progress_state_path) for c, _ in writes]
+    if not write or not writes:
+        return report
+    paths = [c.progress_state_path for c, _ in writes]
+    _refuse_unsafe_write(root, paths, commit=commit)
+    for c, n in writes:
+        state.update_meta(c.progress_state_path, {"seq": n})
+    tracked = [c.progress_state_path for c, _ in writes if not c.local]
+    if commit and gitutil.is_repo(root) and tracked:
+        report.commit = gitutil.commit_paths(root, tracked, "chore(rite): number the cycles in seq" if
+                                             cfg["commit"]["style"] == "conventional" else
+                                             "rite: number the cycles in seq")
+    return report
