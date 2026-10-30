@@ -936,21 +936,29 @@ global = ["test \"$(echo 'a  b')\" = \"a  b\""]
             self.js("begin", "task", "--cycle", "alpha")
             self.fx.work_commit("src/a.py", "a\n", "feat: harness")
             data = self.js("finish", "ALP-TASK-01", "--cycle", "alpha")
-            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None}])
+            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None, "skipped": None}])
             remote = subprocess.run(["git", "-C", bare, "log", "-2", "--format=%s"], check=True,
                                     capture_output=True, text=True).stdout.splitlines()
             self.assertEqual(remote, ["chore(rite): close ALP-TASK-01", "feat: harness"])
 
-    def test_failed_push_is_reported_not_fatal(self):
+    def test_a_repository_without_remote_is_skipped(self):
         self.push_after_each_item()  # no remote at all
         self.js("begin", "task", "--cycle", "alpha")
         self.fx.work_commit("src/a.py", "a\n", "feat: harness")
         data = self.js("finish", "ALP-TASK-01", "--cycle", "alpha")
         self.assertEqual(data["closed"]["id"], "ALP-TASK-01")
-        [push] = data["pushed"]
-        self.assertFalse(push["ok"])
-        self.assertIn("git push", push["error"])
+        self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None, "skipped": "no remote"}])
         self.assertEqual(self.log(1), ["chore(rite): close ALP-TASK-01"])
+
+    def test_a_repository_with_a_remote_still_fails_its_push(self):
+        self.fx.git("remote", "add", "origin", str(self.root / "no-such-remote"))
+        self.push_after_each_item()
+        self.js("begin", "task", "--cycle", "alpha")
+        self.fx.work_commit("src/a.py", "a\n", "feat: harness")
+        [push] = self.js("finish", "ALP-TASK-01", "--cycle", "alpha")["pushed"]
+        self.assertFalse(push["ok"])
+        self.assertIsNone(push["skipped"])
+        self.assertIn("git push", push["error"])
 
     def new_fix(self) -> str:
         return self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-01", "--title", "T",
@@ -969,18 +977,18 @@ global = ["test \"$(echo 'a  b')\" = \"a  b\""]
             self.fx.git("commit", "-q", "-am", "chore: push after each item")
             fix_id = self.new_fix()
             data = self.js("commit-new", fix_id, "--cycle", "alpha")
-            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None}])
+            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None, "skipped": None}])
             remote = subprocess.run(["git", "-C", bare, "log", "-1", "--format=%s"], check=True,
                                     capture_output=True, text=True).stdout.splitlines()
             self.assertEqual(remote, [f"chore(rite): open {fix_id}"])
             self.assertNotIn("ahead", self.fx.git("status", "-sb"))
 
-    def test_commit_new_reports_failed_push(self):
+    def test_commit_new_skips_a_repository_without_remote(self):
         self.push_after_each_item()  # no remote at all
         fix_id = self.new_fix()
         data = self.js("commit-new", fix_id, "--cycle", "alpha")
         [push] = data["pushed"]
-        self.assertFalse(push["ok"])
+        self.assertEqual((push["ok"], push["skipped"]), (True, "no remote"))
         self.assertEqual(self.log(1), [f"chore(rite): open {fix_id}"])
 
 

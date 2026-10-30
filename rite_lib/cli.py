@@ -196,7 +196,8 @@ def cmd_finish(project: Project, args) -> int:
 
 
 def _pushed_lines(pushed: list[dict]) -> list[str]:
-    return [f"  pushed: {p['repo']}" if p["ok"] else f"  push failed: {p['repo']}: {p['error']}" for p in pushed]
+    return [f"  push skipped: {p['repo']}: {p['skipped']}" if p.get("skipped")
+            else f"  pushed: {p['repo']}" if p["ok"] else f"  push failed: {p['repo']}: {p['error']}" for p in pushed]
 
 
 def cmd_next(project: Project, args) -> int:

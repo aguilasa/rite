@@ -26,6 +26,10 @@ def is_repo(root: Path) -> bool:
         return False
 
 
+def has_remote(root: Path) -> bool:
+    return bool(run(root, "remote", check=False).strip())
+
+
 def push(root: Path) -> None:
     """Plain `git push`: the branch's configured upstream, never forced."""
     run(root, "push", "--quiet")

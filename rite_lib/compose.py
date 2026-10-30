@@ -769,7 +769,7 @@ def _push_after_commit(project: Project, item: Item, no_repo: bool) -> list[dict
     """`[commit].push = "after-each-item"`: push the work repository and the bookkeeping one.
 
     Run after `rite finish` and `rite commit-new`. A failed push is reported, never fatal: the
-    commit already stands in the local history.
+    commit already stands in the local history. A repository with no remote is skipped.
     """
     if project.cfg["commit"]["push"] != "after-each-item":
         return []
@@ -778,7 +778,12 @@ def _push_after_commit(project: Project, item: Item, no_repo: bool) -> list[dict
     for root in dict.fromkeys(r.resolve() for r in roots):
         if not gitutil.is_repo(root):
             continue
-        entry = {"repo": display(project.root, root) or ".", "ok": True, "error": None}
+        entry = {"repo": display(project.root, root) or ".", "ok": True, "error": None, "skipped": None}
+        if not gitutil.has_remote(root):
+            # local by design (a split layout's documents repository): nothing to push to, nothing failed
+            entry["skipped"] = "no remote"
+            result.append(entry)
+            continue
         try:
             gitutil.push(root)
         except gitutil.GitError as e:

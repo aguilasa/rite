@@ -103,7 +103,7 @@ class SingleRepoLayout(unittest.TestCase):
             self.fx.git("commit", "-q", "-am", "chore: push")
             self.fx.work_commit("src/a.py", "a\n", "feat: harness")
             data = self.js("finish", "ALP-TASK-01", "--cycle", "alpha")
-            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None}])
+            self.assertEqual(data["pushed"], [{"repo": ".", "ok": True, "error": None, "skipped": None}])
 
     def test_check_is_clean(self):
         code, out, _ = self.fx.rite("check", "--cycle", "alpha", "--json")

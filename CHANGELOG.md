@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`push = "after-each-item"` skips a repository with no remote**: a deliberately local documents
+  repository no longer fails its push on every item; it is reported as `skipped: "no remote"`, and
+  only a repository that has a remote can fail (#27).
+
 ## [0.27.0] — 2026-10-29
 
 ### Added
