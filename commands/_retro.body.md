@@ -26,7 +26,12 @@ twice belongs in the repo config, and a failure of the rite itself belongs to th
    **bookkeeping** (state, links, logs) or **engineering** (code, data, numbers). The bookkeeping and
    engineering totals are the sums of these counts — `rite stats` does not classify fixes.
 6. **Propose**, every proposal carrying its fix IDs as evidence, starting from the candidates and
-   marked `(retro-suggest)`, or `(added)` when it is yours:
+   marked `(retro-suggest)`, or `(added)` when it is yours. Give each an ID (`K1`, `P1`, `R1`, `X1`
+   for Keep, Promote, Report, Prune) and a verdict with a one-line reason: **recommended** when the
+   evidence is measured — a candidate of `retro-suggest`, a lesson two or more fixes of one root-cause
+   group share, a Report whose fix shows the rite itself failed; **optional** when it rests on one fix,
+   on reading alone, or on a choice that is the user's (the wording of a rule, pruning an entry no fix
+   touched):
    - **Keep** — pitfalls, in the template's format, written to this cycle's pitfalls file: the next
      cycle does not exist yet, and `/rite:new-cycle` starts its file as a copy of it (`--pitfalls-from`).
      A fix whose `suggest` is `update-existing` extends that entry (its `proven by`, its `rule`), never
@@ -38,14 +43,18 @@ twice belongs in the repo config, and a failure of the rite itself belongs to th
    - **Prune** — the `prune` candidates; profile or pitfall entries no fix touched and that no longer
      apply; profile entries that should move to the pitfalls file to stay under `[profile].max_kb`.
 7. **Write** `retro.md` in the cycle folder from `${CLAUDE_PLUGIN_ROOT}/templates/retro.md`.
-8. **Ask** which proposals to apply (multi-select, grouped by kind) and apply only those. Issues are
-   drafted in `retro.md`; open them (`gh issue create`) only if the user explicitly asks.
+8. **Ask** which proposals to apply: one call, one multi-select question per kind that has proposals.
+   Up to 4 in a kind: one option each, the recommended first with `(Recommended)` at the end of the
+   label, the reason and fix IDs as its description. More than 4: `Recommended (<IDs>) (Recommended)`,
+   `All <n>`, `None` — other IDs can be typed. Apply only what was chosen and list every ID under
+   `## Applied` as applied or declined. Issues are drafted in `retro.md`; open them (`gh issue
+   create`) only if the user explicitly asks. With `--yes`, apply nothing: report the recommended IDs.
 9. **Validate** `rite check --all --json`, then commit the retro and the applied edits:
    `docs(rite): retro <cycle>`.
 
 ## Report
 
 The numbers from `rite stats` · root-cause groups with counts and kind · proposals per kind with
-their fix IDs, applied or not · commit SHA.
+their ID, verdict and fix IDs, applied or not · commit SHA.
 
 <!-- rite:parts -->

@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **`/rite:retro` recommends**: each proposal gets an ID (`K1`, `P1`, `R1`, `X1`) and a verdict,
+  recommended or optional, with its reason, written in `retro.md`; the closing question offers the
+  recommended ones first, marked `(Recommended)`, so accepting them is one choice. `## Applied`
+  lists every ID as applied or declined.
+
 ## [0.27.1] — 2026-10-30
 
 ### Fixed

@@ -14,8 +14,9 @@ Date: {{date}}
 
 ## Proposals
 
-<!-- each proposal: its fix IDs, then (retro-suggest) when it came from `rite retro-suggest`,
-     (added) when the retro found it by reading -->
+<!-- each proposal: ID (K1, P1, R1, X1), [recommended] or [optional], the proposal, its fix IDs,
+     (retro-suggest) when it came from `rite retro-suggest` or (added) when the retro found it by
+     reading, then the reason for the verdict -->
 
 ### Keep in next profile
 
@@ -26,3 +27,5 @@ Date: {{date}}
 ### Prune
 
 ## Applied
+
+<!-- every proposal ID: applied or declined -->
