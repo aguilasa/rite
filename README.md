@@ -145,6 +145,7 @@ the product's: [split layout](docs/CONCEPTS.md#split-layout).
 | `/rite:phase [cycle] [phase]` | what a phase delivered, finished or in progress |
 | `/rite:execute [cycle] [ID]` | one task, two commits |
 | `/rite:execute-batch [cycle] [N]` | N tasks in conflict-free waves |
+| `/rite:execute-phase <cycle> <phase>` | every remaining task of a phase in waves, the closing task last |
 | `/rite:review [cycle] [ID]` | independent review by the `rite-reviewer` agent; opens fixes |
 | `/rite:review-all [cycle]` | every task awaiting review, reviewers in parallel waves |
 | `/rite:fix [cycle] [ID]` | reproduce evidence, repair, sweep |

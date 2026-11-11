@@ -195,7 +195,8 @@ product = "../../github/product"   # absolute, ~, or relative to this folder
 A batch relaxes one rule — more than one item per invocation — and nothing else. Items share a wave
 only when they share no file, no serialized resource and no dependency; when the dependency graph and
 the conflict matrix disagree, the matrix wins. Workers (subagents) edit; the main thread commits, one
-item at a time. Default size 2; never "all" for tasks.
+item at a time. Default size 2; never "all" for tasks — except `/rite:execute-phase`, which runs one
+phase whole: the phase is where review catches up.
 
 Gates are measured twice. Once on the combined tree, to abort a wave that breaks the build. Then per
 item, with the later items' files stashed, right before its commit: that tree is the commit, so the gate

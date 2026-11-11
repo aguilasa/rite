@@ -435,11 +435,13 @@ class PlanWritesNothingTest(unittest.TestCase):
         self.assertIn("never command output or the counts it prints (gates, criteria, Verification)", worker)
 
     def test_execute_batch_plan_marks_nothing(self):
-        body = (self.root / "commands/_execute-batch.body.md").read_text(encoding="utf-8")
-        marks = [" ".join(entry.split()) for entry in re.split(r"\n\s*(?:- |\d+\. )", body) if "rite mark" in entry]
-        self.assertTrue(marks)
-        for entry in marks:
-            self.assertIn("--plan", entry, entry)
+        for name in ("execute-batch", "execute-phase"):
+            body = (self.root / f"commands/_{name}.body.md").read_text(encoding="utf-8")
+            marks = [" ".join(entry.split()) for entry in re.split(r"\n\s*(?:- |\d+\. )", body)
+                     if "rite mark" in entry]
+            self.assertTrue(marks, name)
+            for entry in marks:
+                self.assertIn("--plan", entry, f"{name}: {entry}")
 
 
 if __name__ == "__main__":

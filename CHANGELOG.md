@@ -9,6 +9,10 @@ All notable changes to this project are documented here. Versions follow [SemVer
 - **`rite batch-plan --phase P`** plans every remaining task of a phase: pending or in-progress, each
   of whose `depends_on` is met or in the plan, so a task waiting on a blocked one drops out with it.
   An unknown phase is refused with the cycle's phases.
+- **`/rite:execute-phase <cycle> <phase>`** runs every remaining task of a phase in conflict-free
+  waves, planning again after each so a task gone blocked or stale drops out with its dependents; the
+  closing task runs last, alone. Same workers, gates and two commits per item as
+  `/rite:execute-batch`, without its count: the phase is where review catches up.
 
 ## [0.28.0] — 2026-11-10
 
