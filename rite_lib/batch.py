@@ -123,6 +123,21 @@ def serialized_names(project: Project, cycle: Cycle) -> set[str]:
     return names
 
 
+def select_phase(cycle: Cycle, phase: str) -> list[Item]:
+    """Every task of ``phase`` still to run, in execution order: pending or in-progress, each of whose
+    `depends_on` is satisfied or itself selected — a task waiting on a blocked one drops out with it."""
+    index = cycle.by_id()
+    chosen = [t for t in cycle.tasks if str(t.fields.get("phase")) == str(phase)
+              and t.status in ("pending", "in-progress")]
+    while True:
+        ids = {t.id for t in chosen}
+        kept = [t for t in chosen if all(d in ids or (d in index and index[d].status in SATISFIED)
+                                         for d in t.depends_on)]
+        if len(kept) == len(chosen):
+            return kept
+        chosen = kept
+
+
 def select(cycle: Cycle, kind: str, count: int | None, ids: list[str]) -> list[Item]:
     index = cycle.by_id()
     if kind == "review":
@@ -267,12 +282,14 @@ def plan(project: Project, cycle: Cycle, items: list[Item], *, kind: str | None 
         "waves": [[p.item.id for p in wave] for wave in waves],
         "serialized_resources": sorted(serial),
         "parallel_cap": cap,
+        "phase": None,
         "warnings": warnings,
     }
 
 
 def render_text(data: dict) -> str:
-    lines = [f"batch plan — cycle {data['cycle']} ({len(data['items'])} {data['kind'] or 'item'}s)", ""]
+    phase = f", phase {data['phase']}" if data.get("phase") is not None else ""
+    lines = [f"batch plan — cycle {data['cycle']}{phase} ({len(data['items'])} {data['kind'] or 'item'}s)", ""]
     for it in data["items"]:
         files = ", ".join(it["files"]) or "?"
         lines.append(f"{it['id']} [wave {it['wave']}] {it['title']}")

@@ -424,6 +424,8 @@ def cmd_batch_plan(project: Project, args) -> int:
     from . import batch
     cycle = project.resolve_cycle(args.cycle)
     tokens = _ids(args.targets)
+    if args.phase is not None:
+        return _batch_plan_phase(project, cycle, args, tokens)
     if tokens == ["all"]:
         if args.kind == "task":
             raise RiteError("'all' is for fixes and reviews; a task batch takes a number (default 2)")
@@ -438,6 +440,25 @@ def cmd_batch_plan(project: Project, args) -> int:
     if not items:
         raise RiteError(f"no selectable {args.kind} in cycle {cycle.name} (see: rite.py next {args.kind})")
     data = batch.plan(project, cycle, items, kind=args.kind)
+    _emit(args, data, batch.render_text(data))
+    return EXIT_OK
+
+
+def _batch_plan_phase(project: Project, cycle, args, tokens: list[str]) -> int:
+    from . import batch, phase
+    if args.kind != "task":
+        raise RiteError("--phase plans tasks; fixes and reviews take a count, IDs or 'all'")
+    if tokens:
+        raise RiteError("--phase and a count or IDs exclude each other")
+    wanted = str(args.phase)
+    phases = phase.phases(cycle)
+    if wanted not in phases:
+        raise RiteError(f"cycle {cycle.name} has no phase {wanted}; its phases: {', '.join(phases) or 'none'}")
+    items = batch.select_phase(cycle, wanted)
+    if not items:
+        left = [f"{t.id} {t.status}" for t in cycle.tasks if str(t.fields.get("phase")) == wanted]
+        raise RiteError(f"no selectable task in phase {wanted} of cycle {cycle.name}: {', '.join(left)}")
+    data = {**batch.plan(project, cycle, items, kind="task"), "phase": wanted}
     _emit(args, data, batch.render_text(data))
     return EXIT_OK
 
@@ -890,6 +911,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("batch-plan", parents=[common], help="inventory, conflict matrix and waves for a batch")
     s.add_argument("targets", nargs="*", help="a count (default 2), item IDs, or 'all' (fixes and reviews)")
     s.add_argument("--kind", choices=["task", "fix", "review"], default="task")
+    s.add_argument("--phase", help="every remaining task of this phase whose dependencies can be met")
     s.set_defaults(fn=cmd_batch_plan)
 
     s = sub.add_parser("new-cycle", parents=[common], help="create a cycle folder, views, profile and pitfalls")

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite batch-plan --phase P`** plans every remaining task of a phase: pending or in-progress, each
+  of whose `depends_on` is met or in the plan, so a task waiting on a blocked one drops out with it.
+  An unknown phase is refused with the cycle's phases.
+
 ## [0.28.0] — 2026-11-10
 
 ### Changed

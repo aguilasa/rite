@@ -529,6 +529,33 @@ class BatchPlanTest(BatchCase):
         self.assertEqual(data["waves"], [["BET-TASK-01"], ["BET-TASK-02"]])
         self.assertTrue(any("no predicted files" in w for w in data["warnings"]))
 
+    def test_phase_selects_every_remaining_task_of_it(self):
+        set_fields(self.root / "docs/rite/cycles/alpha/01-harness.md", {"files": ["src/a.py"]})
+        set_fields(self.root / "docs/rite/cycles/alpha/02-report.md", {"files": ["src/b.py"]})
+        data = self.js("batch-plan", "--phase", "1", "--cycle", "alpha")
+        self.assertEqual((data["phase"], data["waves"]), ("1", [["ALP-TASK-01"], ["ALP-TASK-02"]]))
+        code, _, err = self.fx.rite("batch-plan", "--phase", "2", "--cycle", "alpha")
+        self.assertEqual(code, 1)
+        self.assertIn("no selectable task in phase 2", err)
+        for n, item_id in enumerate(("ALP-TASK-01", "ALP-TASK-02")):
+            self.fx.work_commit(f"src/{n}.py", "x\n", f"feat: {item_id}")
+            self.ok("close", item_id)
+        self.assertEqual(self.js("batch-plan", "--phase", "2", "--cycle", "alpha")["waves"], [["ALP-TASK-03"]])
+
+    def test_phase_drops_a_task_waiting_on_a_blocked_one(self):
+        self.ok("mark", "ALP-TASK-01", "blocked", "--reason", "no harness")
+        code, _, err = self.fx.rite("batch-plan", "--phase", "1", "--cycle", "alpha")
+        self.assertEqual(code, 1)
+        self.assertIn("ALP-TASK-01 blocked, ALP-TASK-02 pending", err)
+
+    def test_phase_is_refused_with_targets_another_kind_or_an_unknown_phase(self):
+        for args, message in ((["--phase", "9"], "its phases: 1, 2"),
+                              (["--phase", "1", "2"], "exclude each other"),
+                              (["--phase", "1", "--kind", "fix"], "--phase plans tasks")):
+            code, _, err = self.fx.rite("batch-plan", *args, "--cycle", "alpha")
+            self.assertEqual(code, 1, args)
+            self.assertIn(message, err)
+
     def test_all_is_for_fixes_only(self):
         self.add(1, files="[src/a.py]")
         self.assertEqual(self.fx.rite("batch-plan", "all", "--cycle", "beta")[0], 1)
