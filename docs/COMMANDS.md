@@ -13,6 +13,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | `/rite:execute-phase <cycle> <phase> [--plan]` | Every pending or in-progress task of the phase whose dependencies can be met, in waves from `rite batch-plan --phase`, planned again after each wave (a task gone blocked or stale drops out with its dependents); the closing task last, alone; no count. Same workers, gates and commits as `/rite:execute-batch`. | per item: work + close |
 | `/rite:review [cycle] [task]` | Delegates to the `rite-reviewer` agent in a clean context; four universal questions + the profile's phase checks; opens fixes. | `chore(rite): review <ID> (…)` — also with no finding |
 | `/rite:review-all [cycle] [IDs] [--plan]` | The review queue now, one fresh `rite-reviewer` per task: waves from `rite batch-plan all --kind review` (only shared serialized resources and `[limits].review_parallel` split them), findings screened as in `/rite:review`, one fix per root cause across reviews, bookkeeping serial per task. `--plan` shows the waves. | per task: `chore(rite): review <ID> (…)` |
+| `/rite:review-phase <cycle> <phase> [--yes]` | A finished phase as a whole (`rite phase` says `reviewable`: every task done or skipped and reviewed, no open fix): one fresh `rite-phase-reviewer` reruns the tasks' done criteria, the phase checks and the closed fixes' verification at HEAD, looks for contradictions between tasks and for parts of the plan no task delivered. A finding becomes a fix; a gap becomes a task of the same phase only if the user chooses it (`--yes`: none). Writes `phase-<phase>-review.md` in the cycle folder. | per new item: open; the document |
 | `/rite:fix [cycle] [fix]` | Reproduce evidence → root cause → repair (in the generator if output is generated) → verify → sweep. Stale if the symptom is gone. | work + sweep + close, or `stale` |
 | `/rite:fix-all [cycle] [IDs] [--plan]` | All fixes open now: inline triage with `rite reproduce --all`, a `rite-reproducer` only for the fixes it cannot decide, then waves of `rite-worker`. `--plan` triages dry: verdicts reported, nothing marked or logged. | per item |
 
@@ -35,6 +36,7 @@ respects `rite.toml`, and ends with a fixed, numbered report. Commands that ask 
 | Agent | Tools | Used by |
 | --- | --- | --- |
 | `rite-reviewer` | Read, Grep, Glob, Bash — never edits | `/rite:review`, `/rite:review-all` |
+| `rite-phase-reviewer` | Read, Grep, Glob, Bash — never edits | `/rite:review-phase` |
 | `rite-worker` | edits; no git state, no bookkeeping | `/rite:execute-batch`, `/rite:fix-all` |
 | `rite-reproducer` | Read, Grep, Glob, Bash — never edits | `/rite:fix-all` triage residue |
 

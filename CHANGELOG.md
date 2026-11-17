@@ -9,6 +9,12 @@ All notable changes to this project are documented here. Versions follow [SemVer
 - **`rite phase` says whether the phase can be reviewed as a whole**: `unreviewed` (done tasks
   awaiting review), `open_fixes` and `reviewable` — every task done or skipped and reviewed, no fix
   going back to them open.
+- **`/rite:review-phase <cycle> <phase>`** reviews a finished phase as a whole. A fresh
+  `rite-phase-reviewer` agent reruns every task's done criteria, the phase checks and the closed
+  fixes' verification at HEAD, and looks for contradictions between tasks and for parts of the plan
+  no task delivered. Each finding becomes a fix; each gap becomes a task of the same phase only when
+  the user chooses it. The run leaves `phase-<phase>-review.md` in the cycle folder, also when
+  nothing was found; a phase that is not `reviewable` is refused with what is left.
 
 ## [0.29.0] — 2026-11-11
 

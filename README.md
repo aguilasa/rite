@@ -148,6 +148,7 @@ the product's: [split layout](docs/CONCEPTS.md#split-layout).
 | `/rite:execute-phase <cycle> <phase>` | every remaining task of a phase in waves, the closing task last |
 | `/rite:review [cycle] [ID]` | independent review by the `rite-reviewer` agent; opens fixes |
 | `/rite:review-all [cycle]` | every task awaiting review, reviewers in parallel waves |
+| `/rite:review-phase <cycle> <phase>` | a finished phase as a whole: regressions, contradictions, plan left out; opens fixes and tasks |
 | `/rite:fix [cycle] [ID]` | reproduce evidence, repair, sweep |
 | `/rite:fix-all [cycle]` | inline triage (agents only for the residue), then repairs in waves |
 | `/rite:board` | live, read-only board of the cycles in the browser |
