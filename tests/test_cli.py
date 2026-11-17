@@ -352,6 +352,8 @@ class PhaseTest(FixtureCase):
         self.assertEqual((data["pending"], data["blocked"]), (["ALP-TASK-02"], {}))
         self.assertFalse(data["finished"])
         self.assertEqual(data["next"]["command"], "fix")  # a high fix is open
+        self.assertEqual((data["unreviewed"], data["open_fixes"], data["reviewable"]),
+                         (["ALP-TASK-01"], ["FIX-ALP-001", "FIX-ALP-002"], False))
 
         later = self.js("phase", "alpha", "--phase", "2")
         self.assertEqual((later["fixes"], later["pending"]), ([], []))
@@ -416,6 +418,26 @@ class CheckRedTest(FixtureCase):
         set_fields(p, {"status": "finished"})
         self.ok("sync", "--all")
         self.assert_red("status 'finished' not in")
+
+    def test_phase_is_reviewable_once_done_reviewed_and_without_open_fixes(self):
+        for n, item_id in enumerate(("ALP-TASK-01", "ALP-TASK-02")):
+            self.fx.work_commit(f"src/{n}.py", "x\n", f"feat: {item_id}")
+            self.ok("close", item_id)
+        data = self.js("phase", "alpha", "--phase", "1")
+        self.assertEqual((data["finished"], data["unreviewed"], data["reviewable"]),
+                         (True, ["ALP-TASK-01", "ALP-TASK-02"], False))
+        self.ok("mark-reviewed", "ALP-TASK-01")
+        fix = self.js("new-fix", "--cycle", "alpha", "--origin", "ALP-TASK-02", "--title", "t", "--severity", "low")
+        self.ok("mark-reviewed", "ALP-TASK-02", "--fixes", fix["id"])
+        data = self.js("phase", "alpha", "--phase", "1")
+        self.assertEqual((data["unreviewed"], data["open_fixes"], data["reviewable"]), ([], [fix["id"]], False))
+        self.fx.work_commit("src/fix.py", "y\n", "fix: t")
+        self.ok("close", fix["id"])
+        self.assertTrue(self.js("phase", "alpha", "--phase", "1")["reviewable"])
+        self.assertIn("ready for /rite:review-phase", self.ok("phase", "alpha", "--phase", "1"))
+        # a document of the phase review in the cycle folder is not an item
+        write(self.root / "docs/rite/cycles/alpha/phase-1-review.md", "# Phase 1 review\n")
+        self.assertEqual(self.check_errors("--cycle", "alpha"), [])
 
     def test_phase_without_profile_entry(self):
         add_item(self.cyc() / "04-x.md", task("ALP-TASK-04", "X", phase=7, sot="/docs/plans/PLAN-alpha.md#1"))

@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite phase` says whether the phase can be reviewed as a whole**: `unreviewed` (done tasks
+  awaiting review), `open_fixes` and `reviewable` — every task done or skipped and reviewed, no fix
+  going back to them open.
+
 ## [0.29.0] — 2026-11-11
 
 ### Added

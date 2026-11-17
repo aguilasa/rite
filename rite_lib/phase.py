@@ -6,6 +6,8 @@ result is not data anywhere: it lives in each task's Execution Log, which is ret
 
 from __future__ import annotations
 
+import re
+
 from . import markdown, selection
 from .config import OPEN_FIX_STATUSES
 from .model import Cycle, Project, RiteError, display
@@ -51,6 +53,11 @@ def phase_report(project: Project, cycle: Cycle, phase: str | None = None, *,
     fixes = [f for f in cycle.fixes if (root := root_task(f, index)) is not None and root.id in ids]
     waiting = {t.id: selection.unmet_deps(t, index) for t in tasks if t.status == "pending"}
     summary = selection.summary(cycle, review_age_days=review_age_days)
+    finished = (all(t.status in ("done", "skipped") for t in tasks)
+                and not any(f.status in OPEN_FIX_STATUSES for f in fixes))
+    # a done task is reviewed once `reviewed_on` holds a date (`pending`: still in the queue)
+    unreviewed = [t.id for t in tasks if t.status == "done"
+                  and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(t.fields.get("reviewed_on")))]
     return {
         "cycle": cycle.name,
         "phase": phase,
@@ -68,8 +75,11 @@ def phase_report(project: Project, cycle: Cycle, phase: str | None = None, *,
         "pending": [t.id for t in tasks if t.status in ("pending", "in-progress") and not waiting.get(t.id)],
         "blocked": {t.id: waiting.get(t.id) or [] for t in tasks
                     if t.status == "blocked" or waiting.get(t.id)},
-        "finished": all(t.status in ("done", "skipped") for t in tasks)
-                    and not any(f.status in OPEN_FIX_STATUSES for f in fixes),
+        "finished": finished,
+        "unreviewed": unreviewed,
+        "open_fixes": [f.id for f in fixes if f.status in OPEN_FIX_STATUSES],
+        # the phase as a whole can be reviewed: nothing left to do, to review or to fix
+        "reviewable": finished and not unreviewed,
         "next": summary["suggestion"],
     }
 
@@ -84,5 +94,9 @@ def render_text(r: dict) -> str:
     if r["blocked"]:
         lines.append("  blocked: " + ", ".join(f"{k} ({', '.join(v) or 'status=blocked'})"
                                               for k, v in r["blocked"].items()))
+    if r["unreviewed"]:
+        lines.append("  awaiting review: " + ", ".join(r["unreviewed"]))
+    if r["reviewable"]:
+        lines.append("  ready for /rite:review-phase")
     lines.append(f"  next: /rite:{r['next']['command']} — {r['next']['reason']}")
     return "\n".join(lines)
