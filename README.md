@@ -155,7 +155,7 @@ the product's: [split layout](docs/CONCEPTS.md#split-layout).
 | `/rite:review-phase <cycle> <phase>` | a finished phase as a whole: regressions, contradictions, plan left out; opens fixes and tasks |
 | `/rite:fix [cycle] [ID]` | reproduce evidence, repair, sweep |
 | `/rite:fix-all [cycle]` | inline triage (agents only for the residue), then repairs in waves |
-| `/rite:board` | live, read-only board of the cycles in the browser |
+| `/rite:board [--restart]` | live, read-only board of the cycles in the browser; one per repository, replaced when an older rite serves it |
 | `/rite:delete [cycle] <ID>` | remove a task or fix created by mistake (never worked on); its ID is not reused |
 | `/rite:close-cycle <cycle>` | check preconditions, archive with links rewritten |
 | `/rite:retro <cycle> [--phase P \| --since-last]` | root-cause groups; keep, promote, report, prune — of the cycle, or of finished phases of an open one |

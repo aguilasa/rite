@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`/rite:board --restart`** stops the board serving the repository and starts it again, on the
+  same port, so open pages reconnect. `rite serve` takes `--restart` and `--if-stale`.
+- **`rite board-status`** lists the boards serving a repository — pid, URL, rite version and
+  install, current or stale — from a registry each board now writes and its `GET /api/info`, and on
+  Linux/macOS from the running processes, which finds boards started by an older rite too.
+
+### Changed
+
+- **`/rite:board` keeps one board per repository**: a board this rite already serves is reused
+  instead of a second one on the next port, and a board an older install started — still serving
+  the old code after an update — is replaced by one of the current version.
+
 ## [0.34.1] — 2026-11-23
 
 ### Changed
