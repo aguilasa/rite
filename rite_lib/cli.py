@@ -421,7 +421,15 @@ def cmd_status(project: Project, args) -> int:
 def cmd_serve(project: Project, args) -> int:
     from . import board
     return board.serve(project.root, host=args.host, port=args.port, tries=args.tries, poll=args.poll,
-                       open_browser=not args.no_browser, as_json=args.json)
+                       open_browser=not args.no_browser, as_json=args.json, restart=args.restart,
+                       if_stale=args.if_stale)
+
+
+def cmd_board_status(project: Project, args) -> int:
+    from . import boardproc
+    data = boardproc.status(project.root)
+    _emit(args, data, boardproc.render_status(data))
+    return EXIT_OK
 
 
 def cmd_batch_plan(project: Project, args) -> int:
@@ -936,12 +944,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("serve", parents=[common],
                        help="read-only board of the cycles in the browser, live (Ctrl+C stops)")
-    s.add_argument("--port", type=int, default=3000, help="first port to try; taken → the next (default 3000)")
+    s.add_argument("--port", type=int, default=None,
+                   help="first port to try; taken → the next (default 3000, or the port of the board --restart stops)")
     s.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1)")
     s.add_argument("--tries", type=int, default=100, help="how many ports to try from --port (default 100)")
     s.add_argument("--poll", type=float, default=1.0, help="seconds between looks for changes (default 1)")
     s.add_argument("--no-browser", action="store_true", help="only print the URL")
+    s.add_argument("--restart", action="store_true", help="stop the boards serving this repository first")
+    s.add_argument("--if-stale", action="store_true",
+                   help="a board of this rite already serves this repository: report it and exit; "
+                        "one of another (older) rite: restart it")
     s.set_defaults(fn=cmd_serve)
+
+    s = sub.add_parser("board-status", parents=[common],
+                       help="the boards serving this repository: pid, URL, rite version, current or stale")
+    s.set_defaults(fn=cmd_board_status)
 
     s = sub.add_parser("batch-plan", parents=[common], help="inventory, conflict matrix and waves for a batch")
     s.add_argument("targets", nargs="*", help="a count (default 2), item IDs, or 'all' (fixes and reviews)")

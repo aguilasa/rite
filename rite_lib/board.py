@@ -176,6 +176,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._json(200, board.cycle(query.get("folder", "")))
             elif url.path == "/api/item":
                 self._json(200, board.item(query.get("folder", ""), query.get("id", "")))
+            elif url.path == "/api/info":  # who serves: `rite board-status` asks it
+                self._json(200, getattr(self.server, "info", None) or {"app": "rite-board"})
             elif url.path == "/api/events":
                 self._events()
             else:
@@ -254,16 +256,41 @@ def url_of(server: _Server) -> str:
     return f"http://{f'[{host}]' if ':' in host else host}:{port}/"
 
 
-def serve(root: Path, *, host: str = "127.0.0.1", port: int = 3000, tries: int = 100, poll: float = 1.0,
-          open_browser: bool = True, as_json: bool = False) -> int:
-    """Serve until Ctrl+C. The socket listens once ``bind`` returns, so the browser opens on a ready
-    server; the URL is printed first, for whoever runs this in the background."""
+def serve(root: Path, *, host: str = "127.0.0.1", port: int | None = None, tries: int = 100, poll: float = 1.0,
+          open_browser: bool = True, as_json: bool = False, restart: bool = False,
+          if_stale: bool = False) -> int:
+    """Serve until Ctrl+C (or SIGTERM). The socket listens once ``bind`` returns, so the browser opens
+    on a ready server; the URL is printed first, for whoever runs this in the background.
+
+    ``restart`` stops every board of ``root`` first and takes the port the stopped one had (open tabs
+    reconnect by themselves). ``if_stale``: a board of this rite already serving ``root`` is reported
+    and kept — no second one —; one of another rite (an older install) is restarted."""
+    from . import boardproc
+    restarted = []
+    if restart or if_stale:
+        found = boardproc.running(root)
+        current = [b for b in found if b["current"]]
+        if if_stale and not restart and current:
+            b = current[0]
+            print(json.dumps({"url": b["url"], "port": b["port"], "already_running": True, "pid": b["pid"]})
+                  if as_json else f"rite board: {b['url']}  (already running, pid {b['pid']})", flush=True)
+            return 0
+        for b in found:
+            boardproc.stop(b)
+            restarted.append({"pid": b["pid"], "version": b.get("version")})
+        if port is None:
+            port = next((b["port"] for b in found if b.get("port")), None)
     board = Board(root, poll)
-    server = bind(host, port, tries)
+    server = bind(host, 3000 if port is None else port, tries)
     server.board = board
     url = url_of(server)
-    print(json.dumps({"url": url, "port": server.server_address[1]}) if as_json
-          else f"rite board: {url}  (Ctrl+C to stop)", flush=True)
+    server.info = boardproc.identity(root, host=host, port=server.server_address[1], url=url)
+    boardproc.register(server.info)
+    if restarted:
+        note = ", ".join(f"pid {r['pid']} (rite {r['version'] or 'checkout'})" for r in restarted)
+    print(json.dumps({"url": url, "port": server.server_address[1], "restarted": restarted}) if as_json
+          else f"rite board: {url}  (Ctrl+C to stop)" + (f"; stopped {note}" if restarted else ""), flush=True)
+    _term_is_interrupt()
     threading.Thread(target=board.watch, name="rite-board-watch", daemon=True).start()
     if open_browser:
         try:
@@ -279,4 +306,15 @@ def serve(root: Path, *, host: str = "127.0.0.1", port: int = 3000, tries: int =
     finally:
         board.close()
         server.server_close()
+        boardproc.unregister(root, server.info["pid"])
     return 0
+
+
+def _term_is_interrupt() -> None:
+    """SIGTERM — how `rite serve --restart` stops a board — ends it as Ctrl+C does, so its registry
+    goes too. Only in the main thread (a test serving from a thread keeps its own handlers)."""
+    import signal
+    if hasattr(signal, "SIGTERM") and threading.current_thread() is threading.main_thread():
+        def stop(*_):
+            raise KeyboardInterrupt
+        signal.signal(signal.SIGTERM, stop)
