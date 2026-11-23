@@ -244,6 +244,12 @@ Statuses and severities are fixed, not configurable:
 | --- | --- | --- |
 | `stop_check` | `false` | At the end of each turn, run `rite.py check --quick` and warn if views are out of sync. |
 
+## `[decisions]`
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `recommend` | `false` | `true`: `execute`, `execute-batch`, `execute-phase`, `review`, `review-all`, `review-phase`, `fix` and `fix-all` end by asking each open decision that has two or more viable paths, the recommended option first with its reason ([DECISIONS.md](DECISIONS.md)); `rite status`, `next`, `finish` and `phase` add `options`, the ranked next steps. Absent or `false`: nothing changes. |
+
 ## Example: legacy layout
 
 A repository with Portuguese file names, flat `docs/tasks/<cycle>/` folders and `CORR-*` fixes:

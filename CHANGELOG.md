@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`[decisions] recommend = true`** makes `execute`, `execute-batch`, `execute-phase`, `review`,
+  `review-all`, `review-phase`, `fix` and `fix-all` end by asking each decision they leave open that
+  has two or more viable paths: one final question, the recommended option first with its measured
+  reason, two marked when the evidence supports both, and Other for the user's own instruction.
+  Local decisions (blocked, red gate, files outside the scope, a dropped finding…) are applied; the
+  next command is reported, not run. The rules are in `docs/DECISIONS.md`, read only with the flag
+  on. Absent or `false` — the default — nothing changes.
+- **`options`** in `rite status`, `next`, `finish` and `phase`, only with that flag: every next step
+  that applies with its reason, the suggestion first; urgent fixes and a long or aged review queue
+  are recommended too. `begin` and `resolve-cycle` report `decisions.recommend`.
+
 ## [0.31.0] — 2026-11-23
 
 ### Added

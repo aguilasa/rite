@@ -95,3 +95,6 @@ review_age_days = 7
 
 [hooks]
 stop_check = false                          # warn at end of turn if views are out of sync
+
+[decisions]
+recommend = false                           # true: execute/review/fix end asking decisions, recommended first

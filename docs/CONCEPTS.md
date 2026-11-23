@@ -20,6 +20,10 @@ plan ──/rite:plan-to-tasks──► tasks (one file each) + progress.md + pr
    /rite:close-cycle ─► archive ─► /rite:retro ─► pitfalls kept, rules promoted, rite issues reported
 ```
 
+With `[decisions] recommend = true`, every execute, review and fix command ends by asking the
+decisions it leaves open — the recommended option first, with its measured reason
+([DECISIONS.md](DECISIONS.md)). Off by default.
+
 ## Four layers
 
 Each layer knows only what is its own. The rite never names a project, a path, a tool or an ID.
