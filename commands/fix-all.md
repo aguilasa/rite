@@ -14,24 +14,24 @@ Arguments: `$ARGUMENTS`
 1. `rite begin fix --cycle <cycle> --json` (`--no-claim` with `--plan`: it takes no item). The batch:
    the fix IDs given, or every fix open **now** (`rite batch-plan all --kind fix --cycle <cycle>
    --json`); fixes opened mid-run wait: a batch that grows never ends.
-2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call (many fixes:
-   in the background; stderr names each).
+2. **Triage inline**: `rite reproduce --all --cycle <cycle> --json`, one call (many:
+   in the background; stderr names each fix).
    Compare each output with its `recorded` Evidence; write the verdict:
-   - `blocked: true` → its `unblock` ran its `unblocked_by`, as `/rite:execute` does for a blocked
-     task. Exit 0 → `rite mark <FIX> pending --reason "<command> now passes" --commit`, then
-     `rite reproduce <FIX> --json` and it joins the batch; else it stays blocked: report command and output.
+   - `blocked: true` → its `unblock` ran its `unblocked_by`. Exit 0 → `rite mark <FIX> pending
+     --reason "<command> now passes" --commit`, then `rite reproduce <FIX> --json`: it joins the
+     batch; else it stays blocked: report command and output.
    - `NOT REPRODUCED` → `rite mark-stale <FIX> --reason "<command> now prints <output>"`.
    - `REPRODUCED` → stays; paste the output into its Execution Log.
    - **Residue** — `runnable: false`, `over_limit`, `cannot_decide`, `CANNOT RUN`, or an output that
-     does not decide: only then one `rite:rite-reproducer` per residue fix, in a single message, with the payload of
-     `rite context <FIX> --json`. Handle its verdict as above; `CANNOT RUN` stays in the batch.
+     does not decide: only then one `rite:rite-reproducer` per residue fix, in one message, with
+     `rite context <FIX> --json`. Its verdict as above; `CANNOT RUN` stays in the batch.
    - **With `--plan` the triage is dry**: it measures and reports, never writes — each verdict, inline
      or residue; no `mark-stale` or `mark`, no Execution Log, no `rite:rite-reproducer` (residue
      counted, not sent): a plan must not take a fix out of the backlog.
-3. **Plan** with `--kind fix` on the remaining IDs (with `--plan`: all but the `NOT REPRODUCED`).
-   With `--plan`, stop here.
-4. **Run the waves.** Each worker follows the single-fix rules of `/rite:fix`: reproduce again, confirm
-   the root cause, repair the generator when the output is generated, never widen the scope.
+3. **Plan** with `--kind fix` on the remaining IDs (with `--plan`: all but the `NOT REPRODUCED`,
+   then stop).
+4. **Run the waves.** Each worker follows `/rite:fix`: reproduce again, confirm the root cause,
+   repair the generator of a generated output, never widen the scope.
 5. Sweep edits go in their own commit (`docs: sweep after <FIX>`), then `rite finish <FIX> --sha
    <work-SHA> --json`.
 6. **New problems** become new fixes (`rite new-fix --origin <FIX>`, fill the body,
@@ -95,6 +95,8 @@ frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
   (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error`,
   `missing_path` or `timed_out`) → an agent or a person, never *stale*. An exit code is not a verdict.
+- **The CLI in a `$` line** is `sh "$RITE_HOME/bin/rite"`, never the resolved plugin path: an
+  upgrade removes it.
 - **Negative results are results**: "X fails, because Y (command, output)".
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.

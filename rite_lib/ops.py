@@ -15,6 +15,31 @@ from .model import Cycle, Item, Project, RiteError, display, make_link, resolve_
 from .naming import slugify
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+
+# the plugin root of one installed version: `~/.claude/plugins/cache/<marketplace>/rite/0.15.0` (#10)
+PINNED_CLI = re.compile(r"""(?:~|/)[^\s"'`;|&()<>=]*?/\.claude/plugins/cache/"""
+                        r"""[^/\s"'`;|&()<>]+/rite/[^/\s"'`;|&()<>]+""")
+# that root's launcher, quoted or not, as a command writes it
+_PINNED_LAUNCHER = re.compile(r"""(["']?)""" + PINNED_CLI.pattern + r"""/bin/rite\1""")
+STABLE_CLI = '"$RITE_HOME/bin/rite"'
+
+
+def unpin_item_files(paths) -> list[Path]:
+    """Rewrite, in item files, the CLI path of an installed version to `"$RITE_HOME/bin/rite"`.
+
+    Why (#30): Claude Code expands `${CLAUDE_PLUGIN_ROOT}` when a command loads, so the only CLI
+    path a command shows is the versioned one, and Evidence copied it. That version's folder goes
+    away with the next update. Every pinned version is rewritten, still on disk or not."""
+    changed = []
+    for path in paths:
+        if path.suffix != ".md" or not path.is_file():
+            continue
+        text = path.read_bytes().decode("utf-8", errors="surrogateescape")  # line endings kept
+        new = _PINNED_LAUNCHER.sub(STABLE_CLI, text)
+        if new != text:
+            path.write_bytes(new.encode("utf-8", errors="surrogateescape"))
+            changed.append(path)
+    return changed
 BOOKKEEPING_PREFIXES = ("chore(rite):", "rite:")
 # a ticket template may put the key before the subject ("PROJ-1 chore(rite): close ...")
 _BOOKKEEPING_RE = re.compile(r"(?:^|\s)(?:chore\(rite\)|rite):\s")
@@ -192,6 +217,7 @@ def _commit(project: Project, cycle: Cycle, paths: list[Path], message: str, rem
 def _finish(project: Project, cycle: Cycle, item_paths: list[Path], message: str, commit: bool,
             removed: list[Path] = ()) -> dict:
     """Sync the views and commit. ``removed``: tracked files deleted on purpose, whose removal is staged."""
+    unpinned = unpin_item_files(item_paths)  # never commit an installed version's CLI path (#30)
     cycle = _reload(project, cycle)
     views.sync(project, cycle)
     paths = [*item_paths, cycle.progress_state_path, cycle.fixes_state_path, cycle.progress_path, cycle.fixes_path]
@@ -200,7 +226,8 @@ def _finish(project: Project, cycle: Cycle, item_paths: list[Path], message: str
     commit = commit and not cycle.local
     sha = _commit(project, cycle, paths, message, removed) if commit else None
     return {"commit": sha, "message": message if commit else None, "local": cycle.local,
-            "files": [display(project.root, p) for p in paths if p.exists()]}
+            "files": [display(project.root, p) for p in paths if p.exists()],
+            "unpinned": [display(project.root, p) for p in unpinned]}
 
 
 def _allocate(path_for_n, start: int) -> tuple[int, Path, int]:

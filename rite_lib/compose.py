@@ -532,8 +532,7 @@ def _kill_tree(proc: subprocess.Popen) -> None:
 
 
 # a launcher path of one installed version: `~/.claude/plugins/cache/<marketplace>/rite/0.15.0` (#10)
-_PINNED_CLI = re.compile(r"""(?:~|/)[^\s"'`;|&()<>=]*?/\.claude/plugins/cache/"""
-                         r"""[^/\s"'`;|&()<>]+/rite/[^/\s"'`;|&()<>]+""")
+_PINNED_CLI = ops.PINNED_CLI
 
 
 def unpin_cli(command: str) -> tuple[str, list[str]]:

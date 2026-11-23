@@ -42,8 +42,7 @@ of the queue reviewed.
    - one fix per kept finding: `rite new-fix --cycle <cycle> --origin <ID> --title "<title>" --severity
      <critical|high|medium|low> --json`, then fill the body sections (Problem, Evidence, Root cause,
      Fix, Files, Verification) — never its frontmatter or the JSON state. A merged fix lists every
-     task's evidence. In Evidence the CLI is `sh "$RITE_HOME/bin/rite"`, never a resolved plugin
-     path. A finding about a phase with no entry in the profile's phase checks is itself a `medium` fix;
+     task's evidence. A finding about a phase with no entry in the profile's phase checks is itself a `medium` fix;
    - `rite mark-reviewed <ID> [--fixes <FIX-ID>,…] --json` — one commit per task, also with no finding,
      because a review without a record leaves the task to be selected again. In a local cycle it writes
      the files and commits nothing.
@@ -110,6 +109,8 @@ frontmatter, never edit between `<!-- rite:begin … -->` and `<!-- rite:end -->
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
   (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error`,
   `missing_path` or `timed_out`) → an agent or a person, never *stale*. An exit code is not a verdict.
+- **The CLI in a `$` line** is `sh "$RITE_HOME/bin/rite"`, never the resolved plugin path: an
+  upgrade removes it.
 - **Negative results are results**: "X fails, because Y (command, output)".
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.

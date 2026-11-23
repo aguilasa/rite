@@ -110,6 +110,8 @@ matching pitfalls entries. Read that instead of opening those files.
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
   (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error`,
   `missing_path` or `timed_out`) → an agent or a person, never *stale*. An exit code is not a verdict.
+- **The CLI in a `$` line** is `sh "$RITE_HOME/bin/rite"`, never the resolved plugin path: an
+  upgrade removes it.
 - **Negative results are results**: "X fails, because Y (command, output)".
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.

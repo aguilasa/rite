@@ -18,6 +18,11 @@ All notable changes to this project are documented here. Versions follow [SemVer
   real tree. Now a line sees what the lines before it set; an unset variable is a `shell_error`; a
   command after one that ended the block is `not_run` and the fix `cannot_decide`, never stale.
   Each command keeps its own output and exit code. `--scratch` stays opt-in. (#28)
+- **An installed version's CLI path no longer reaches a fix file**: Claude Code expands
+  `${CLAUDE_PLUGIN_ROOT}` when a command loads, so Evidence copied `…/plugins/cache/…/rite/<version>/bin/rite`,
+  which the next update removes. Every bookkeeping commit now rewrites it in the item files it carries
+  to `sh "$RITE_HOME/bin/rite"` (`unpinned` in the JSON), and the rule is in every command that
+  writes Evidence, `fix` and `fix-all` included. (#30)
 
 ## [0.32.0] — 2026-11-23
 

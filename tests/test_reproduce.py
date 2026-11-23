@@ -417,6 +417,32 @@ class ReproduceTest(unittest.TestCase):
         self.assertEqual((run["output"].strip(), "rewritten" in run), ("0", False))
         self.assertEqual(self.evidence_warnings(fine), [])
 
+    def test_the_commit_that_records_a_fix_unpins_the_cli(self):
+        # #30: the command text shows only the versioned path; Evidence copied it into the fix file
+        pinned = "/home/u/.claude/plugins/cache/rite/rite/0.30.0/bin/rite"
+        fix_id = self.add_fix(f"```text\n$ sh \"{pinned}\" guard a.md --json\n$ sh {pinned} status\n```")
+        code, out, err = self.fx.rite("commit-new", fix_id, "--json")
+        self.assertEqual(code, 0, err)
+        rel = f"docs/rite/cycles/alpha/{fix_id}.md"
+        self.assertEqual(json.loads(out)["unpinned"], [rel])
+        committed = self.fx.git("show", f"HEAD:{rel}")
+        self.assertNotIn("plugins/cache", committed)
+        self.assertIn('$ sh "$RITE_HOME/bin/rite" guard a.md --json', committed)
+        self.assertIn('$ sh "$RITE_HOME/bin/rite" status', committed)
+        self.assertEqual(self.evidence_warnings(fix_id), [])
+
+    def test_a_review_commit_unpins_the_fixes_it_opens_and_leaves_others_alone(self):
+        self.fx.work_commit("src/one.py", "x\n", "feat: one")
+        code, _, err = self.fx.rite("close", "ALP-TASK-01")
+        self.assertEqual(code, 0, err)
+        pinned = self.add_fix("```text\n$ sh ~/.claude/plugins/cache/m/rite/9.9.9/bin/rite check\n```")
+        clean = self.add_fix('```text\n$ sh "$RITE_HOME/bin/rite" check\n```')
+        code, out, err = self.fx.rite("mark-reviewed", "ALP-TASK-01", "--fixes", f"{pinned},{clean}", "--json")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["unpinned"], [f"docs/rite/cycles/alpha/{pinned}.md"])
+        self.assertIn('$ sh "$RITE_HOME/bin/rite" check', (self.cycle / f"{pinned}.md").read_text())
+
+
 class StaleRuleTest(unittest.TestCase):
     """`mark-stale` closes a fix unrepaired: the rule names what never authorizes it."""
 

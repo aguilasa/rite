@@ -31,7 +31,7 @@ Review only: never change code, docs or the tasks' work.
 4. **One fix per kept finding**: `rite new-fix --cycle <cycle> --origin <its origin> --title "<title>"
    --severity <critical|high|medium|low> --json`, fill the body sections (Problem, Evidence, Root
    cause, Fix, Files, Verification) — never its frontmatter or the JSON state —, then `rite commit-new
-   <FIX> --json`. In Evidence the CLI is `sh "$RITE_HOME/bin/rite"`, never a resolved plugin path.
+   <FIX> --json`.
 5. **Gaps become tasks only when the user says so**: they change the scope. Ask once, multi-select, a
    gap whose section states the missing part outright first and marked `(Recommended)`. For each
    chosen: `rite new-task --cycle <cycle> --title "<title>" --type <type> --phase <phase>
@@ -112,6 +112,8 @@ them down only.
   `REPRODUCED` → fix it · `NOT REPRODUCED` (`why: ok`, output contradicts the Evidence) → *stale*
   (`rite mark-stale`) · else `CANNOT RUN` (other `why`, `cannot_decide`: a `shell_error`,
   `missing_path` or `timed_out`) → an agent or a person, never *stale*. An exit code is not a verdict.
+- **The CLI in a `$` line** is `sh "$RITE_HOME/bin/rite"`, never the resolved plugin path: an
+  upgrade removes it.
 - **Negative results are results**: "X fails, because Y (command, output)".
 - **Gates**: `rite gates [--id <ID>] --json`. Red means not done: fix it, or stop and report its
   output.

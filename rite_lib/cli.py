@@ -306,6 +306,9 @@ def _result_text(verb: str, res: dict) -> str:
                      + ", ".join(res["outside_files"]))
     if res.get("amended_files"):
         lines.append("  amended `files` with: " + ", ".join(res["amended_files"]))
+    if res.get("unpinned"):
+        lines.append('  CLI path of an installed version rewritten to "$RITE_HOME/bin/rite" in: '
+                     + ", ".join(res["unpinned"]))
     return "\n".join(lines)
 
 

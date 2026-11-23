@@ -30,7 +30,7 @@ Review only: never change code, docs or the tasks' work.
 4. **One fix per kept finding**: `rite new-fix --cycle <cycle> --origin <its origin> --title "<title>"
    --severity <critical|high|medium|low> --json`, fill the body sections (Problem, Evidence, Root
    cause, Fix, Files, Verification) — never its frontmatter or the JSON state —, then `rite commit-new
-   <FIX> --json`. In Evidence the CLI is `sh "$RITE_HOME/bin/rite"`, never a resolved plugin path.
+   <FIX> --json`.
 5. **Gaps become tasks only when the user says so**: they change the scope. Ask once, multi-select, a
    gap whose section states the missing part outright first and marked `(Recommended)`. For each
    chosen: `rite new-task --cycle <cycle> --title "<title>" --type <type> --phase <phase>
