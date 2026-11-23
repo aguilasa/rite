@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`rite check` warns about a generated artifact `rite.toml` does not guard**: a line of the
+  profile's Generated artifacts section (`output -> generator -> check`) that no
+  `[[guards.generated]]` entry covers, since the profile is prose and only `rite.toml` blocks the
+  edit. The profile template says so. (#29)
+
 ## [0.32.0] — 2026-11-23
 
 ### Added

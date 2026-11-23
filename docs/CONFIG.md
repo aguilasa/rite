@@ -169,7 +169,7 @@ relative to the repository holding it: the root, or one of `[repos]`. When the e
 | --- | --- | --- |
 | `read_only` | `[]` | Globs that must never be written (`**` any depth, `*` one segment). Work that needs one changed is marked `blocked` until a commit changes it (a fix's `unblocked_by` checks the path). |
 | `read_only_reason` | `""` | Shown when a write is blocked. |
-| `[[guards.generated]]` | — | Tables with `paths` (globs), `generator` (what to edit instead) and optional `check` (command proving output matches the generator). |
+| `[[guards.generated]]` | — | Tables with `paths` (globs), `generator` (what to edit instead) and optional `check` (command proving output matches the generator). Only these guard: a profile's Generated artifacts line no entry covers is a `check` warning. |
 
 ```toml
 [guards]

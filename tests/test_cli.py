@@ -364,6 +364,30 @@ class PhaseTest(FixtureCase):
         self.assertIn("phases: 1, 2", err)
 
 
+class GeneratedArtifactsTest(FixtureCase):
+    """A profile's Generated artifacts line is prose; only [[guards.generated]] guards it (#29)."""
+
+    def warnings(self, section: str) -> list[str]:
+        profile = self.root / "docs/rite/profiles/alpha.md"
+        profile.write_text(profile.read_text(encoding="utf-8") + f"\n## Generated artifacts\n\n{section}\n",
+                           encoding="utf-8")
+        _, out, _ = self.fx.rite("check", "--cycle", "alpha", "--json")
+        return [f["message"] for f in json.loads(out)["findings"]
+                if f["level"] == "warn" and "Generated artifacts" in f["message"]]
+
+    def test_a_line_rite_toml_does_not_guard_is_a_warning(self):
+        found = self.warnings("- `out/data.bin` -> tools/pack.py -> python tools/pack.py --check\n")
+        self.assertEqual(len(found), 1)
+        self.assertIn("`out/data.bin`", found[0])
+        self.assertIn("[[guards.generated]]", found[0])
+
+    def test_a_guarded_output_and_template_hints_are_not(self):
+        self.assertEqual(self.warnings("<!-- Output -> generator -> check command. -->\n"
+                                       "- `src/gen/a.py` -> tools/gen.py -> python tools/gen.py --check\n"
+                                       "- src/gen/** → tools/gen.py → python tools/gen.py --check\n"
+                                       "Plain prose about src/gen without an arrow.\n"), [])
+
+
 class CheckRedTest(FixtureCase):
     """Planted defects must turn `check` red."""
 

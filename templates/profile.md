@@ -16,7 +16,8 @@ which commands search instead of reading whole.
 
 ## {{generated_artifacts}}
 
-<!-- Output -> generator -> check command. Never edit the output. -->
+<!-- Output -> generator -> check command. Never edit the output. Only rite.toml [[guards.generated]]
+     blocks edits: declare each output there too; rite check warns about a line here without it. -->
 
 ## {{gates}}
 

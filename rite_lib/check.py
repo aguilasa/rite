@@ -639,6 +639,8 @@ class Checker:
         if not cycle.archived and markdown.first_section(text, self.p.section_titles("gates")) is None:
             self.warn(prof, "no section titled " + " / ".join(f"'{t}'" for t in self.p.section_titles("gates"))
                       + ": `rite.py gates` runs only [gates].global (set [sections].gates)")
+        if not cycle.archived:
+            self.check_generated_artifacts(prof, text)
         found = markdown.first_section(text, self.p.section_titles("phase_checks"))
         heading = found[0] if found else self.p.section_title("phase_checks")
         # template hints are not entries
@@ -652,6 +654,26 @@ class Checker:
         for ph in phases:
             if ph not in covered:
                 self.err(prof, f"'{heading}' has no entry for phase {ph}")
+
+    def check_generated_artifacts(self, prof: Path, text: str) -> None:
+        """A profile's Generated artifacts line (`output -> generator -> check`) is prose: only
+        [[guards.generated]] in rite.toml keeps the output from being edited. Warn about a line no
+        entry there covers (#29)."""
+        from .guard import matches
+        found = markdown.first_section(text, self.p.section_titles("generated_artifacts"))
+        if not found:
+            return
+        declared = [p for gen in self.p.cfg["guards"]["generated"]
+                    for p in ([gen["paths"]] if isinstance(gen["paths"], str) else gen["paths"])]
+        for line in re.sub(r"<!--.*?-->", "", found[1], flags=re.DOTALL).splitlines():
+            bullet = re.match(r"^\s*[-*]\s+(.+?)\s*(?:->|→)", line)
+            if not bullet:
+                continue
+            output = bullet.group(1).strip().strip("`").strip().removeprefix("./")
+            if output and output not in declared and not matches(output, declared):
+                self.warn(prof, f"'{found[0]}' lists `{output}` but no [[guards.generated]] in rite.toml "
+                          f"covers it, so nothing stops an edit: add paths = [\"{output}\"], its generator "
+                          "and check there")
 
 
 def run(project: Project, cycles: list[Cycle], *, quick: bool = False) -> list[Finding]:
