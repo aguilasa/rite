@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`/rite:retro <cycle> --phase P …` or `--since-last`** is a partial retro of an open cycle: what
+  its finished phases taught reaches the pitfalls file now, and `rite context` hands it to the tasks
+  still to run. Every phase must be `reviewable`, as for a phase review; one without a phase review
+  is only a warning. It writes `retro-phase-<p>.md` (`retro-phases-<p>-<q>.md`) with a `Phases:`
+  line. The whole-cycle retro reads the partial ones and does not propose again what they decided.
+- **`rite retro-scope NAME --phase P … | --since-last`** resolves that scope: the phases (named,
+  repeated or comma-separated, or every reviewable phase no partial retro covered yet), whether each
+  is ready and what is left in it, the file to write and the partial retros already written. Exit 1
+  when a phase is not ready.
+- **`rite stats` and `rite retro-suggest` take `--phase`**: only the tasks of those phases and the
+  fixes whose root task is one of them; `scope` in the JSON. `retro-suggest` also lists `partials`.
+
+### Fixed
+
+- **`rite archive`** rewrites the old folder in partial retros (`retro-phase*.md`) and phase reviews
+  (`phase-*-review.md`) too; only `retro.md` was rewritten.
+
 ## [0.30.0] — 2026-11-17
 
 ### Added
