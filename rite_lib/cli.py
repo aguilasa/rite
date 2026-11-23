@@ -555,16 +555,33 @@ def cmd_phase(project: Project, args) -> int:
 def cmd_stats(project: Project, args) -> int:
     from . import stats
     cycle = project.resolve_cycle(args.name)
-    data = stats.cycle_stats(project, cycle)
+    data = stats.cycle_stats(project, cycle, _phases_arg(cycle, args))
     _emit(args, data, stats.render_text(data))
     return EXIT_OK
 
 
+def _phases_arg(cycle, args) -> list[str] | None:
+    """`--phase`, repeated or comma-separated, checked against the cycle's phases; None without it."""
+    from . import phase
+    return phase.check_phases(cycle, args.phase) if args.phase else None
+
+
 def cmd_retro_suggest(project: Project, args) -> int:
     from . import retro
-    data = retro.suggest(project, project.resolve_cycle(args.name), previous=args.previous)
+    cycle = project.resolve_cycle(args.name)
+    data = retro.suggest(project, cycle, previous=args.previous, phases=_phases_arg(cycle, args))
     _emit(args, data, retro.render_text(data))
     return EXIT_OK
+
+
+def cmd_retro_scope(project: Project, args) -> int:
+    from . import retro
+    if not args.phase and not args.since_last:
+        raise RiteError("rite retro-scope needs --phase or --since-last")
+    data = retro.scope(project, project.resolve_cycle(args.name), args.phase, since_last=args.since_last,
+                       review_age_days=int(project.cfg["status"]["review_age_days"]))
+    _emit(args, data, retro.render_scope(data))
+    return EXIT_OK if data["ready"] else EXIT_FAIL
 
 
 def cmd_relink(project: Project, args) -> int:
@@ -948,13 +965,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("stats", parents=[common], help="numbers for a retro: tasks, fixes, review latency")
     s.add_argument("name")
+    s.add_argument("--phase", action="append", help="only these phases (repeat or comma-separate)")
     s.set_defaults(fn=cmd_stats)
 
     s = sub.add_parser("retro-suggest", parents=[common],
                        help="Keep / Promote / Prune candidates for a retro, with their evidence")
     s.add_argument("name")
     s.add_argument("--previous", help="the cycle before this one (default: the one that finished last before it)")
+    s.add_argument("--phase", action="append", help="only the fixes of these phases (repeat or comma-separate)")
     s.set_defaults(fn=cmd_retro_suggest)
+
+    s = sub.add_parser("retro-scope", parents=[common],
+                       help="the phases a partial retro covers, whether they are ready, and its file")
+    s.add_argument("name")
+    s.add_argument("--phase", action="append", help="these phases (repeat or comma-separate)")
+    s.add_argument("--since-last", action="store_true",
+                   help="every reviewable phase no partial retro covered yet")
+    s.set_defaults(fn=cmd_retro_scope)
 
     s = sub.add_parser("relink", parents=[common], help="rewrite links in cycle files to [paths].link_style")
     s.add_argument("--all", action="store_true")

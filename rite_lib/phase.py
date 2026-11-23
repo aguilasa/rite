@@ -11,7 +11,7 @@ import re
 from . import markdown, selection
 from .config import OPEN_FIX_STATUSES
 from .model import Cycle, Project, RiteError, display
-from .stats import root_task
+from .stats import items_in
 
 LOG_LINES = 40  # per task: enough for the closing notes, not a whole transcript
 
@@ -24,6 +24,20 @@ def phases(cycle: Cycle) -> list[str]:
         if ph not in seen:
             seen.append(ph)
     return seen
+
+
+def check_phases(cycle: Cycle, wanted) -> list[str]:
+    """The phases named in ``wanted`` (repeated or comma-separated), each checked against the cycle's,
+    returned in the cycle's order and without repeats."""
+    known = phases(cycle)
+    asked = list(dict.fromkeys(p.strip() for w in (wanted or []) for p in str(w).split(",") if p.strip()))
+    unknown = [p for p in asked if p not in known]
+    if unknown:
+        raise RiteError(f"cycle {cycle.name} has no phase {', '.join(map(repr, unknown))}; "
+                        f"phases: {', '.join(known) or 'none'}")
+    if not asked:
+        raise RiteError("name at least one phase")
+    return [p for p in known if p in asked]
 
 
 def default_phase(cycle: Cycle) -> str:
@@ -48,9 +62,7 @@ def phase_report(project: Project, cycle: Cycle, phase: str | None = None, *,
     if phase not in known:
         raise RiteError(f"cycle {cycle.name} has no phase {phase!r}; phases: {', '.join(known) or 'none'}")
     index = cycle.by_id()
-    tasks = [t for t in cycle.tasks if str(t.fields.get("phase")) == phase]
-    ids = {t.id for t in tasks}
-    fixes = [f for f in cycle.fixes if (root := root_task(f, index)) is not None and root.id in ids]
+    tasks, fixes = items_in(cycle, [phase])
     waiting = {t.id: selection.unmet_deps(t, index) for t in tasks if t.status == "pending"}
     summary = selection.summary(cycle, review_age_days=review_age_days)
     finished = (all(t.status in ("done", "skipped") for t in tasks)

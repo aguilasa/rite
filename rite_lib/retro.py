@@ -9,7 +9,9 @@ from pathlib import Path
 from . import gitutil, markdown
 from .config import NO_COMMIT
 from .guard import glob_regex
-from .model import Cycle, Item, Project, display
+from .model import Cycle, Item, Project, RiteError, display
+from .naming import slugify
+from .stats import items_in
 
 _ENTRY_KEY = re.compile(r"^\s*[-*]\s+(tags|paths|proven by|rule)\s*:\s*(.*)$", re.IGNORECASE)
 
@@ -109,14 +111,88 @@ def _sections(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def suggest(project: Project, cycle: Cycle, previous: str | None = None) -> dict:
+_PHASES_LINE = re.compile(r"^Phases:\s*(.*?)\s*$", re.MULTILINE)
+
+
+def partial_name(phases: list[str]) -> str:
+    """The file a retro of these phases is written to, in the cycle folder."""
+    if len(phases) == 1:
+        return f"retro-phase-{slugify(phases[0])}.md"
+    return "retro-phases-" + "-".join(slugify(p) for p in phases) + ".md"
+
+
+def partials(project: Project, cycle: Cycle) -> list[dict]:
+    """The retros of some phases already written in the cycle folder, each with the phases its
+    `Phases:` line names — that line, not the file name, says what a partial retro covered."""
+    out = []
+    for path in sorted(cycle.path.glob("retro-phase*.md")):
+        found = _PHASES_LINE.search(path.read_text(encoding="utf-8", errors="replace"))
+        out.append({"file": display(project.root, path),
+                    "phases": _values(found.group(1)) if found else []})
+    return out
+
+
+def scope(project: Project, cycle: Cycle, phases=None, *, since_last: bool = False,
+          review_age_days: int = 7) -> dict:
+    """What a retro of some phases covers: the phases (named, or every ready phase no partial retro
+    covered yet), whether each is ready — the gate of a phase review, `reviewable` —, what is left in
+    those that are not, and the file the retro is written to."""
+    from . import phase as ph
+    done = partials(project, cycle)
+    covered = {p: d["file"] for d in done for p in d["phases"]}
+    reports: dict[str, dict] = {}
+
+    def report(p: str) -> dict:
+        if p not in reports:
+            reports[p] = ph.phase_report(project, cycle, p, review_age_days=review_age_days)
+        return reports[p]
+
+    if since_last:
+        if phases:
+            raise RiteError("--phase and --since-last exclude each other")
+        wanted = [p for p in ph.phases(cycle) if p not in covered and report(p)["reviewable"]]
+        if not wanted:
+            raise RiteError(f"no phase of cycle {cycle.name} is ready and uncovered by a partial retro "
+                            f"(covered: {', '.join(covered) or 'none'}); see rite phase")
+    else:
+        wanted = ph.check_phases(cycle, phases)
+    rows = []
+    for p in wanted:
+        r = report(p)
+        review = cycle.path / f"phase-{p}-review.md"
+        rows.append({"phase": p, "reviewable": r["reviewable"], "pending": r["pending"],
+                     "blocked": r["blocked"], "unreviewed": r["unreviewed"], "open_fixes": r["open_fixes"],
+                     "phase_review": display(project.root, review) if review.is_file() else None,
+                     "covered_by": covered.get(p)})
+    target = cycle.path / partial_name(wanted)
+    return {"cycle": cycle.name, "phases": wanted, "ready": all(r["reviewable"] for r in rows),
+            "detail": rows, "file": display(project.root, target), "exists": target.is_file(),
+            "partials": done}
+
+
+def render_scope(s: dict) -> str:
+    lines = [f"retro-scope {s['cycle']}: phases {', '.join(s['phases'])} — "
+             + ("ready" if s["ready"] else "not ready") + f" → {s['file']}" + (" (exists)" if s["exists"] else "")]
+    for r in s["detail"]:
+        left = [f"{k} {', '.join(r[k])}" for k in ("pending", "unreviewed", "open_fixes") if r[k]]
+        left += [f"blocked {', '.join(r['blocked'])}"] if r["blocked"] else []
+        lines.append(f"  phase {r['phase']}: " + ("reviewable" if r["reviewable"] else "; ".join(left))
+                     + ("" if r["phase_review"] else " — no phase review")
+                     + (f" — covered by {r['covered_by']}" if r["covered_by"] else ""))
+    return "\n".join(lines)
+
+
+def suggest(project: Project, cycle: Cycle, previous: str | None = None,
+            phases: list[str] | None = None) -> dict:
     cycles = project.all_cycles()
     prev = project.resolve_cycle(previous) if previous else previous_cycle(project, cycle, cycles)
     owner = {i.id: c.name for c in cycles for i in c.items}
     own = pitfall_entries(cycle.pitfalls_path)
     files = [display(project.root, cycle.pitfalls_path)] if cycle.pitfalls_path.is_file() else []
 
-    fixes = sorted((f for f in cycle.fixes if f.status != "stale"), key=lambda f: f.id)
+    # a retro of some phases weighs only their fixes; prune and carry-over stay the cycle's
+    pool = items_in(cycle, phases)[1] if phases else cycle.fixes
+    fixes = sorted((f for f in pool if f.status != "stale"), key=lambda f: f.id)
     fix_paths = {f.id: _fix_paths(project, cycle, f) for f in fixes}
 
     keep = []
@@ -173,12 +249,17 @@ def suggest(project: Project, cycle: Cycle, previous: str | None = None) -> dict
                 carry_over.append({"section": title, "from_cycle": prev.name,
                                    "content": _strip_hints(body).strip()})
 
-    return {"cycle": cycle.name, "previous": prev.name if prev else None, "pitfalls": files,
-            "keep": keep, "promote": promote, "prune": prune, "carry_over": carry_over}
+    return {"cycle": cycle.name, "previous": prev.name if prev else None,
+            "scope": {"phases": list(phases)} if phases else None,
+            "partials": partials(project, cycle), "pitfalls": files, "keep": keep, "promote": promote, "prune": prune, "carry_over": carry_over}
 
 
 def render_text(s: dict) -> str:
-    lines = [f"retro-suggest {s['cycle']} (previous: {s['previous'] or '—'})"]
+    scoped = f", phases {', '.join(s['scope']['phases'])}" if s.get("scope") else ""
+    lines = [f"retro-suggest {s['cycle']}{scoped} (previous: {s['previous'] or '—'})"]
+    if s.get("partials"):
+        lines.append("partial retros: " + ", ".join(f"{p['file']} ({', '.join(p['phases']) or '?'})"
+                                                     for p in s["partials"]))
     lines.append(f"keep ({len(s['keep'])}):")
     for k in s["keep"]:
         hit = ", ".join(m["title"] for m in k["matches_existing"])

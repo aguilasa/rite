@@ -47,8 +47,21 @@ def root_task(fix: Item, index: dict[str, Item]) -> Item | None:
     return origin
 
 
-def cycle_stats(project: Project, cycle: Cycle) -> dict:
-    tasks, fixes = cycle.tasks, cycle.fixes
+def items_in(cycle: Cycle, phases) -> tuple[list[Item], list[Item]]:
+    """The tasks of these phases and the fixes whose root task is one of them. A fix with no root task
+    belongs to no phase."""
+    wanted = {str(p) for p in phases}
+    index = cycle.by_id()
+    tasks = [t for t in cycle.tasks if str(t.fields.get("phase")) in wanted]
+    ids = {t.id for t in tasks}
+    fixes = [f for f in cycle.fixes if (root := root_task(f, index)) is not None and root.id in ids]
+    return tasks, fixes
+
+
+def cycle_stats(project: Project, cycle: Cycle, phases: list[str] | None = None) -> dict:
+    """The cycle's numbers — or, with ``phases``, those of these phases only (`items_in`)."""
+    tasks, fixes = items_in(cycle, phases) if phases else (cycle.tasks, cycle.fixes)
+    scoped = {i.id for i in (*tasks, *fixes)}
     by_status = dict.fromkeys(TASK_STATUSES, 0)  # every status, zero included: a retro reads "stale 0"
     for t in tasks:
         by_status[t.status] = by_status.get(t.status, 0) + 1
@@ -75,7 +88,8 @@ def cycle_stats(project: Project, cycle: Cycle) -> dict:
         "cycle": cycle.name,
         "path": display(project.root, cycle.path),
         "archived": cycle.archived,
-        "tasks": {"total": len(tasks), **by_status},
+        "scope": {"phases": list(phases)} if phases else None,
+        "tasks":{"total": len(tasks), **by_status},
         "fixes": {"total": len(fixes), **fix_status, "by_severity": sev},
         "fixes_per_task": round(len(fixes) / len(tasks), 2) if tasks else None,
         "fixes_by_origin": dict(sorted(per_origin.items(), key=lambda kv: (-kv[1], kv[0]))),
@@ -93,7 +107,7 @@ def cycle_stats(project: Project, cycle: Cycle) -> dict:
         },
         "fix_files": [display(project.root, f.path) for f in fixes],
         "items_without_log": [i.id for i in cycle.items
-                              if i.status in ("done", "stale")
+                              if i.id in scoped and i.status in ("done", "stale")
                               and not (markdown.first_section(i.body, log_titles) or ("", ""))[1].strip()],
     }
 
@@ -101,7 +115,8 @@ def cycle_stats(project: Project, cycle: Cycle) -> dict:
 def render_text(s: dict) -> str:
     t, f = s["tasks"], s["fixes"]
     lines = [
-        f"cycle {s['cycle']} ({s['path']}){' [archived]' if s['archived'] else ''}",
+        f"cycle {s['cycle']} ({s['path']}){' [archived]' if s['archived'] else ''}"
+        + (f", phases {', '.join(s['scope']['phases'])}" if s.get("scope") else ""),
         "  tasks: " + ", ".join(f"{k} {v}" for k, v in t.items()),
         "  fixes: " + ", ".join(f"{k} {v}" for k, v in f.items() if k != "by_severity"),
         "  by severity: " + ", ".join(f"{k} {v}" for k, v in f["by_severity"].items()),
