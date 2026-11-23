@@ -47,6 +47,9 @@ C:\work\                 ← not a git repository; rite.toml goes here
    ```
 2. `/reload-plugins`, or start a new session.
 
+   Once installed, `/rite:update-plugin` does the update, and `/rite:clear-cache` deletes the cached
+   versions neither running nor installed.
+
 ### 1. Once per folder
 
 3. Open Claude Code in the folder (`C:\work`).
@@ -156,6 +159,8 @@ the product's: [split layout](docs/CONCEPTS.md#split-layout).
 | `/rite:delete [cycle] <ID>` | remove a task or fix created by mistake (never worked on); its ID is not reused |
 | `/rite:close-cycle <cycle>` | check preconditions, archive with links rewritten |
 | `/rite:retro <cycle> [--phase P \| --since-last]` | root-cause groups; keep, promote, report, prune — of the cycle, or of finished phases of an open one |
+| `/rite:update-plugin` | update the installed plugin to its latest version; then `/reload-plugins` |
+| `/rite:clear-cache [--yes]` | delete cached plugin versions neither running nor installed, after confirming |
 
 Details: [docs/COMMANDS.md](docs/COMMANDS.md) · concepts: [docs/CONCEPTS.md](docs/CONCEPTS.md).
 

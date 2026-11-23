@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`/rite:update-plugin`** updates the installed plugin to its latest version — the marketplace
+  refresh and the update that `rite plugin-info` names — and ends telling the user to run
+  `/reload-plugins`, a built-in command no plugin can run. It deletes nothing.
+- **`/rite:clear-cache`** deletes, after a confirmation, the cached plugin versions that are neither
+  the one this session runs nor the one installed; `--yes` deletes nothing.
+- **`rite plugin-info`** and **`rite clear-cache [--dry-run]`**, which need no `rite.toml`: the rite
+  running, installed and latest, the update state, every cached version and what may go.
+
 ## [0.33.0] — 2026-11-23
 
 ### Added
