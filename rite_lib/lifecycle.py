@@ -390,9 +390,13 @@ def _rewrite_bare(path: Path, old: str, new: str) -> int:
 
 
 def _own_files(project: Project, cycle: Cycle, old_dir: Path, new_dir: Path) -> list[Path]:
-    """The files Rite writes for a cycle outside its state: profile, pitfalls file, retro — after the move."""
+    """The files Rite writes for a cycle outside its state: profile, pitfalls file, the retro, the retros
+    of some phases and the phase reviews — after the move."""
     out = []
-    for p in (cycle.profile_path, cycle.pitfalls_path, old_dir / "retro.md"):
+    here = old_dir if old_dir.is_dir() else new_dir  # called before the move (dry run) and after it
+    docs = sorted({*here.glob("retro*.md"), *here.glob("phase-*-review.md")})
+    for p in (cycle.profile_path, cycle.pitfalls_path, old_dir / "retro.md",
+              *(old_dir / d.name for d in docs)):
         out.append(new_dir / p.relative_to(old_dir) if old_dir in p.parents else p)
     return list(dict.fromkeys(out))
 
