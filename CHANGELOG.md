@@ -11,6 +11,14 @@ All notable changes to this project are documented here. Versions follow [SemVer
   `[[guards.generated]]` entry covers, since the profile is prose and only `rite.toml` blocks the
   edit. The profile template says so. (#29)
 
+### Fixed
+
+- **`rite reproduce` runs the commands of one Evidence block in one shell**, under `set -u`. Each
+  line ran in a shell of its own, so `S=$(mktemp -d)` then `cd "$S"` ran `cd ""` and wrote into the
+  real tree. Now a line sees what the lines before it set; an unset variable is a `shell_error`; a
+  command after one that ended the block is `not_run` and the fix `cannot_decide`, never stale.
+  Each command keeps its own output and exit code. `--scratch` stays opt-in. (#28)
+
 ## [0.32.0] — 2026-11-23
 
 ### Added

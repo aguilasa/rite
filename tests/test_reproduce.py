@@ -292,6 +292,41 @@ class ReproduceTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 10)
         self.assertEqual((run["exit_code"], run["timed_out"], run["output"].strip()), (0, False, "ok"))
 
+    def test_a_block_runs_in_one_shell_so_a_variable_reaches_the_next_line(self):
+        # #28: `S=$(mktemp -d)` then `cd "$S"` ran `cd ""` in a second shell, in the real tree
+        fix_id = self.add_fix("```text\n$ S=$(mktemp -d) && echo made\nmade\n"
+                              "$ cd \"$S\" && pwd && test \"$(pwd)\" != \"$OLDPWD\"\n$ echo second\nsecond\n```")
+        fix = self.reproduce(fix_id)["fixes"][0]
+        first, second, third = fix["commands"]
+        self.assertEqual([r["exit_code"] for r in fix["commands"]], [0, 0, 0])
+        self.assertEqual(first["output"].strip(), "made")  # each command keeps its own output
+        self.assertNotEqual(second["output"].strip(), str(self.root))
+        self.assertEqual(third["output"].strip(), "second")
+        self.assertFalse(fix["cannot_decide"])
+
+    def test_an_unset_variable_stops_the_block_and_cannot_decide(self):
+        fix_id = self.add_fix("```text\n$ cd \"$NEVER_SET_BY_ANYONE\" && touch here.txt\n$ echo after\n```")
+        fix = self.reproduce(fix_id)["fixes"][0]
+        first, second = fix["commands"]
+        self.assertTrue(first["shell_error"])
+        self.assertIn("unbound variable", first["output"])
+        self.assertTrue(second["not_run"])
+        self.assertTrue(fix["cannot_decide"])
+        self.assertFalse((self.root / "here.txt").exists())
+
+    def test_an_exit_ends_the_block_and_the_rest_did_not_run(self):
+        fix_id = self.add_fix("```text\n$ echo one; exit 3\n$ echo two\n```")
+        fix = self.reproduce(fix_id)["fixes"][0]
+        first, second = fix["commands"]
+        self.assertEqual((first["exit_code"], first["output"].strip()), (3, "one"))
+        self.assertEqual((second["not_run"], second["exit_code"]), (True, None))
+        self.assertTrue(fix["cannot_decide"])
+
+    def test_a_failing_line_does_not_stop_the_next(self):
+        fix_id = self.add_fix(f"```text\n$ {PY} -c \"import sys; sys.exit(2)\"\n$ echo still\n```")
+        first, second = self.reproduce(fix_id)["fixes"][0]["commands"]
+        self.assertEqual((first["exit_code"], second["exit_code"], second["output"].strip()), (2, 0, "still"))
+
     def test_each_fix_reports_on_stderr_and_stdout_stays_json(self):
         first = self.add_fix(f"```text\n$ {PY} -c \"print(1)\"\n```")
         second = self.add_fix(f"```text\n$ {PY} -c \"import sys; sys.exit(3)\"\n```")

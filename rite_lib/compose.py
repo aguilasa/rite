@@ -579,27 +579,107 @@ def _run_one(command: str, where: Path, tail: int, shell: list[str] | None = Non
             _kill_tree(proc)
             proc.wait()
         seconds = round(time.monotonic() - started, 1)
-        size = out.seek(0, os.SEEK_END)
-        out.seek(max(0, size - cap_bytes) if cap_bytes else 0)
-        raw = out.read()
+        output, clipped, size = _read_capped(out, cap_bytes)
+    code = None if timed_out else proc.returncode
+    return _result(command, where, output, clipped, size, code, timed_out, seconds, tail)
+
+
+def _read_capped(fh, cap_bytes: int | None) -> tuple[str, bool, int]:
+    """(text, clipped, size) of an output file: up to ``cap_bytes`` of its end, a cut line dropped."""
+    size = fh.seek(0, os.SEEK_END)
+    fh.seek(max(0, size - cap_bytes) if cap_bytes else 0)
+    raw = fh.read()
     output = raw.decode("utf-8", errors="replace").replace("\r\n", "\n")
     clipped = len(raw) < size
     if clipped and "\n" in output:
         output = output.split("\n", 1)[1]  # a line cut in half is noise
-    code = None if timed_out else proc.returncode
+    return output, clipped, size
+
+
+def _result(command: str, where: Path, output: str, clipped: bool, size: int, code: int | None,
+            timed_out: bool, seconds: float, tail: int, *, shell_error: bool = False) -> dict:
     lines = output.splitlines()
-    return {"command": command, "exit_code": code, "shell_error": code in SHELL_ERRORS,
+    return {"command": command, "exit_code": code, "shell_error": shell_error or code in SHELL_ERRORS,
             "timed_out": timed_out, "seconds": seconds, "output_bytes": size,
             "missing_path": _missing_paths(output, where) if code else [],
             "output": "\n".join(lines[-tail:]) if code == 0 else output,
             "truncated": clipped or (code == 0 and len(lines) > tail)}
 
 
+def _run_block(commands: list[str], where: Path, tail: int, shell: list[str], *,
+               timeout: float | None = None, cap_bytes: int | None = None) -> list[dict]:
+    """Run the commands of one Evidence block in **one** bash, under `set -u`, each with its own
+    output and exit code (#28).
+
+    Why: each line in its own shell lost what the line before set — `S=$(mktemp -d)` then
+    `cd "$S"` ran `cd ""` and the next command wrote into the real tree. One script keeps variables
+    and `cd`; `set -u` turns a variable that is still unset into an error (`shell_error`) instead of
+    an empty string. Each command runs as `{ cmd\\n} >k.out 2>&1; echo $? >k.code` in that shell. A
+    command whose code was never written ended the script (an `exit`, an unset variable) or was
+    running at the timeout; the ones after it are `not_run`. ``timeout`` is for the whole block."""
+    import shutil
+    import tempfile
+    import time
+    tmp = Path(tempfile.mkdtemp(prefix="rite-block-"))
+    try:
+        here = tmp.as_posix()
+        script = ["set -u"]
+        for k, command in enumerate(commands):
+            script.append(f"{{ {command}\n}} >'{here}/{k}.out' 2>&1 </dev/null; echo $? >'{here}/{k}.code'")
+        (tmp / "block.sh").write_text("\n".join(script) + "\n", encoding="utf-8", newline="\n")
+        group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+                 else {"start_new_session": True})
+        started_wall, started = time.time(), time.monotonic()
+        with tempfile.TemporaryFile() as stray:  # what the script itself prints, outside every command
+            proc = subprocess.Popen([shell[0], f"{here}/block.sh"], cwd=where, stdout=stray, stderr=stray,
+                                    stdin=subprocess.DEVNULL,
+                                    env={**os.environ, "RITE_HOME": str(ops.PLUGIN_ROOT)}, **group)
+            timed_out = False
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                _kill_tree(proc)
+                proc.wait()
+        ended = time.monotonic()
+        results, previous, stopped = [], started_wall, False
+        for k, command in enumerate(commands):
+            out_file, code_file = tmp / f"{k}.out", tmp / f"{k}.code"
+            if stopped or not out_file.exists():
+                results.append({"command": command, "exit_code": None, "shell_error": False, "timed_out": False,
+                                "not_run": True, "seconds": 0.0, "output_bytes": 0, "missing_path": [],
+                                "output": "", "truncated": False})
+                stopped = True
+                continue
+            with out_file.open("rb") as fh:
+                output, clipped, size = _read_capped(fh, cap_bytes)
+            if code_file.exists():
+                text = code_file.read_text(encoding="utf-8").strip()
+                code = int(text) if text.lstrip("-").isdigit() else None
+                done = code_file.stat().st_mtime
+                results.append(_result(command, where, output, clipped, size, code, False,
+                                       round(max(0.0, done - previous), 1), tail))
+                previous = done
+                continue
+            # this command ended the script, or was running when the block timed out
+            stopped = True
+            unset = "unbound variable" in output
+            code = None if timed_out else proc.returncode
+            seconds = round(max(0.0, ended - started - (previous - started_wall)), 1)
+            results.append(_result(command, where, output, clipped, size, code, timed_out, seconds, tail,
+                                   shell_error=unset))
+        return results
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _undecidable(runs: list[dict]) -> dict:
-    """A fix whose evidence could not run as written has no verdict: never *stale*."""
+    """A fix whose evidence could not run as written has no verdict: never *stale*. A command an
+    earlier one kept from running (`not_run`) leaves the block undecided too."""
     missing = list(dict.fromkeys(p for r in runs for p in r["missing_path"]))
     return {"missing_path": missing, "timed_out": any(r["timed_out"] for r in runs),
-            "cannot_decide": bool(missing) or any(r["shell_error"] or r["timed_out"] for r in runs)}
+            "cannot_decide": bool(missing) or any(r["shell_error"] or r["timed_out"] or r.get("not_run")
+                                                  for r in runs)}
 
 
 def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, all_open: bool = False,
@@ -642,6 +722,12 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
         result = run_raw(command, where)
         return {**result, "rewritten": swapped} if swapped else result
 
+    def run_block(commands: list[str], where: Path) -> list[dict]:
+        unpinned = [unpin_cli(c) for c in commands]
+        results = _run_block([c for c, _ in unpinned], where, tail, shell, timeout=timeout,
+                             cap_bytes=int(limit_kb * 1024) + 1)
+        return [{**r, "rewritten": s} if s else r for r, (_, s) in zip(results, unpinned)]
+
     copies: dict[Path, Path] = {}
     results = []
     try:
@@ -670,7 +756,10 @@ def reproduce(project: Project, *, fix_id: str | None, cycle_name: str | None, a
                     copies[repo] = Path(tempfile.mkdtemp(prefix="rite-reproduce-"))
                     _export(repo, copies[repo])
                 where = copies[repo]
-            runs = [run(command, where) for command in found["commands"]]
+            # one bash for the block, so a line sees what the line before it set (#28); a system
+            # shell ([gates].shell = "system") keeps one shell per line
+            runs = run_block(found["commands"], where) if shell and found["commands"] else \
+                [run(command, where) for command in found["commands"]]
             # what holding it inline would cost: a failing command's whole output, a passing one's tail
             held = sum(len(r["output"].encode("utf-8")) if r["exit_code"] == 0 else r["output_bytes"] for r in runs)
             over = held > limit_kb * 1024
