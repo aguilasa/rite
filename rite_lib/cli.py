@@ -733,6 +733,20 @@ def _migrate_cycle_order(args) -> int:
     return EXIT_OK
 
 
+def cmd_plugin_info(args) -> int:
+    from . import plugin
+    data = plugin.info(args.plugins_dir and Path(args.plugins_dir))
+    _emit(args, data, plugin.render_info(data))
+    return EXIT_OK
+
+
+def cmd_clear_cache(args) -> int:
+    from . import plugin
+    data = plugin.clear(args.plugins_dir and Path(args.plugins_dir), dry_run=args.dry_run)
+    _emit(args, data, plugin.render_clear(data))
+    return EXIT_OK
+
+
 def cmd_tokens(args) -> int:
     """Thin on purpose: the measurement is tools/token_report.py, so the two cannot disagree."""
     tools = Path(__file__).resolve().parent.parent / "tools"
@@ -1044,6 +1058,17 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--suggest-limits", action="store_true",
                    help="suggest [limits].inline_triage_max_output_kb from this window's /rite:fix-all runs")
     s.set_defaults(fn=cmd_tokens, needs_project=False)
+
+    s = sub.add_parser("plugin-info", parents=[common],
+                       help="the rite running, installed and latest, and its cached versions (no rite.toml)")
+    s.add_argument("--plugins-dir", help=argparse.SUPPRESS)
+    s.set_defaults(fn=cmd_plugin_info, needs_project=False)
+
+    s = sub.add_parser("clear-cache", parents=[common],
+                       help="delete cached rite versions neither running nor installed (no rite.toml)")
+    s.add_argument("--dry-run", action="store_true", help="list what would be deleted, delete nothing")
+    s.add_argument("--plugins-dir", help=argparse.SUPPRESS)
+    s.set_defaults(fn=cmd_clear_cache, needs_project=False)
 
     s = sub.add_parser("guard", parents=[common], help="is this path read-only or generated?")
     s.add_argument("path")
