@@ -98,7 +98,7 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
         item, reason = pick.item, pick.reason
         if item is None:
             return {"cycle": cycle.name, "kind": kind, "item": None, "reason": reason,
-                    "blocked_by": pick.blocked_by}
+                    "blocked_by": pick.blocked_by, "decisions": decisions(project)}
     taken = False
     if claim and kind in ("task", "fix") and item.status == "pending":
         ops.mark(project, cycle, item, "in-progress")
@@ -126,8 +126,23 @@ def begin(project: Project, *, kind: str, cycle_name: str | None, item_id: str |
         "commit": ops.commit_refs(project, cycle, item),
         "config": _cycle_digest(project, cycle),
         "repo_kb": _repo_kb(repo_dir),
+        "decisions": decisions(project),
         "next_step": f"rite context {item.id} --json",
     }
+
+
+def decisions(project: Project) -> dict:
+    """`[decisions]`: whether the commands end by asking their open decisions, recommended first."""
+    return {"recommend": bool(project.cfg["decisions"]["recommend"])}
+
+
+def next_options(project: Project, cycle) -> dict:
+    """`{"options": [...]}` — the ranked next steps — when `[decisions].recommend` is on, else `{}`:
+    with the flag off no output changes."""
+    if not decisions(project)["recommend"]:
+        return {}
+    return {"options": selection.summary(
+        cycle, review_age_days=int(project.cfg["status"]["review_age_days"]))["options"]}
 
 
 # --- context -------------------------------------------------------------------
@@ -753,7 +768,7 @@ def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str |
         kind = "task"
     return {"closed": closed, "check": {"errors": errors, "warnings":
                                         [str(f) for f in findings if f.level == "warn"]},
-            "next": {"kind": kind, **pick.as_dict(project.root)},
+            "next": {"kind": kind, **pick.as_dict(project.root), **next_options(project, cycle)},
             "synced": [display(project.root, p) for p in views.sync(project, cycle)],
             "pushed": pushed}
 

@@ -88,6 +88,8 @@ DEFAULTS: dict = {
                "reproduce_timeout_s": 300, "review_parallel": 4},
     "status": {"review_age_days": 7},
     "hooks": {"stop_check": False},
+    # true: execute, review and fix end with their open decisions asked, recommended options first
+    "decisions": {"recommend": False},
 }
 
 ENUMS = {
@@ -218,6 +220,8 @@ def parse(root: Path, text: str) -> Config:
         errors.append("[project].session_language must be a language tag such as \"pt-BR\", or \"\"")
     if not isinstance(data["commit"]["co_author_footer"], bool):
         errors.append("[commit].co_author_footer must be true or false")
+    if not isinstance(data["decisions"]["recommend"], bool):
+        errors.append("[decisions].recommend must be true or false")
     for name, value in data["repos"].items():
         if not REPO_NAME.match(name):
             errors.append(f"[repos].{name}: a name is letters, digits, '.', '_' or '-', "

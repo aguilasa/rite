@@ -93,6 +93,8 @@ def phase_report(project: Project, cycle: Cycle, phase: str | None = None, *,
         # the phase as a whole can be reviewed: nothing left to do, to review or to fix
         "reviewable": finished and not unreviewed,
         "next": summary["suggestion"],
+        # the ranked next steps only with [decisions].recommend on: off, the output stays as it was
+        **({"options": summary["options"]} if project.cfg["decisions"]["recommend"] else {}),
     }
 
 
