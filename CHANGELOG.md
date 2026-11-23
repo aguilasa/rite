@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **`[decisions] recommend = true` asks only the decisions a run leaves to the user**: the next
+  `/rite:` command is no longer a question (it stays the report's `next:` line), and the `options`
+  field of `rite status`, `next`, `finish` and `phase` is gone.
+
 ## [0.34.0] — 2026-11-23
 
 ### Added

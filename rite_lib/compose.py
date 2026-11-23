@@ -136,15 +136,6 @@ def decisions(project: Project) -> dict:
     return {"recommend": bool(project.cfg["decisions"]["recommend"])}
 
 
-def next_options(project: Project, cycle) -> dict:
-    """`{"options": [...]}` — the ranked next steps — when `[decisions].recommend` is on, else `{}`:
-    with the flag off no output changes."""
-    if not decisions(project)["recommend"]:
-        return {}
-    return {"options": selection.summary(
-        cycle, review_age_days=int(project.cfg["status"]["review_age_days"]))["options"]}
-
-
 # --- context -------------------------------------------------------------------
 def _slice_anchor(text: str, anchor: str) -> tuple[int, int] | None:
     """(first line, last line) of the anchored heading and everything under it, 1-based inclusive."""
@@ -856,7 +847,7 @@ def finish(project: Project, *, item_id: str, cycle_name: str | None, sha: str |
         kind = "task"
     return {"closed": closed, "check": {"errors": errors, "warnings":
                                         [str(f) for f in findings if f.level == "warn"]},
-            "next": {"kind": kind, **pick.as_dict(project.root), **next_options(project, cycle)},
+            "next": {"kind": kind, **pick.as_dict(project.root)},
             "synced": [display(project.root, p) for p in views.sync(project, cycle)],
             "pushed": pushed}
 

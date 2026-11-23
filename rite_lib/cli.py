@@ -191,8 +191,6 @@ def cmd_finish(project: Project, args) -> int:
     lines += [f"    {e}" for e in data["check"]["errors"]]
     nxt = data["next"]
     lines.append(f"  next {nxt['kind']}: {nxt['id'] or '— ' + nxt['reason']}")
-    if "options" in nxt:
-        lines.append(_options_text(nxt["options"]))
     lines += _pushed_lines(data["pushed"])
     _emit(args, data, "\n".join(lines))
     return EXIT_FAIL if data["check"]["errors"] else EXIT_OK
@@ -207,17 +205,9 @@ def cmd_next(project: Project, args) -> int:
     cycle = project.resolve_cycle(args.cycle)
     fn = {"task": selection.next_task, "review": selection.next_review, "fix": selection.next_fix}[args.what]
     pick = fn(cycle)
-    data = {"cycle": cycle.name, "kind": args.what, **pick.as_dict(project.root),
-            **compose.next_options(project, cycle)}
-    text = _pick_text(project.root, f"next {args.what} ({cycle.name})", pick)
-    _emit(args, data, text + ("\n" + _options_text(data["options"]) if "options" in data else ""))
+    data = {"cycle": cycle.name, "kind": args.what, **pick.as_dict(project.root)}
+    _emit(args, data, _pick_text(project.root, f"next {args.what} ({cycle.name})", pick))
     return EXIT_OK if pick.item else EXIT_FAIL
-
-
-def _options_text(options: list[dict]) -> str:
-    """The next steps on one line, `*` on the recommended ones."""
-    return "  options: " + "; ".join(f"{'*' if o['recommended'] else ''}/rite:{o['command']} ({o['reason']})"
-                                     for o in options)
 
 
 def cmd_new_task(project: Project, args) -> int:
@@ -398,14 +388,11 @@ def cmd_check(project: Project, args) -> int:
 def cmd_status(project: Project, args) -> int:
     cycles = _target_cycles(project, args)
     age = int(project.cfg["status"]["review_age_days"])
-    recommend = compose.decisions(project)["recommend"]
     out, texts = [], []
     for c in cycles:
         s = {"seq": c.seq, **selection.summary(c, review_age_days=age)}
         for key in ("next_task", "next_review", "next_fix"):
             s[key] = s[key].as_dict(project.root)
-        if not recommend:
-            s.pop("options")  # [decisions].recommend off: the output stays as it was
         out.append(s)
         t = s["tasks"]
         fx = s["open_fixes"]
@@ -423,7 +410,7 @@ def cmd_status(project: Project, args) -> int:
             f"  next review: {s['next_review']['id'] or '—'}",
             f"  next fix: {s['next_fix']['id'] or '—'}",
             f"  suggested: /rite:{s['suggestion']['command']} — {s['suggestion']['reason']}",
-        ] + ([_options_text(s["options"])] if recommend else [])))
+        ]))
     if not cycles:
         texts.append(f"no live cycle under {display(project.root, project.cycles_root)} (run /rite:new-cycle)")
     _emit(args, {"cycles": out, "session_language": project.cfg["project"]["session_language"]},

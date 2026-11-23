@@ -150,26 +150,6 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
     else:
         suggestion = ("unblock", task_pick.reason)
 
-    # every next step that applies, the suggestion first. A pressure (urgent fixes, a long or aged
-    # review queue) is recommended too: two of them at once are two legitimate ways to go on.
-    candidates = [(suggestion[0], suggestion[1], True)]
-    if urgent:
-        candidates.append(("fix", "critical/high fixes are open — fix before building on top of them", True))
-    if aged or len(queue) >= 3:
-        candidates.append(("review", f"review queue has {len(queue)} item(s)"
-                           + (f", {len(aged)} older than {review_age_days} days" if aged else ""), True))
-    if task_pick.item:
-        candidates.append(("execute", f"next task {task_pick.item.id} is ready", False))
-    if queue:
-        candidates.append(("review", f"review queue has {len(queue)} item(s)", False))
-    if fix_pick.item:
-        candidates.append(("fix", f"{len(fixes) - len(waiting)} open fix(es), next {fix_pick.item.id}", False))
-    options, seen = [], set()
-    for command, reason, recommended in candidates:
-        if command not in seen:
-            seen.add(command)
-            options.append({"command": command, "reason": reason, "recommended": recommended})
-
     return {
         "cycle": cycle.name,
         "prefix": cycle.prefix,
@@ -184,5 +164,4 @@ def summary(cycle: Cycle, *, review_age_days: int, today: dt.date | None = None)
         "next_review": review_pick,
         "next_fix": fix_pick,
         "suggestion": {"command": suggestion[0], "reason": suggestion[1]},
-        "options": options,
     }

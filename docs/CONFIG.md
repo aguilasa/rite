@@ -248,7 +248,7 @@ Statuses and severities are fixed, not configurable:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `recommend` | `false` | `true`: `execute`, `execute-batch`, `execute-phase`, `review`, `review-all`, `review-phase`, `fix` and `fix-all` end by asking each open decision that has two or more viable paths, the recommended option first with its reason ([DECISIONS.md](DECISIONS.md)); `rite status`, `next`, `finish` and `phase` add `options`, the ranked next steps. Absent or `false`: nothing changes. |
+| `recommend` | `false` | `true`: `execute`, `execute-batch`, `execute-phase`, `review`, `review-all`, `review-phase`, `fix` and `fix-all` end by asking each open decision that has two or more viable paths, the recommended option first with its reason ([DECISIONS.md](DECISIONS.md)). Only decisions the run leaves to the user are asked; the next `/rite:` command never is. Absent or `false`: nothing changes. |
 
 ## Example: legacy layout
 

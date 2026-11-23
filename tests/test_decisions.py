@@ -59,44 +59,20 @@ class DecisionsTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("[decisions].recommend must be true or false", err)
 
-    def test_one_path_is_one_option(self):
+    def test_on_reports_the_flag_and_never_ranks_next_commands(self):
+        # the next /rite: command is never a question: no `options` anywhere, flag on or off
         self.turn_on()
         self.assertEqual(self.js("resolve-cycle", "alpha")["decisions"], {"recommend": True})
-        s = self.status()
-        self.assertEqual(s["options"], [{"command": "execute", "reason": "next task ALP-TASK-01 is ready",
-                                         "recommended": True}])
-
-    def test_options_rank_the_suggestion_first_and_skip_repeats(self):
-        self.turn_on()
-        self.close("ALP-TASK-01")
-        s = self.status()
-        self.assertEqual([(o["command"], o["recommended"]) for o in s["options"]],
-                         [("execute", True), ("review", False)])
-        self.high_fix()
-        s = self.status()
-        self.assertEqual(s["options"][0]["command"], s["suggestion"]["command"])
-        self.assertEqual([(o["command"], o["recommended"]) for o in s["options"]],
-                         [("fix", True), ("execute", False), ("review", False)])
-        self.assertIn("*/rite:fix", self.fx.rite("status", "--all")[1])
-
-    def test_two_pressures_are_two_recommended_options(self):
-        self.turn_on()
-        self.close("ALP-TASK-01", "ALP-TASK-02", "ALP-TASK-03")
-        self.high_fix()
-        s = self.status()
-        self.assertEqual([(o["command"], o["recommended"]) for o in s["options"]],
-                         [("fix", True), ("review", True)])
-
-    def test_finish_next_and_phase_carry_the_options(self):
-        self.turn_on()
-        self.close("ALP-TASK-01")
-        self.fx.work_commit("src/b.py", "y\n", "feat: b")
-        nxt = self.js("finish", "ALP-TASK-02")["next"]
-        self.assertEqual(nxt["options"][0]["command"], "execute")  # ALP-TASK-03 is ready now
-        self.assertIn("options", self.js("next", "review", "--cycle", "alpha"))
-        self.assertIn("options", self.js("phase", "alpha", "--phase", "1"))
         self.assertEqual(self.js("begin", "task", "--cycle", "alpha", "--no-claim")["decisions"],
                          {"recommend": True})
+        self.close("ALP-TASK-01")
+        self.high_fix()
+        self.assertNotIn("options", self.status())
+        self.assertNotIn("options", self.js("next", "review", "--cycle", "alpha"))
+        self.assertNotIn("options", self.js("phase", "alpha", "--phase", "1"))
+        self.fx.work_commit("src/b.py", "y\n", "feat: b")
+        self.assertNotIn("options", self.js("finish", "ALP-TASK-02")["next"])
+        self.assertNotIn("options:", self.fx.rite("status", "--all")[1])
 
 
 class DecisionsDocTest(unittest.TestCase):
@@ -112,8 +88,10 @@ class DecisionsDocTest(unittest.TestCase):
             text = (ROOT / "commands" / f"{name}.md").read_text(encoding="utf-8")
             self.assertIn("${CLAUDE_PLUGIN_ROOT}/docs/DECISIONS.md", text, name)
             self.assertIn(f"`{name}`", doc, name)
-        for rule in ("(Recommended)", "two or more", "--yes", "never one that deletes"):
+        for rule in ("(Recommended)", "two or more", "--yes", "never one that deletes",
+                     "command is never a\n  question"):
             self.assertIn(rule, doc, rule)
+        self.assertNotIn("`options`", doc)
 
 
 if __name__ == "__main__":

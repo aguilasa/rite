@@ -5,6 +5,8 @@ and `fix-all` before their report, and only when `rite.toml` sets `[decisions] r
 (`decisions.recommend` in `rite begin` / `rite resolve-cycle`). Off — the default — they report as
 before and never open this file.
 
+- Only decisions this run leaves to the user are asked. The next `/rite:` command is never a
+  question: it stays the report's `next:` line, as with the flag off. No decision left: no question.
 - Gather the run's open decisions. One with **two or more viable paths** becomes a question in **one**
   AskUserQuestion call at the end of the run (at most 4 questions, 2–4 options each) — in a batch or a
   phase, after the last wave, never during one. One with a single path stays a line of the report.
@@ -12,9 +14,6 @@ before and never open this file.
   description is the reason, measured (command and decisive output, IDs, counts), never bare opinion.
   Mark two recommended when the evidence supports both, and say in which case each wins. The
   automatic "Other" is the user's own instruction: follow it.
-- **The next command** is a question only when the `options` of `finish`, `rite status` or `rite
-  phase` hold two or more: their commands and reasons, none added. The choice is not run: it goes in
-  the report as `next:`.
 - **Local decisions** — the run applies the choice:
   - item **blocked** → recommended: `rite mark <ID> blocked` with the cause and its command; else
     narrow the scope (a note in the item), `skipped`, or a fix on the dependency;
