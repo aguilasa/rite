@@ -47,6 +47,7 @@ Review only: never change code, docs or the tasks' work.
 
 The four verdicts, one line each · fixes opened (ID, severity, origin, title) · tasks created, gaps
 declined or left to decide · dropped findings and gaps with reasons · the document and its commit
-SHA, or "local cycle" · next: `/rite:fix-all`, `/rite:execute-phase <cycle> <phase>`, or "phase clean".
+SHA, or "local cycle" · next: `/rite:fix-all`, `/rite:execute-phase <cycle> <phase>`, or "phase clean" with
+`/rite:retro <cycle> --phase <phase>` when its fixes hold a lesson for the phases still to run.
 
 <!-- rite:parts -->

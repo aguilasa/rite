@@ -33,6 +33,7 @@ Arguments: `$ARGUMENTS`
 ## Report
 
 Cycle, from → to · preconditions passed or the blockers · files whose links were rewritten · bare paths rewritten · lines
-not rewritten · commit SHA · next: `/rite:retro <cycle>`.
+not rewritten · commit SHA · next: `/rite:retro <cycle>` (it reads the partial retros of the cycle and
+does not propose again what they decided).
 
 <!-- rite:parts -->

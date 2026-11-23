@@ -1,6 +1,7 @@
 # Retro — {{cycle}}
 
 Date: {{date}}
+Phases: {{phases}}
 
 ## Numbers
 
@@ -18,7 +19,7 @@ Date: {{date}}
      (retro-suggest) when it came from `rite retro-suggest` or (added) when the retro found it by
      reading, then the reason for the verdict -->
 
-### Keep in next profile
+### Keep (pitfalls file)
 
 ### Promote to rite.toml / CLAUDE.md
 
