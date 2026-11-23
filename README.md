@@ -105,7 +105,8 @@ Faster: `/rite:execute-batch my-cycle 2` (tasks in different repositories never 
 15. `/rite:close-cycle my-cycle` — needs every task done and reviewed and no open fix; archives the
     cycle.
 16. `/rite:retro my-cycle` — groups fixes by root cause and proposes the pitfalls to keep for the next
-    cycle.
+    cycle. In a long cycle, `/rite:retro my-cycle --phase 2` (or `--since-last`) after a phase review
+    keeps what that phase taught for the phases still to run; the final retro reads it.
 
 Keep in mind:
 
@@ -154,7 +155,7 @@ the product's: [split layout](docs/CONCEPTS.md#split-layout).
 | `/rite:board` | live, read-only board of the cycles in the browser |
 | `/rite:delete [cycle] <ID>` | remove a task or fix created by mistake (never worked on); its ID is not reused |
 | `/rite:close-cycle <cycle>` | check preconditions, archive with links rewritten |
-| `/rite:retro <cycle>` | root-cause groups; keep, promote, report, prune |
+| `/rite:retro <cycle> [--phase P \| --since-last]` | root-cause groups; keep, promote, report, prune — of the cycle, or of finished phases of an open one |
 
 Details: [docs/COMMANDS.md](docs/COMMANDS.md) · concepts: [docs/CONCEPTS.md](docs/CONCEPTS.md).
 
