@@ -1,7 +1,7 @@
 ---
 description: Review every Rite task awaiting review in a cycle — independent reviewers in parallel waves, bookkeeping in series
 argument-hint: "[cycle] [task-IDs] [--plan]"
-parts: [cli, state, evidence, workspace, reporting]
+parts: [cli, state, evidence, workspace, deciding, reporting]
 ---
 
 # /rite:review-all — the whole review queue, independent

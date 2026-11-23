@@ -1,7 +1,7 @@
 ---
 description: Execute exactly one task of a Rite cycle, commit it, and record it
 argument-hint: "[cycle] [task-ID]"
-parts: [cli, state, reading, evidence, guards, sweep, commit, workspace, reporting]
+parts: [cli, state, reading, evidence, guards, sweep, commit, workspace, deciding, reporting]
 ---
 
 # /rite:execute — one task

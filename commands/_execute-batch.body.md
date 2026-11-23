@@ -1,7 +1,7 @@
 ---
 description: Execute a small batch of Rite tasks in conflict-free waves (default 2, never "all")
 argument-hint: "[cycle] [N | task-IDs] [--plan]"
-parts: [cli, state, evidence, commit, batch, workspace, reporting]
+parts: [cli, state, evidence, commit, batch, workspace, deciding, reporting]
 ---
 
 # /rite:execute-batch — N tasks, in waves

@@ -1,7 +1,7 @@
 ---
 description: Independently review one finished Rite task in a clean context and open fixes for what fails
 argument-hint: "[cycle] [task-ID]"
-parts: [cli, state, evidence, workspace, reporting]
+parts: [cli, state, evidence, workspace, deciding, reporting]
 ---
 
 # /rite:review — one task, independent

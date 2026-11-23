@@ -138,6 +138,11 @@ An item's work lands in its repository, `commit.repo_dir`: run its commands and 
 <repo_dir> …`, a batch's `status` and `stash` too) and read its paths relative to it. One item, one
 repository. Rite's documents are never staged there; in a workspace every cycle is local.
 
+## Decisions at the end
+
+`decisions.recommend` true (`rite begin`, `resolve-cycle`): before the report, follow
+`${CLAUDE_PLUGIN_ROOT}/docs/DECISIONS.md`.
+
 ## Reporting
 
 **At most 15 lines.** IDs, commands, measured numbers, SHAs, and what the user must decide. Do not

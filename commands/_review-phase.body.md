@@ -1,7 +1,7 @@
 ---
 description: Review a finished phase of a Rite cycle as a whole — regressions, contradictions, parts of the plan left out — and open fixes and tasks
 argument-hint: "<cycle> <phase> [--yes]"
-parts: [cli, state, asking, evidence, commit, workspace, reporting]
+parts: [cli, state, asking, evidence, commit, workspace, deciding, reporting]
 ---
 
 # /rite:review-phase — the phase as a whole

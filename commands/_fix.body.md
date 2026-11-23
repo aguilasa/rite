@@ -1,7 +1,7 @@
 ---
 description: Fix exactly one Rite fix item — reproduce its evidence first, then repair and record
 argument-hint: "[cycle] [fix-ID]"
-parts: [cli, state, reading, evidence, guards, sweep, commit, workspace, reporting]
+parts: [cli, state, reading, evidence, guards, sweep, commit, workspace, deciding, reporting]
 ---
 
 # /rite:fix — one fix, evidence first

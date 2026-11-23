@@ -99,5 +99,22 @@ class DecisionsTest(unittest.TestCase):
                          {"recommend": True})
 
 
+class DecisionsDocTest(unittest.TestCase):
+    """The rules live in docs/DECISIONS.md, read only with the flag on; each command points to it."""
+
+    COMMANDS = ("execute", "execute-batch", "execute-phase", "review", "review-all", "review-phase",
+                "fix", "fix-all")
+
+    def test_every_covered_command_points_to_the_rules_and_they_name_it(self):
+        from fixtures import ROOT
+        doc = (ROOT / "docs/DECISIONS.md").read_text(encoding="utf-8")
+        for name in self.COMMANDS:
+            text = (ROOT / "commands" / f"{name}.md").read_text(encoding="utf-8")
+            self.assertIn("${CLAUDE_PLUGIN_ROOT}/docs/DECISIONS.md", text, name)
+            self.assertIn(f"`{name}`", doc, name)
+        for rule in ("(Recommended)", "two or more", "--yes", "never one that deletes"):
+            self.assertIn(rule, doc, rule)
+
+
 if __name__ == "__main__":
     unittest.main()

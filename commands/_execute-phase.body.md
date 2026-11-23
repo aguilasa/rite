@@ -1,7 +1,7 @@
 ---
 description: Execute every remaining task of one phase of a Rite cycle in conflict-free waves, the closing task last
 argument-hint: "<cycle> <phase> [--plan]"
-parts: [cli, state, evidence, commit, batch, workspace, reporting]
+parts: [cli, state, evidence, commit, batch, workspace, deciding, reporting]
 ---
 
 # /rite:execute-phase — one phase, in waves
